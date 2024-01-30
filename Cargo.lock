@@ -1008,7 +1008,7 @@ dependencies = [
 
 [[package]]
 name = "pkdns"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "any-dns",
  "clap",

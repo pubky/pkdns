@@ -105,6 +105,10 @@ fn main() -> Result<(), Box<dyn Error>> {
     let threads: &String = matches.get_one("threads").unwrap();
     let threads: u8 = threads.parse().expect("threads should be valid positive integer.");
     let forward: &String = matches.get_one("forward").unwrap();
+    let mut forward: String = forward.clone();
+    if !forward.contains(":") {
+        forward.push_str(":53"); // Add default port
+    };
     let forward: SocketAddr = forward.parse().expect("forward should be valid IP:Port combination.");
     let socket: &String = matches.get_one("socket").unwrap();
     let socket: SocketAddr = socket.parse().expect("socket should be valid IP:Port combination.");

@@ -1,0 +1,3 @@
+# A list of free to use pkdns servers.
+
+37.27.13.182  # By lnrouter.app

@@ -1,11 +1,16 @@
 #!/bin/bash
 
+VERSION=$(cargo get package.version)
+echo pkdns $VERSION
 echo Build OSX amd64
 cargo build --release --package=pkdns
+echo
 echo Build Linux amd64
 cargo build --release --package=pkdns --target=x86_64-unknown-linux-gnu
+echo
 echo Build Windows amd64
 cargo build --release --package=pkdns --target=x86_64-pc-windows-gnu
+
 
 echo
 echo Build packets
@@ -14,23 +19,28 @@ cd target
 mkdir github-release
 
 echo Tar osx
-mkdir github-release/pknames-osx-amd64
-cp release/pkdns github-release/pknames-osx-amd64
-cd github-release && tar -czf pknames-osx-amd64.tar.gz pknames-osx-amd64 && cd ..
-rm -rf github-release/pknames-osx-amd64
+DIR_NAME="pkdns-osx-amd64-v$VERSION"
+mkdir github-release/$DIR_NAME
+cp release/pkdns github-release/$DIR_NAME
+cd github-release && tar -czf $DIR_NAME.tar.gz $DIR_NAME && cd ..
+rm -rf github-release/$DIR_NAME
 
 echo Tar linux
-mkdir github-release/pknames-linux-amd64
-cp x86_64-unknown-linux-gnu/release/pkdns github-release/pknames-linux-amd64
-cd github-release && tar -czf pknames-linux-amd64.tar.gz pknames-linux-amd64 && cd ..
-rm -rf github-release/pknames-linux-amd64
+DIR_NAME="pkdns-linux-amd64-v$VERSION"
+mkdir github-release/$DIR_NAME
+cp x86_64-unknown-linux-gnu/release/pkdns github-release/$DIR_NAME
+cd github-release && tar -czf $DIR_NAME.tar.gz $DIR_NAME && cd ..
+rm -rf github-release/$DIR_NAME
 
 echo Tar Windows
-mkdir github-release/pknames-windows-amd64
-cp x86_64-pc-windows-gnu/release/pkdns.exe github-release/pknames-windows-amd64
-cd github-release && tar -czf pknames-windows-amd64.tar.gz pknames-windows-amd64 && cd ..
-rm -rf github-release/pknames-windows-amd64
+DIR_NAME="pkdns-windows-amd64-v$VERSION"
+mkdir github-release/$DIR_NAME
+cp x86_64-pc-windows-gnu/release/pkdns.exe github-release/$DIR_NAME
+cd github-release && tar -czf $DIR_NAME.tar.gz $DIR_NAME && cd ..
+rm -rf github-release/$DIR_NAME
 
 echo
 cd ..
 tree target/github-release
+cd target/github-release
+pwd
