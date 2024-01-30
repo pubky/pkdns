@@ -3,7 +3,7 @@
 ![GitHub Release](https://img.shields.io/github/v/release/severinalexb/pkdns)
 
 
-DNS server resolving [pkarr](https://github.com/nuhvi/pkarr) self-sovereign domains.
+DNS server resolving [pkarr](https://github.com/nuhvi/pkarr) self-sovereign domains on the [mainline DHT](https://en.wikipedia.org/wiki/Mainline_DHT).
 
 ## Getting Started
 
@@ -51,6 +51,7 @@ Verify your server with this domain [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5
 
 ### Verify pkdns is working
 
+#### Pkarr Domains
 Verify the server resolves pkarr domains.
 Replace `PKDNS_SERVER_IP` with either a [hosted server ip](./servers.txt) or `127.0.0.1` if you run it on your localhost.
 
@@ -59,6 +60,9 @@ nslookup 7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy PKDNS_SERVER_IP
 ```
 
 > *Troubleshooting* If this does not work then the pkdns server is likely not running.
+
+
+#### ICANN Domains
 
 Verify it resolves regular ICANN domains. Replace `PKDNS_SERVER_IP` with either a [hosted server ip](./servers.txt) or `127.0.0.1` if you run it on your localhost.
 
