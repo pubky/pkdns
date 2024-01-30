@@ -17,10 +17,11 @@ Use one of the [hosted DNS servers](./servers.txt) to try out pkarr quickly.
 
 
 ### Pre-Built Binaries
+
 1. Download the [latest release](https://github.com/SeverinAlexB/pkdns/releases/latest/) for your plattform.
 2. Extract the tar file. Should be something like `tar -xvf tarfile.tar.gz`.
 3. Run `pkdns -f 8.8.8.8`.
-4. [Verify](#verify-pkdns-is-working) the server is working.
+4. [Verify](#verify-pkdns-is-working) the server is working. Your server ip is `127.0.0.1`.
 5. [Configure](#change-your-system-dns) your system dns.
 6. [Browse](#browse-the-self-sovereign-web) the self-sovereign web.
 
@@ -32,8 +33,8 @@ Make sure you have the [Rust toolchain](https://rustup.rs/) installed.
 1. Clone repository `git clone https://github.com/SeverinAlexB/pkdns.git`.
 2. Switch directory `cd pkdns`.
 3. Run `cargo run -- -f 8.8.8.8`.
-4. [Verify](#verify-pkdns-is-working) the server is working.
-6. [Configure](#change-your-system-dns) your system dns to `127.0.0.1`.
+4. [Verify](#verify-pkdns-is-working) the server is working. Your server ip is `127.0.0.1`.
+6. [Configure](#change-your-system-dns) your system dns.
 7. [Browse](#browse-the-self-sovereign-web) the self-sovereign web.
 
 
@@ -52,8 +53,7 @@ Verify your server with this domain [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5
 ### Verify pkdns is working
 
 #### Pkarr Domains
-Verify the server resolves pkarr domains.
-Replace `PKDNS_SERVER_IP` with either a [hosted server ip](./servers.txt) or `127.0.0.1` if you run it on your localhost.
+Verify the server resolves pkarr domains. Replace `PKDNS_SERVER_IP` with your pkdns server IP address.
 
 ```bash 
 nslookup 7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy PKDNS_SERVER_IP
@@ -64,7 +64,7 @@ nslookup 7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy PKDNS_SERVER_IP
 
 #### ICANN Domains
 
-Verify it resolves regular ICANN domains. Replace `PKDNS_SERVER_IP` with either a [hosted server ip](./servers.txt) or `127.0.0.1` if you run it on your localhost.
+Verify it resolves regular ICANN domains. Replace `PKDNS_SERVER_IP` with your pkdns server IP address.
 
 ```bash
 nslookup example.com PKDNS_SERVER_IP
@@ -79,6 +79,12 @@ Here are some example pkarr domains:
 
 - [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/).
 - [http://pknames.p2p.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/](http://pknames.p2p.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/).
+
+Hint: Always add a `/` to the end of a pkarr domain. Otherwise browsers will search instead of resolve the website.
+
+### Address already in use
+
+Other services might occupy the port 53 already. For example, [Docker Desktop](https://github.com/docker/for-mac/issues/7008) uses the port 53 on MacOS. Make sure to free those.
 
 ## Options
 
