@@ -46,10 +46,6 @@ impl PknamesResolver {
             return pkarr_result; // It was a pkarr hostname
         }
 
-        let question = original_query.questions.first();
-        if let None = question {
-
-        }
         let question = original_query.questions.first().ok_or("Query does not include a question.")?;
         let domain = question.qname.to_string();
         let pkarr_domain = self.predict_pknames_domain(&domain)?;
