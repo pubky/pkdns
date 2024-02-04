@@ -131,7 +131,14 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("Forward ICANN queries to {}", forward);
     }
 
-
+    // Exit the main thread if a anydns thread panics. Todo: Add to anydns
+    let orig_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |panic_info| {
+        // invoke the default handler and exit the process
+        println!("Thread paniced. Stop main thread too.");
+        orig_hook(panic_info);
+        std::process::exit(1);
+    }));
 
     let anydns = Builder::new()
         .handler(MyHandler::new(cache_ttl, directory))
