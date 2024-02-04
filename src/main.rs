@@ -7,6 +7,7 @@ use std::{error::Error, net::SocketAddr, sync::mpsc::channel, time::Instant};
 mod pkarr_cache;
 mod pkarr_resolver;
 mod pknames_resolver;
+mod packet_lookup;
 
 #[derive(Clone)]
 struct MyHandler {
@@ -76,11 +77,10 @@ fn main() -> Result<(), Box<dyn Error>> {
                 .help("Show verbose output."),
         )
         .arg(
-            clap::Arg::new("no-cache")
-                .long("no-cache")
+            clap::Arg::new("cache-ttl")
+                .long("cache-ttl")
                 .required(false)
-                .num_args(0)
-                .help("Disable DHT packet caching."),
+                .help("Pkarr packet cache ttl in seconds."),
         )
         .arg(
             clap::Arg::new("threads")
@@ -100,7 +100,9 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let matches = cmd.get_matches();
     let verbose: bool = *matches.get_one("verbose").unwrap();
-    let no_cache: bool = *matches.get_one("no-cache").unwrap();
+    let default_cache_ttl = "60".to_string();
+    let cache_ttl: &String = matches.get_one("cache-ttl").unwrap_or(&default_cache_ttl);
+    let cache_ttl: u64 = cache_ttl.parse().expect("cache-ttl should be a valid valid positive integer (u64).");
     let directory: &String = matches.get_one("directory").unwrap();
     let threads: &String = matches.get_one("threads").unwrap();
     let threads: u8 = threads.parse().expect("threads should be valid positive integer.");
@@ -116,8 +118,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     if verbose {
         println!("Verbose mode");
     }
-    if no_cache {
-        println!("Disabled DHT cache")
+    if cache_ttl != 60 {
+        println!("Set cache-ttl to {cache_ttl}s")
     }
     if threads != 4 {
         println!("Use {} threads", threads);
@@ -130,17 +132,9 @@ fn main() -> Result<(), Box<dyn Error>> {
     }
 
 
-    
-
-
-    let max_ttl = if no_cache {
-        1
-    } else {
-        60*60
-    };
 
     let anydns = Builder::new()
-        .handler(MyHandler::new(max_ttl, directory))
+        .handler(MyHandler::new(cache_ttl, directory))
         .threads(threads)
         .verbose(verbose)
         .icann_resolver(forward)

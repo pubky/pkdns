@@ -1,6 +1,6 @@
 [package]
 name = "pkdns"
-version = "0.1.2"
+version = "0.2.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
@@ -8,9 +8,10 @@ edition = "2021"
 [dependencies]
 ctrlc = "3.4.2"
 simple-dns = "0.6.0"
-pknames_core = "0.1.0"
-pkarr = "1.0.1"
+pknames_core = "0.1.1"
+pkarr = "1.0.4"
 zbase32 = "0.1.2"
 ttl_cache = "0.5.1"
 clap = "4.4.18"
 any-dns = "0.1.1"
+chrono = "0.4.33"

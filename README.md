@@ -95,7 +95,7 @@ Options:
   -f, --forward <forward>      ICANN fallback DNS server. IP:Port [default: 192.168.1.1:53]
   -s, --socket <socket>        Socket the server should listen on. IP:Port [default: 0.0.0.0:53]
   -v, --verbose                Show verbose output.
-      --no-cache               Disable DHT packet caching.
+      --cache-ttl <cache-ttl>  Pkarr packet cache ttl in seconds.
       --threads <threads>      Number of threads to process dns queries. [default: 4]
   -d, --directory <directory>  pknames source directory. [default: ~/.pknames]
   -h, --help                   Print help

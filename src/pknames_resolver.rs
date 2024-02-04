@@ -53,7 +53,7 @@ impl PknamesResolver {
         let qname = Name::new(&pkarr_domain).unwrap();
         let mut pkarr_query = original_query.clone();
         pkarr_query.questions[0].qname = qname;
-        let pkarr_query = pkarr_query.build_bytes_vec().unwrap();
+        let pkarr_query = pkarr_query.build_bytes_vec_compressed().unwrap();
         let pkarr_reply = self.pkarr.resolve(&pkarr_query)?;
         let pkarr_reply = Packet::parse(&pkarr_reply).unwrap();
 
@@ -63,7 +63,7 @@ impl PknamesResolver {
             answer.name = question.qname.clone();
             reply.answers.push(answer);
         };
-        Ok(reply.build_bytes_vec().unwrap())
+        Ok(reply.build_bytes_vec_compressed().unwrap())
     }
 }
 
@@ -83,7 +83,7 @@ mod tests {
         let name = Name::new("pknames.p2p").unwrap();
         let question = Question::new(name, pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A), pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN), false);
         query.questions.push(question);
-        let query_bytes = query.build_bytes_vec().unwrap();
+        let query_bytes = query.build_bytes_vec_compressed().unwrap();
 
         let result  = pknames.resolve(&query_bytes);
         if result.is_err() {
