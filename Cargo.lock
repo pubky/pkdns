@@ -100,9 +100,9 @@ dependencies = [
 
 [[package]]
 name = "any-dns"
-version = "0.1.1"
+version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6edefda8000f200c72cfd369d8a46fb56523f25e6fa7ee713d5c9e6c08044dc0"
+checksum = "6efda8204383c5499a12d7ec5e0b3fefb4322f4fcafa7ab3bf54804e68346d67"
 dependencies = [
  "ctrlc",
  "dyn-clone",
@@ -1075,7 +1075,7 @@ dependencies = [
 
 [[package]]
 name = "pkdns"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "any-dns",
  "chrono",
