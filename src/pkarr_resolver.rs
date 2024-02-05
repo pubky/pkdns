@@ -83,6 +83,9 @@ impl PkarrResolver {
         }
         let question = question_opt.unwrap();
         let labels = question.qname.get_labels();
+        if labels.len() == 0 {
+            return Err("No label in question.qname.".into());
+        };
 
         let raw_pubkey = labels.last().unwrap().to_string();
         let parsed_option = Self::parse_pkarr_uri(&raw_pubkey);
