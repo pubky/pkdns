@@ -13,5 +13,7 @@ pkarr = "1.0.4"
 zbase32 = "0.1.2"
 ttl_cache = "0.5.1"
 clap = "4.4.18"
-any-dns = "0.1.2"
+any-dns = "0.2.0"
 chrono = "0.4.33"
+tokio = { version = "1.36.0", features = ["full"] }
+async-trait = "0.1.77"

@@ -1,4 +1,5 @@
-use any_dns::{Builder, CustomHandler};
+use any_dns::{Builder, CustomHandler, CustomHandlerError, DnsSocket};
+use async_trait::async_trait;
 use ctrlc;
 use pkarr::dns::Packet;
 use pknames_resolver::PknamesResolver;
@@ -21,32 +22,19 @@ impl MyHandler {
         }
     }
 }
-
+#[async_trait]
 impl CustomHandler for MyHandler {
-    fn lookup(&mut self, query: &Vec<u8>) -> std::prelude::v1::Result<Vec<u8>, Box<dyn Error>> {
-        let start = Instant::now();
-        let result = self.pkarr.resolve(query);
-        if result.is_ok() {
-            let query = Packet::parse(&query).unwrap();
-            println!(
-                "Resolved {:?} within {}ms",
-                query.questions.first().unwrap(),
-                start.elapsed().as_millis()
-            );
-        };
-
-        result
+    async fn lookup(&mut self, query: &Vec<u8>, _socket: DnsSocket) -> std::prelude::v1::Result<Vec<u8>, CustomHandlerError> {
+        match self.pkarr.resolve(query) {
+            Ok(reply) => Ok(reply),
+            Err(_) => Err(CustomHandlerError::Unhandled)
+        }
     }
 }
 
-fn wait_on_ctrl_c() {
-    let (tx, rx) = channel();
-    ctrlc::set_handler(move || tx.send(()).expect("Could not send signal on channel."))
-        .expect("Error setting Ctrl-C handler");
-    rx.recv().expect("Could not receive from channel.");
-}
 
-fn main() -> Result<(), Box<dyn Error>> {
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn Error>> {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
 
     let cmd = clap::Command::new("pkdns")
@@ -142,16 +130,15 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     let anydns = Builder::new()
         .handler(MyHandler::new(cache_ttl, directory))
-        .threads(threads)
         .verbose(verbose)
         .icann_resolver(forward)
         .listen(socket)
-        .build();
+        .build().await?;
     println!("Listening on {}. Waiting for Ctrl-C...", socket);
 
-    wait_on_ctrl_c();
+    anydns.wait_on_ctrl_c();
     println!("Got it! Exiting...");
-    anydns.join();
+    anydns.stop();
 
     Ok(())
 }
