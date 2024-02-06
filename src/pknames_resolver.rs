@@ -1,7 +1,6 @@
+use crate::pkarr_resolver::PkarrResolver;
 use pkarr::dns::{Name, Packet};
 use pknames_core::resolve::resolve_standalone;
-use crate::pkarr_resolver::PkarrResolver;
-
 
 #[derive(Clone)]
 pub struct PknamesResolver {
@@ -13,7 +12,7 @@ impl PknamesResolver {
     pub fn new(max_cache_ttl: u64, config_dir_path: &str) -> Self {
         PknamesResolver {
             pkarr: PkarrResolver::new(max_cache_ttl),
-            config_dir_path: config_dir_path.to_string()
+            config_dir_path: config_dir_path.to_string(),
         }
     }
 
@@ -37,7 +36,6 @@ impl PknamesResolver {
         Ok(full_domain)
     }
 
-
     pub fn resolve(&mut self, query: &Vec<u8>) -> std::prelude::v1::Result<Vec<u8>, Box<dyn std::error::Error>> {
         let original_query = Packet::parse(query)?;
 
@@ -46,7 +44,10 @@ impl PknamesResolver {
             return pkarr_result; // It was a pkarr hostname
         }
 
-        let question = original_query.questions.first().ok_or("Query does not include a question.")?;
+        let question = original_query
+            .questions
+            .first()
+            .ok_or("Query does not include a question.")?;
         let domain = question.qname.to_string();
         let pkarr_domain = self.predict_pknames_domain(&domain)?;
 
@@ -62,12 +63,10 @@ impl PknamesResolver {
             let mut answer = answer.clone();
             answer.name = question.qname.clone();
             reply.answers.push(answer);
-        };
+        }
         Ok(reply.build_bytes_vec_compressed().unwrap())
     }
 }
-
-
 
 #[cfg(test)]
 mod tests {
@@ -81,11 +80,16 @@ mod tests {
 
         let mut query = Packet::new_query(0);
         let name = Name::new("pknames.p2p").unwrap();
-        let question = Question::new(name, pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A), pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN), false);
+        let question = Question::new(
+            name,
+            pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A),
+            pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN),
+            false,
+        );
         query.questions.push(question);
         let query_bytes = query.build_bytes_vec_compressed().unwrap();
 
-        let result  = pknames.resolve(&query_bytes);
+        let result = pknames.resolve(&query_bytes);
         if result.is_err() {
             eprintln!("{:?}", result.unwrap_err());
             assert!(false);
@@ -96,7 +100,5 @@ mod tests {
         let reply = result.unwrap();
         let reply = Packet::parse(&reply).unwrap();
         println!("{:?}", reply);
-
     }
-
 }

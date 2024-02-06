@@ -1,4 +1,7 @@
-use simple_dns::{rdata::{self, RData}, Name, Packet, Question, ResourceRecord, QTYPE, TYPE};
+use simple_dns::{
+    rdata::{self, RData},
+    Name, Packet, Question, ResourceRecord, QTYPE, TYPE,
+};
 
 /**
  * Handles all possible ways on how to resolve a query into a reply.
@@ -51,15 +54,18 @@ fn resolve_question<'a>(pkarr_packet: &Packet<'a>, question: &Question<'a>) -> V
 fn resolve_cname_for<'a>(pkarr_packet: &Packet<'a>, question: &Question<'a>) -> Vec<ResourceRecord<'a>> {
     let cname_matches = direct_matches(pkarr_packet, &question.qname, &QTYPE::TYPE(TYPE::CNAME));
 
-    let additional_data: Vec<ResourceRecord<'_>> = cname_matches.iter().flat_map(|cname| {
-        let cname_content = if let RData::CNAME(rdata::CNAME(cname_pointer)) = &cname.rdata {
-            cname_pointer
-        } else {
-            panic!("Should be cname");
-        };
-        let matches = direct_matches(pkarr_packet, &cname_content, &question.qtype);
-        matches
-    }).collect();
+    let additional_data: Vec<ResourceRecord<'_>> = cname_matches
+        .iter()
+        .flat_map(|cname| {
+            let cname_content = if let RData::CNAME(rdata::CNAME(cname_pointer)) = &cname.rdata {
+                cname_pointer
+            } else {
+                panic!("Should be cname");
+            };
+            let matches = direct_matches(pkarr_packet, &cname_content, &question.qtype);
+            matches
+        })
+        .collect();
 
     let mut result = vec![];
     result.extend(cname_matches);
@@ -72,12 +78,12 @@ fn resolve_cname_for<'a>(pkarr_packet: &Packet<'a>, question: &Question<'a>) -> 
  * Resolve direct qname and qtype record matches.
  */
 fn direct_matches<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>, qtype: &QTYPE) -> Vec<ResourceRecord<'a>> {
-    let matches: Vec<ResourceRecord<'_>> = pkarr_packet.answers.iter()
-    .filter(|record| {
-        record.name == *qname && record.match_qtype(*qtype)
-    })
-    .map(|record| record.clone())
-    .collect();
+    let matches: Vec<ResourceRecord<'_>> = pkarr_packet
+        .answers
+        .iter()
+        .filter(|record| record.name == *qname && record.match_qtype(*qtype))
+        .map(|record| record.clone())
+        .collect();
     matches
 }
 
@@ -85,12 +91,14 @@ fn direct_matches<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>, qtype: &QTYPE
  * Find nameserver for given qname.
  */
 fn find_nameserver<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>) -> Vec<ResourceRecord<'a>> {
-    let matches: Vec<ResourceRecord<'_>> = pkarr_packet.answers.iter()
-    .filter(|record| {
-         record.match_qtype(QTYPE::TYPE(TYPE::NS)) && (qname.is_subdomain_of(&record.name) || record.name == *qname)
-    })
-    .map(|record| record.clone())
-    .collect();
+    let matches: Vec<ResourceRecord<'_>> = pkarr_packet
+        .answers
+        .iter()
+        .filter(|record| {
+            record.match_qtype(QTYPE::TYPE(TYPE::NS)) && (qname.is_subdomain_of(&record.name) || record.name == *qname)
+        })
+        .map(|record| record.clone())
+        .collect();
     matches
 }
 
@@ -99,7 +107,8 @@ mod tests {
     use std::net::Ipv4Addr;
 
     use pkarr::{
-        dns::{Name, Packet, ResourceRecord}, Keypair, PublicKey
+        dns::{Name, Packet, ResourceRecord},
+        Keypair, PublicKey,
     };
     use simple_dns::{rdata::RData, Question};
 
@@ -116,18 +125,14 @@ mod tests {
         let mut packet = Packet::new_reply(0);
 
         let name = Name::new(&pubkey_z32).unwrap();
-        let ip: Ipv4Addr = "127.0.0.1".parse().unwrap();           
-        let answer1 = ResourceRecord::new(
-            name.clone(), simple_dns::CLASS::IN, 100, RData::A(ip.into())
-        );
+        let ip: Ipv4Addr = "127.0.0.1".parse().unwrap();
+        let answer1 = ResourceRecord::new(name.clone(), simple_dns::CLASS::IN, 100, RData::A(ip.into()));
         packet.answers.push(answer1);
 
         let name = format!("pknames.p2p.{pubkey_z32}");
         let name = Name::new(&name).unwrap();
-        let ip: Ipv4Addr = "127.0.0.1".parse().unwrap();           
-        let answer1 = ResourceRecord::new(
-            name.clone(), simple_dns::CLASS::IN, 100, RData::A(ip.into())
-        );
+        let ip: Ipv4Addr = "127.0.0.1".parse().unwrap();
+        let answer1 = ResourceRecord::new(name.clone(), simple_dns::CLASS::IN, 100, RData::A(ip.into()));
         packet.answers.push(answer1);
 
         let name = format!("www.pknames.p2p.{pubkey_z32}");
@@ -135,7 +140,10 @@ mod tests {
         let data = format!("pknames.p2p.{pubkey_z32}");
         let data = Name::new(&data).unwrap();
         let answer3 = ResourceRecord::new(
-            name.clone(), simple_dns::CLASS::IN, 100, RData::CNAME(simple_dns::rdata::CNAME(data))
+            name.clone(),
+            simple_dns::CLASS::IN,
+            100,
+            RData::CNAME(simple_dns::rdata::CNAME(data)),
         );
         packet.answers.push(answer3);
 
@@ -144,15 +152,15 @@ mod tests {
         let data = format!("my.ns.example.com");
         let data = Name::new(&data).unwrap();
         let answer4 = ResourceRecord::new(
-            name.clone(), simple_dns::CLASS::IN, 100, RData::NS(simple_dns::rdata::NS(data))
+            name.clone(),
+            simple_dns::CLASS::IN,
+            100,
+            RData::NS(simple_dns::rdata::NS(data)),
         );
         packet.answers.push(answer4);
 
         (packet.build_bytes_vec_compressed().unwrap(), pubkey)
     }
-
-
-
 
     #[test]
     fn simple_a_question() {
@@ -163,7 +171,12 @@ mod tests {
         let name = format!("pknames.p2p.{pubkey_z32}");
         let name = Name::new(&name).unwrap();
         let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
-        let question = Question::new(name.clone(), qtype, simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN), false);
+        let question = Question::new(
+            name.clone(),
+            qtype,
+            simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN),
+            false,
+        );
 
         let reply = resolve_question(&pkarr_packet, &question);
         let reply = Packet::parse(&reply).unwrap();
@@ -184,7 +197,12 @@ mod tests {
         let name = format!("www.pknames.p2p.{pubkey_z32}");
         let name = Name::new(&name).unwrap();
         let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
-        let question = Question::new(name.clone(), qtype, simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN), false);
+        let question = Question::new(
+            name.clone(),
+            qtype,
+            simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN),
+            false,
+        );
 
         let reply = resolve_question(&pkarr_packet, &question);
         let reply = Packet::parse(&reply).unwrap();
@@ -210,7 +228,12 @@ mod tests {
         let name = format!("other.{pubkey_z32}");
         let name = Name::new(&name).unwrap();
         let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
-        let question = Question::new(name.clone(), qtype, simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN), false);
+        let question = Question::new(
+            name.clone(),
+            qtype,
+            simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN),
+            false,
+        );
 
         let reply = resolve_question(&pkarr_packet, &question);
         let reply = Packet::parse(&reply).unwrap();
@@ -232,7 +255,12 @@ mod tests {
         let name = format!("sub.other.{pubkey_z32}");
         let name = Name::new(&name).unwrap();
         let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
-        let question = Question::new(name.clone(), qtype, simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN), false);
+        let question = Question::new(
+            name.clone(),
+            qtype,
+            simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN),
+            false,
+        );
 
         let reply = resolve_question(&pkarr_packet, &question);
         let reply = Packet::parse(&reply).unwrap();
@@ -247,16 +275,17 @@ mod tests {
 
     #[test]
     fn simple_a_query() {
-        let (pkarr_packet, pubkey) = example_pkarr_reply();
+        let (pkarr_packet, _pubkey) = example_pkarr_reply();
         let pkarr_packet = Packet::parse(&pkarr_packet).unwrap();
 
         let mut query = Packet::new_query(0);
-        query.questions = vec![
-            Question::new(Name::new("pknames.p2p").unwrap(), simple_dns::QTYPE::TYPE(simple_dns::TYPE::A), simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN), false)
-        ];
+        query.questions = vec![Question::new(
+            Name::new("pknames.p2p").unwrap(),
+            simple_dns::QTYPE::TYPE(simple_dns::TYPE::A),
+            simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN),
+            false,
+        )];
 
         let _reply = resolve_query(&pkarr_packet, &query);
     }
-
-
 }

@@ -1,14 +1,13 @@
 use any_dns::{Builder, CustomHandler, CustomHandlerError, DnsSocket};
 use async_trait::async_trait;
-use ctrlc;
-use pkarr::dns::Packet;
-use pknames_resolver::PknamesResolver;
-use std::{error::Error, net::SocketAddr, sync::mpsc::channel, time::Instant};
 
+use pknames_resolver::PknamesResolver;
+use std::{error::Error, net::SocketAddr};
+
+mod packet_lookup;
 mod pkarr_cache;
 mod pkarr_resolver;
 mod pknames_resolver;
-mod packet_lookup;
 
 #[derive(Clone)]
 struct MyHandler {
@@ -24,14 +23,17 @@ impl MyHandler {
 }
 #[async_trait]
 impl CustomHandler for MyHandler {
-    async fn lookup(&mut self, query: &Vec<u8>, _socket: DnsSocket) -> std::prelude::v1::Result<Vec<u8>, CustomHandlerError> {
+    async fn lookup(
+        &mut self,
+        query: &Vec<u8>,
+        _socket: DnsSocket,
+    ) -> std::prelude::v1::Result<Vec<u8>, CustomHandlerError> {
         match self.pkarr.resolve(query) {
             Ok(reply) => Ok(reply),
-            Err(_) => Err(CustomHandlerError::Unhandled)
+            Err(_) => Err(CustomHandlerError::Unhandled),
         }
     }
 }
-
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -76,7 +78,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .required(false)
                 .default_value("4")
                 .help("Number of threads to process dns queries."),
-        )        
+        )
         .arg(
             clap::Arg::new("directory")
                 .short('d')
@@ -90,7 +92,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let verbose: bool = *matches.get_one("verbose").unwrap();
     let default_cache_ttl = "60".to_string();
     let cache_ttl: &String = matches.get_one("cache-ttl").unwrap_or(&default_cache_ttl);
-    let cache_ttl: u64 = cache_ttl.parse().expect("cache-ttl should be a valid valid positive integer (u64).");
+    let cache_ttl: u64 = cache_ttl
+        .parse()
+        .expect("cache-ttl should be a valid valid positive integer (u64).");
     let directory: &String = matches.get_one("directory").unwrap();
     let threads: &String = matches.get_one("threads").unwrap();
     let threads: u8 = threads.parse().expect("threads should be valid positive integer.");
@@ -133,7 +137,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .verbose(verbose)
         .icann_resolver(forward)
         .listen(socket)
-        .build().await?;
+        .build()
+        .await?;
     println!("Listening on {}. Waiting for Ctrl-C...", socket);
 
     anydns.wait_on_ctrl_c().await;

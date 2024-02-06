@@ -1,19 +1,19 @@
-use std::{error::Error, sync::{Arc, Mutex}};
-
-use pkarr::{
-    dns::{Packet, Question, ResourceRecord, QTYPE, TYPE}, PkarrClient, PublicKey, SignedPacket
+use std::{
+    error::Error,
+    sync::{Arc, Mutex},
 };
-use chrono::{DateTime, Utc};
-use crate::{packet_lookup::resolve_query, pkarr_cache::PkarrPacketTtlCache};
 
+use crate::{packet_lookup::resolve_query, pkarr_cache::PkarrPacketTtlCache};
+use chrono::{DateTime, Utc};
+use pkarr::{dns::Packet, PkarrClient, PublicKey, SignedPacket};
 
 trait SignedPacketTimestamp {
     fn chrono_timestamp(&self) -> DateTime<Utc>;
 }
 
 impl SignedPacketTimestamp for SignedPacket {
-    fn chrono_timestamp(&self) -> DateTime<Utc>  {
-        let timestamp = self.timestamp()/1_000_000;
+    fn chrono_timestamp(&self) -> DateTime<Utc> {
+        let timestamp = self.timestamp() / 1_000_000;
         let timestamp = DateTime::from_timestamp((timestamp as u32).into(), 0).unwrap();
         timestamp
     }
@@ -54,9 +54,8 @@ impl PkarrResolver {
         let cached_opt = cache.get(pubkey);
         if cached_opt.is_some() {
             let reply_bytes = cached_opt.unwrap();
-            return Some(reply_bytes)
+            return Some(reply_bytes);
         };
-
 
         let packet_option = self.client.resolve(pubkey.clone());
         if packet_option.is_none() {
@@ -71,10 +70,7 @@ impl PkarrResolver {
     /**
      * Resolves a domain with pkarr.
      */
-    pub fn resolve(
-        &mut self,
-        query: &Vec<u8>
-    ) -> std::prelude::v1::Result<Vec<u8>, Box<dyn Error>> {
+    pub fn resolve(&mut self, query: &Vec<u8>) -> std::prelude::v1::Result<Vec<u8>, Box<dyn Error>> {
         let request = Packet::parse(query)?;
 
         let question_opt = request.questions.first();
@@ -112,10 +108,10 @@ mod tests {
         dns::{Name, Packet, Question, ResourceRecord},
         Keypair, SignedPacket,
     };
-    use simple_dns::rdata::A;
+
     // use simple_dns::{Name, Question, Packet};
     use super::*;
-    use std::{fmt::format, net::Ipv4Addr};
+    use std::net::Ipv4Addr;
     use zbase32;
 
     fn get_test_keypair() -> Keypair {
@@ -170,7 +166,7 @@ mod tests {
             true,
         );
         query.questions.push(question);
-        
+
         let mut resolver = PkarrResolver::new(0);
         let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap());
         assert!(result.is_ok());
@@ -248,7 +244,7 @@ mod tests {
         let pubkey = PkarrResolver::parse_pkarr_uri("7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy").unwrap();
 
         let mut resolver = PkarrResolver::new(0);
-        let result = resolver.resolve_pubkey_respect_cache(&pubkey);
+        let _result = resolver.resolve_pubkey_respect_cache(&pubkey);
         // assert!(result.is_some());
     }
 
@@ -274,7 +270,10 @@ mod tests {
         let data = format!("pknames.p2p.{pubkey_z32}");
         let data = Name::new(&data).unwrap();
         let answer3 = ResourceRecord::new(
-            name.clone(), simple_dns::CLASS::IN, 100, simple_dns::rdata::RData::CNAME(simple_dns::rdata::CNAME(data))
+            name.clone(),
+            simple_dns::CLASS::IN,
+            100,
+            simple_dns::rdata::RData::CNAME(simple_dns::rdata::CNAME(data)),
         );
         packet.answers.push(answer3);
 
@@ -285,6 +284,4 @@ mod tests {
         let reply_bytes = signed_packet.packet().build_bytes_vec().unwrap();
         Packet::parse(&reply_bytes).unwrap(); // Fail
     }
-
-
 }
