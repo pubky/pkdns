@@ -136,7 +136,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build().await?;
     println!("Listening on {}. Waiting for Ctrl-C...", socket);
 
-    anydns.wait_on_ctrl_c();
+    anydns.wait_on_ctrl_c().await;
     println!("Got it! Exiting...");
     anydns.stop();
 
