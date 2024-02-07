@@ -13,9 +13,9 @@ pub struct PknamesResolver {
 }
 
 impl PknamesResolver {
-    pub fn new(max_cache_ttl: u64, config_dir_path: &str) -> Self {
+    pub async fn new(max_cache_ttl: u64, config_dir_path: &str) -> Self {
         PknamesResolver {
-            pkarr: PkarrResolver::new(max_cache_ttl),
+            pkarr: PkarrResolver::new(max_cache_ttl).await,
             config_dir_path: config_dir_path.to_string(),
         }
     }
@@ -80,7 +80,7 @@ mod tests {
 
     #[tokio::test]
     async fn query_pubkey() {
-        let mut pknames = PknamesResolver::new(1, "~/.pknames");
+        let mut pknames = PknamesResolver::new(1, "~/.pknames").await;
 
         let mut query = Packet::new_query(0);
         let name = Name::new("pknames.p2p").unwrap();

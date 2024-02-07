@@ -1,6 +1,4 @@
-use std::{
-    sync::{Arc, Mutex},
-};
+use std::sync::{Arc, Mutex};
 use anyhow::anyhow;
 
 use crate::{packet_lookup::resolve_query, pkarr_cache::PkarrPacketTtlCache};
@@ -25,14 +23,14 @@ impl SignedPacketTimestamp for SignedPacket {
 #[derive(Clone)]
 pub struct PkarrResolver {
     client: PkarrClient,
-    cache: Arc<Mutex<PkarrPacketTtlCache>>,
+    cache: PkarrPacketTtlCache,
 }
 
 impl PkarrResolver {
-    pub fn new(max_cache_ttl: u64) -> Self {
+    pub async fn new(max_cache_ttl: u64) -> Self {
         Self {
             client: PkarrClient::new(),
-            cache: Arc::new(Mutex::new(PkarrPacketTtlCache::new(max_cache_ttl))),
+            cache: PkarrPacketTtlCache::new(max_cache_ttl).await,
         }
     }
 
@@ -50,8 +48,7 @@ impl PkarrResolver {
     }
 
     async fn resolve_pubkey_respect_cache(&mut self, pubkey: &PublicKey) -> Option<Vec<u8>> {
-        let cache = self.cache.lock().unwrap();
-        let cached_opt = cache.get(pubkey);
+        let cached_opt = self.cache.get(pubkey).await;
         if cached_opt.is_some() {
             let reply_bytes = cached_opt.unwrap();
             return Some(reply_bytes);
@@ -63,8 +60,7 @@ impl PkarrResolver {
         };
         let signed_packet = packet_option.unwrap();
         let reply_bytes = signed_packet.packet().build_bytes_vec_compressed().unwrap();
-        let mut cache = self.cache.lock().unwrap();
-        cache.add(pubkey.clone(), reply_bytes.clone());
+        self.cache.add(pubkey.clone(), reply_bytes.clone()).await;
         Some(reply_bytes)
     }
 
@@ -168,7 +164,7 @@ mod tests {
         );
         query.questions.push(question);
 
-        let mut resolver = PkarrResolver::new(0);
+        let mut resolver = PkarrResolver::new(0).await;
         let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap()).await;
         assert!(result.is_ok());
         let reply_bytes = result.unwrap();
@@ -195,7 +191,7 @@ mod tests {
             true,
         );
         query.questions.push(question);
-        let mut resolver = PkarrResolver::new(0);
+        let mut resolver = PkarrResolver::new(0).await;
         let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap()).await;
         assert!(result.is_ok());
         let reply_bytes = result.unwrap();
@@ -219,7 +215,7 @@ mod tests {
             true,
         );
         query.questions.push(question);
-        let mut resolver = PkarrResolver::new(0);
+        let mut resolver = PkarrResolver::new(0).await;
         let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap()).await;
         assert!(result.is_err());
         // println!("{}", result.unwrap_err());
@@ -244,7 +240,7 @@ mod tests {
     async fn pkarr_invalid_packet1() {
         let pubkey = PkarrResolver::parse_pkarr_uri("7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy").unwrap();
 
-        let mut resolver = PkarrResolver::new(0);
+        let mut resolver = PkarrResolver::new(0).await;
         let _result = resolver.resolve_pubkey_respect_cache(&pubkey).await;
         // assert!(result.is_some());
     }

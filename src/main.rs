@@ -15,9 +15,9 @@ struct MyHandler {
 }
 
 impl MyHandler {
-    pub fn new(max_cache_ttl: u64, config_dir_path: &str) -> Self {
+    pub async fn new(max_cache_ttl: u64, config_dir_path: &str) -> Self {
         Self {
-            pkarr: PknamesResolver::new(max_cache_ttl, config_dir_path),
+            pkarr: PknamesResolver::new(max_cache_ttl, config_dir_path).await,
         }
     }
 }
@@ -131,7 +131,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }));
 
     let anydns = Builder::new()
-        .handler(MyHandler::new(cache_ttl, directory))
+        .handler(MyHandler::new(cache_ttl, directory).await)
         .verbose(verbose)
         .icann_resolver(forward)
         .listen(socket)
