@@ -1187,7 +1187,7 @@ dependencies = [
 
 [[package]]
 name = "pkdns"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "any-dns",
  "anyhow",
