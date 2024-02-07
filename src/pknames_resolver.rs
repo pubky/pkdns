@@ -1,6 +1,10 @@
 use crate::pkarr_resolver::PkarrResolver;
 use pkarr::dns::{Name, Packet};
 use pknames_core::resolve::resolve_standalone;
+use anyhow::anyhow;
+
+
+
 
 #[derive(Clone)]
 pub struct PknamesResolver {
@@ -20,10 +24,10 @@ impl PknamesResolver {
      * Resolve a regular pknames domain into a pkarr domain.
      * Example: `pknames.p2p` -> `pknames.p2p.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy`.
      */
-    fn predict_pknames_domain(&self, domain: &str) -> Result<String, Box<dyn std::error::Error>> {
+    fn predict_pknames_domain(&self, domain: &str) -> Result<String, anyhow::Error> {
         let result = resolve_standalone(&domain, &self.config_dir_path);
         if result.is_err() {
-            return Err("Neither pkarr nor pknames domain.".into());
+            return Err(anyhow!("Neither pkarr nor pknames domain."));
         };
 
         let predictions = result.unwrap();
@@ -36,10 +40,10 @@ impl PknamesResolver {
         Ok(full_domain)
     }
 
-    pub fn resolve(&mut self, query: &Vec<u8>) -> std::prelude::v1::Result<Vec<u8>, Box<dyn std::error::Error>> {
+    pub async fn resolve(&mut self, query: &Vec<u8>) -> std::prelude::v1::Result<Vec<u8>, anyhow::Error> {
         let original_query = Packet::parse(query)?;
 
-        let pkarr_result = self.pkarr.resolve(&query.clone());
+        let pkarr_result = self.pkarr.resolve(&query.clone()).await;
         if pkarr_result.is_ok() {
             return pkarr_result; // It was a pkarr hostname
         }
@@ -47,7 +51,7 @@ impl PknamesResolver {
         let question = original_query
             .questions
             .first()
-            .ok_or("Query does not include a question.")?;
+            .ok_or(anyhow!("Query does not include a question."))?;
         let domain = question.qname.to_string();
         let pkarr_domain = self.predict_pknames_domain(&domain)?;
 
@@ -55,7 +59,7 @@ impl PknamesResolver {
         let mut pkarr_query = original_query.clone();
         pkarr_query.questions[0].qname = qname;
         let pkarr_query = pkarr_query.build_bytes_vec_compressed().unwrap();
-        let pkarr_reply = self.pkarr.resolve(&pkarr_query)?;
+        let pkarr_reply = self.pkarr.resolve(&pkarr_query).await?;
         let pkarr_reply = Packet::parse(&pkarr_reply).unwrap();
 
         let mut reply = original_query.clone().into_reply();
@@ -74,8 +78,8 @@ mod tests {
 
     use super::PknamesResolver;
 
-    #[test]
-    fn query_pubkey() {
+    #[tokio::test]
+    async fn query_pubkey() {
         let mut pknames = PknamesResolver::new(1, "~/.pknames");
 
         let mut query = Packet::new_query(0);
@@ -89,7 +93,7 @@ mod tests {
         query.questions.push(question);
         let query_bytes = query.build_bytes_vec_compressed().unwrap();
 
-        let result = pknames.resolve(&query_bytes);
+        let result = pknames.resolve(&query_bytes).await;
         if result.is_err() {
             eprintln!("{:?}", result.unwrap_err());
             assert!(false);

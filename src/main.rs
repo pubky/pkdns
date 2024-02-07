@@ -23,12 +23,10 @@ impl MyHandler {
 }
 #[async_trait]
 impl CustomHandler for MyHandler {
-    async fn lookup(
-        &mut self,
-        query: &Vec<u8>,
-        _socket: DnsSocket,
-    ) -> std::prelude::v1::Result<Vec<u8>, CustomHandlerError> {
-        match self.pkarr.resolve(query) {
+    async fn lookup(&mut self,query: &Vec<u8>, _socket: DnsSocket) -> Result<Vec<u8>, CustomHandlerError> {
+        let result = self.pkarr.resolve(query).await;
+
+        match result {
             Ok(reply) => Ok(reply),
             Err(_) => Err(CustomHandlerError::Unhandled),
         }
