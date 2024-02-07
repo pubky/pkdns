@@ -23,7 +23,7 @@ impl MyHandler {
 }
 #[async_trait]
 impl CustomHandler for MyHandler {
-    async fn lookup(&mut self,query: &Vec<u8>, _socket: DnsSocket) -> Result<Vec<u8>, CustomHandlerError> {
+    async fn lookup(&mut self, query: &Vec<u8>, _socket: DnsSocket) -> Result<Vec<u8>, CustomHandlerError> {
         let result = self.pkarr.resolve(query).await;
 
         match result {

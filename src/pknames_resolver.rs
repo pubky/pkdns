@@ -1,10 +1,7 @@
 use crate::pkarr_resolver::PkarrResolver;
+use anyhow::anyhow;
 use pkarr::dns::{Name, Packet};
 use pknames_core::resolve::resolve_standalone;
-use anyhow::anyhow;
-
-
-
 
 #[derive(Clone)]
 pub struct PknamesResolver {

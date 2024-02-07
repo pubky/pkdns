@@ -1,4 +1,3 @@
-use std::sync::{Arc, Mutex};
 use anyhow::anyhow;
 
 use crate::{packet_lookup::resolve_query, pkarr_cache::PkarrPacketTtlCache};
