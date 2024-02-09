@@ -1,28 +1,24 @@
 use std::{sync::Arc, time::Duration};
 
 use pkarr::{dns::Packet, PublicKey};
-use retainer::Cache;
-use tokio::{sync::Mutex, task::JoinHandle};
+
+use tokio::sync::Mutex;
+use ttl_cache::TtlCache;
 
 /**
  * Pkarr record ttl cache
  */
 #[derive(Clone)]
 pub struct PkarrPacketTtlCache {
-    cache: Arc<Cache<String, Vec<u8>>>,
     max_cache_ttl: u64,
-    monitor: Arc<Mutex<JoinHandle<()>>>,
+    cache: Arc<Mutex<TtlCache<String, Vec<u8>>>>
 }
 
 impl PkarrPacketTtlCache {
     pub async fn new(max_cache_ttl: u64) -> Self {
-        let cache: Arc<Cache<String, Vec<u8>>> = Arc::new(Cache::new());
-        let monitor = tokio::spawn(async move { cache.monitor(4, 0.25, Duration::from_secs(3)).await });
-        let monitor = Arc::new(Mutex::new(monitor));
         PkarrPacketTtlCache {
-            cache: Arc::new(Cache::new()),
             max_cache_ttl,
-            monitor,
+            cache: Arc::new(Mutex::new(TtlCache::new(100_000)))
         }
     }
 
@@ -43,15 +39,16 @@ impl PkarrPacketTtlCache {
         let ttl = ttl.min(self.max_cache_ttl);
         let ttl = Duration::from_secs(ttl as u64);
 
-        self.cache.insert(pubkey.to_z32(), reply, ttl).await;
+        let mut cache = self.cache.lock().await;
+        cache.insert(pubkey.to_z32(), reply, ttl);
     }
 
+    /**
+     * Get packet
+     */
     pub async fn get(&self, pubkey: &PublicKey) -> Option<Vec<u8>> {
         let z32 = pubkey.to_z32();
-        self.cache.get(&z32).await.map(|value| value.clone())
-    }
-
-    pub async fn stop(self) {
-        self.monitor.lock().await.abort();
+        let cache = self.cache.lock().await;
+        cache.get(&z32).map(|value| value.clone())
     }
 }
