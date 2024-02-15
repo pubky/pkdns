@@ -1,3 +1,4 @@
+use any_dns::DnsSocket;
 use anyhow::anyhow;
 
 use crate::{packet_lookup::resolve_query, pkarr_cache::PkarrPacketTtlCache};
@@ -66,7 +67,7 @@ impl PkarrResolver {
     /**
      * Resolves a domain with pkarr.
      */
-    pub async fn resolve(&mut self, query: &Vec<u8>) -> std::prelude::v1::Result<Vec<u8>, anyhow::Error> {
+    pub async fn resolve(&mut self, query: &Vec<u8>, socket: &mut DnsSocket) -> std::prelude::v1::Result<Vec<u8>, anyhow::Error> {
         let request = Packet::parse(query)?;
 
         let question_opt = request.questions.first();
@@ -92,7 +93,7 @@ impl PkarrResolver {
         }
         let pkarr_packet = packet_option.unwrap();
         let pkarr_packet = Packet::parse(&pkarr_packet).unwrap();
-        let reply = resolve_query(&pkarr_packet, &request);
+        let reply = resolve_query(&pkarr_packet, &request, socket).await;
 
         Ok(reply)
     }
@@ -100,6 +101,7 @@ impl PkarrResolver {
 
 #[cfg(test)]
 mod tests {
+    use any_dns::{EmptyHandler, HandlerHolder};
     use pkarr::{
         dns::{Name, Packet, Question, ResourceRecord},
         Keypair, SignedPacket,
@@ -147,6 +149,11 @@ mod tests {
         result.expect("Should have published.");
     }
 
+    async fn get_dnssocket() -> DnsSocket {
+        let handler = HandlerHolder::new(EmptyHandler::new());
+        DnsSocket::new("127.0.0.1:20384".parse().unwrap(), "8.8.8.8:53".parse().unwrap(), handler, false).await.unwrap()
+    }
+
     #[tokio::test]
     async fn query_domain() {
         publish_record().await;
@@ -164,7 +171,8 @@ mod tests {
         query.questions.push(question);
 
         let mut resolver = PkarrResolver::new(0).await;
-        let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap()).await;
+        let mut socket = get_dnssocket().await;
+        let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket).await;
         assert!(result.is_ok());
         let reply_bytes = result.unwrap();
         let reply = Packet::parse(&reply_bytes).unwrap();
@@ -191,7 +199,8 @@ mod tests {
         );
         query.questions.push(question);
         let mut resolver = PkarrResolver::new(0).await;
-        let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap()).await;
+        let mut socket = get_dnssocket().await;
+        let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket).await;
         assert!(result.is_ok());
         let reply_bytes = result.unwrap();
         let reply = Packet::parse(&reply_bytes).unwrap();
@@ -215,7 +224,8 @@ mod tests {
         );
         query.questions.push(question);
         let mut resolver = PkarrResolver::new(0).await;
-        let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap()).await;
+        let mut socket = get_dnssocket().await;
+        let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket).await;
         assert!(result.is_err());
         // println!("{}", result.unwrap_err());
     }

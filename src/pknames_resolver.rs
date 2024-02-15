@@ -1,4 +1,5 @@
 use crate::pkarr_resolver::PkarrResolver;
+use any_dns::DnsSocket;
 use anyhow::anyhow;
 use pkarr::dns::{Name, Packet};
 use pknames_core::resolve::resolve_standalone;
@@ -37,10 +38,10 @@ impl PknamesResolver {
         Ok(full_domain)
     }
 
-    pub async fn resolve(&mut self, query: &Vec<u8>) -> std::prelude::v1::Result<Vec<u8>, anyhow::Error> {
+    pub async fn resolve(&mut self, query: &Vec<u8>, socket: &mut DnsSocket) -> std::prelude::v1::Result<Vec<u8>, anyhow::Error> {
         let original_query = Packet::parse(query)?;
 
-        let pkarr_result = self.pkarr.resolve(&query.clone()).await;
+        let pkarr_result = self.pkarr.resolve(&query.clone(), socket).await;
         if pkarr_result.is_ok() {
             return pkarr_result; // It was a pkarr hostname
         }
@@ -56,7 +57,7 @@ impl PknamesResolver {
         let mut pkarr_query = original_query.clone();
         pkarr_query.questions[0].qname = qname;
         let pkarr_query = pkarr_query.build_bytes_vec_compressed().unwrap();
-        let pkarr_reply = self.pkarr.resolve(&pkarr_query).await?;
+        let pkarr_reply = self.pkarr.resolve(&pkarr_query, socket).await?;
         let pkarr_reply = Packet::parse(&pkarr_reply).unwrap();
 
         let mut reply = original_query.clone().into_reply();
@@ -71,9 +72,15 @@ impl PknamesResolver {
 
 #[cfg(test)]
 mod tests {
+    use any_dns::{DnsSocket, EmptyHandler, HandlerHolder};
     use pkarr::dns::{Name, Packet, Question};
 
     use super::PknamesResolver;
+
+    async fn get_dnssocket() -> DnsSocket {
+        let handler = HandlerHolder::new(EmptyHandler::new());
+        DnsSocket::new("127.0.0.1:20384".parse().unwrap(), "8.8.8.8:53".parse().unwrap(), handler, false).await.unwrap()
+    }
 
     #[tokio::test]
     async fn query_pubkey() {
@@ -89,8 +96,8 @@ mod tests {
         );
         query.questions.push(question);
         let query_bytes = query.build_bytes_vec_compressed().unwrap();
-
-        let result = pknames.resolve(&query_bytes).await;
+        let mut socket = get_dnssocket().await;
+        let result = pknames.resolve(&query_bytes, &mut socket).await;
         if result.is_err() {
             eprintln!("{:?}", result.unwrap_err());
             assert!(false);

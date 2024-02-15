@@ -18,7 +18,7 @@ impl PkarrPacketTtlCache {
     pub async fn new(max_cache_ttl: u64) -> Self {
         PkarrPacketTtlCache {
             max_cache_ttl,
-            cache: Arc::new(Mutex::new(TtlCache::new(100_000)))
+            cache: Arc::new(Mutex::new(TtlCache::new(100_000))) // 1 pkarr packet is max 1KB. Therefore 100,000KB = 100MB
         }
     }
 

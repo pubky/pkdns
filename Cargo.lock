@@ -109,9 +109,7 @@ dependencies = [
 
 [[package]]
 name = "any-dns"
-version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9187fc51343b681b1ab76d6af954d0684cb8202a2500723f42e2dbafd8a8dc2f"
+version = "0.2.3"
 dependencies = [
  "async-trait",
  "dyn-clone",
