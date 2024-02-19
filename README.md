@@ -112,7 +112,7 @@ EASY - All in pkarr:
 - No recursion.
 
 ADVANCED - Fully featured:
-- Delegate your zone to a fully fledged name server ([bind9](https://ubuntu.com/server/docs/service-domain-name-service-dns)?).
+- Delegate your zone to a fully fledged name server ([bind9](https://ubuntu.com/server/docs/service-domain-name-service-dns)).
 - pkdns will forward the request the name server.
 
 
