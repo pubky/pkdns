@@ -4,7 +4,7 @@ use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use hickory_proto::{
     op::{Message, ResponseCode},
-    rr::{domain::{IntoLabel, Label}, LowerName, Name, Record, RecordSet, RecordType, RrKey},
+    rr::{domain::{IntoLabel, Label}, rdata::SOA, LowerName, Name, RData, Record, RecordSet, RecordType, RrKey},
     serialize::binary::BinDecodable
 };
 use hickory_server::{
@@ -50,6 +50,12 @@ impl PkarrAuthority {
     }
 }
 
+impl PkarrAuthority {
+    fn origin_name(&self) -> Name {
+        Name::from_str_relaxed(self.first_origin.to_string()).unwrap()
+    }
+}
+
 #[async_trait]
 impl Authority for PkarrAuthority {
     type Lookup = AuthLookup;
@@ -77,6 +83,7 @@ impl Authority for PkarrAuthority {
         lookup_options: LookupOptions,
     ) -> Result<Self::Lookup, LookupError> {
         println!("{name} lookup in node authority");
+        let original_name = name.clone();
         match parse_name_as_pkarr_with_origin(name, &Name::from_str_relaxed(self.first_origin.clone().to_string()).unwrap()) {
             Err(err) => {
                 println!("{name} not a pkarr name, resolve in static authority");
@@ -88,30 +95,33 @@ impl Authority for PkarrAuthority {
                 match self.pkarr.resolve(&pubkey).await.map_err(err_refused)?
                 {
                     Some(signed_packet) => {
-                        let (_label, records) = signed_packet_to_hickory_records_without_origin(&signed_packet, |_| true).unwrap();
-                        
-                        debug!(%origin, %pubkey, %name, "found records in pkarr zone");
-                        let rrkey = RrKey::new(name.into(), record_type);
-                        let matches = records.get(&rrkey);
-                        if matches.is_none() {
-                            if records.len() > 0 {
-                                println!("Name exists but not record type match.");
-                                return Err(LookupError::NameExists);
-                            } else {
-                                return Err(err_nx_domain("no matches"));
-                            };
-                        };
-                        let records = matches.unwrap();
-                        let new_origin = Name::parse(&pubkey.to_z32(), Some(&origin)).map_err(err_refused)?;
+                        let in_mem_auth = pkarr_to_in_mem_authority(&signed_packet, self.origin_name()).unwrap();
+                        println!("Lookup {original_name}");
 
-                        let record_set =
-                            record_set_append_origin(records, &new_origin, self.serial()).map_err(err_refused)?;
+                        let result = in_mem_auth.lookup(&original_name, record_type, lookup_options).await;
+                        return result;
+                        // debug!(%origin, %pubkey, %name, "found records in pkarr zone");
+                        // let rrkey = RrKey::new(name.into(), record_type);
+                        // let matches = records.get(&rrkey);
+                        // if matches.is_none() {
+                        //     if records.len() > 0 {
+                        //         println!("Name exists but not record type match.");
+                        //         return Err(LookupError::NameExists);
+                        //     } else {
+                        //         return Err(err_nx_domain("no matches"));
+                        //     };
+                        // };
+                        // let records = matches.unwrap();
+                        // let new_origin = Name::parse(&pubkey.to_z32(), Some(&origin)).map_err(err_refused)?;
+
+                        // let record_set =
+                        //     record_set_append_origin(records, &new_origin, self.serial()).map_err(err_refused)?;
                             
-                        let records = LookupRecords::new(lookup_options, Arc::new(record_set));
+                        // let records = LookupRecords::new(lookup_options, Arc::new(record_set));
                         
-                        let answers = AuthLookup::answers(records, None);
-                        println!("Found answers!");
-                        Ok(answers)
+                        // let answers = AuthLookup::answers(records, None);
+                        // println!("Found answers!");
+                        // Ok(answers)
                     }
                     None => Err(err_nx_domain("not found")),
                 }
@@ -172,39 +182,32 @@ fn err_nx_domain(e: impl fmt::Debug) -> LookupError {
     LookupError::from(ResponseCode::NXDomain)
 }
 
-pub fn record_set_append_origin(
-    input: &RecordSet,
-    origin: &Name,
-    serial: u32,
-) -> Result<RecordSet> {
-    let new_name = input.name().clone().append_name(origin)?;
-    let mut output = RecordSet::new(&new_name, input.record_type(), serial);
-    // TODO: less clones
-    for record in input.records_without_rrsigs() {
-        let mut record = record.clone();
-        record.set_name(new_name.clone());
-        output.insert(record, serial);
-    }
-    Ok(output)
-}
-
 pub fn signed_packet_to_hickory_message(signed_packet: &SignedPacket) -> Result<Message> {
     let encoded = signed_packet.encoded_packet();
     let message = Message::from_bytes(&encoded)?;
     Ok(message)
 }
 
-pub fn signed_packet_to_hickory_records_without_origin(
+pub fn pkarr_to_in_mem_authority(
     signed_packet: &SignedPacket,
-    filter: impl Fn(&Record) -> bool,
-) -> Result<(Label, BTreeMap<RrKey, Arc<RecordSet>>)> {
-    let common_zone = Label::from_utf8(&signed_packet.public_key().to_z32())?;
+    first_origin: Name
+) -> Result<InMemoryAuthority> {
+    let pubkey = Label::from_utf8(&signed_packet.public_key().to_z32())?;
+    let zone = Name::from_labels(vec![pubkey.clone()])?.clone().append_name(&first_origin)?.append_label(".")?;
+
     let mut message = signed_packet_to_hickory_message(signed_packet)?;
     let answers = message.take_answers();
-    let mut output: BTreeMap<RrKey, Arc<RecordSet>> = BTreeMap::new();
+    let mut output: BTreeMap<RrKey, RecordSet> = BTreeMap::new();
+
+    let soakey = RrKey::new(LowerName::from(zone.clone()), RecordType::SOA);
+    let soa = SOA::new(zone.clone(), Name::from_str_relaxed("")?, 999, 999, 999, 999, 1);
+    let mut set = RecordSet::new(&zone, RecordType::SOA, 999);
+    set.add_rdata(RData::SOA(soa));
+    output.insert(soakey, set);
+
     for mut record in answers.into_iter() {
         // disallow SOA and NS records
-        if matches!(record.record_type(), RecordType::SOA | RecordType::NS) {
+        if matches!(record.record_type(), RecordType::SOA) {
             continue;
         }
         // expect the z32 encoded pubkey as root name
@@ -212,32 +215,18 @@ pub fn signed_packet_to_hickory_records_without_origin(
         if name.num_labels() < 1 {
             continue;
         }
-        let zone = name.iter().last().unwrap().into_label()?;
-        if zone != common_zone {
-            continue;
-        }
-        if !filter(&record) {
-            continue;
-        }
 
         let name_without_zone =
             Name::from_labels(name.iter().take(name.num_labels() as usize - 1))?;
-        record.set_name(name_without_zone);
 
-        let rrkey = RrKey::new(record.name().into(), record.record_type());
-        match output.entry(rrkey) {
-            btree_map::Entry::Vacant(e) => {
-                let set: RecordSet = record.into();
-                e.insert(Arc::new(set));
-            }
-            btree_map::Entry::Occupied(mut e) => {
-                let set = e.get_mut();
-                let serial = set.serial();
-                // safe because we just created the arc and are sync iterating
-                Arc::get_mut(set).unwrap().insert(record, serial);
-            }
-        }
+        let full_name = name.clone().append_name(&first_origin).unwrap();
+        record.set_name(full_name.clone());
+
+        let lower = LowerName::from(full_name);
+
+        let rrkey = RrKey::new(lower, record.record_type());
+        output.insert(rrkey, record.into());
     }
-    // let mem_auth = InMemoryAuthority::new(origin, output, zone_type, allow_axfr);
-    Ok((common_zone, output))
+    let mem_auth = InMemoryAuthority::new(zone, output, ZoneType::Forward, false).unwrap();
+    Ok(mem_auth)
 }
