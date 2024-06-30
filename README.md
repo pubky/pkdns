@@ -9,7 +9,7 @@ DNS server resolving [pkarr](https://github.com/nuhvi/pkarr) self-sovereign doma
 
 ### Hosted DNS
 
-Use one of the [hosted DNS servers](./servers.txt) to try out pkarr quickly.
+Use one of the [hosted DNS servers](./servers.txt) to try out pkdns quickly.
 
 - [Verify](#verify-pkdns-is-working) the server is working.
 - [Configure](#change-your-system-dns) your system dns.
