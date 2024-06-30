@@ -1,6 +1,6 @@
 use std::{collections::{btree_map, BTreeMap}, fmt, sync::Arc};
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use async_trait::async_trait;
 use hickory_proto::{
     op::{Message, ResponseCode},
@@ -11,10 +11,10 @@ use hickory_server::{
     authority::{
         AuthLookup, Authority, LookupError, LookupOptions, LookupRecords, MessageRequest, UpdateResult, ZoneType,
     },
-    server::RequestInfo
+    server::RequestInfo, store::in_memory::InMemoryAuthority
 };
 use pkarr::{PkarrClient, PkarrClientAsync, PublicKey, Settings, SignedPacket};
-use tracing::{debug, trace};
+use tracing::{debug, info, trace};
 
 
 #[derive()]
@@ -28,7 +28,6 @@ pub struct PkarrAuthority {
 impl PkarrAuthority {
     pub async fn new() -> Self {
         let tld = Name::from_str_relaxed("pkarr").unwrap();
-        // let tld = Name::from_str_relaxed("").unwrap();
         let first_origin = LowerName::from(&tld);
         Self {
             origins: vec![tld],
@@ -78,29 +77,40 @@ impl Authority for PkarrAuthority {
         lookup_options: LookupOptions,
     ) -> Result<Self::Lookup, LookupError> {
         println!("{name} lookup in node authority");
-        match parse_name_as_pkarr_with_origin(name, &self.origins) {
+        match parse_name_as_pkarr_with_origin(name, &Name::from_str_relaxed(self.first_origin.clone().to_string()).unwrap()) {
             Err(err) => {
                 println!("{name} not a pkarr name, resolve in static authority");
                 Err(err_nx_domain("not found"))
             }
             Ok((name, pubkey, origin)) => {
-                debug!(%origin, %pubkey, %name, "resolve in pkarr zones");
+                println!("{name} {pubkey} {origin} resolve in pkarr zones");
                 
-                let result = self.pkarr.resolve(&pubkey).await.map_err(err_refused)?;
-                
-                match result
+                match self.pkarr.resolve(&pubkey).await.map_err(err_refused)?
                 {
                     Some(signed_packet) => {
                         let (_label, records) = signed_packet_to_hickory_records_without_origin(&signed_packet, |_| true).unwrap();
+                        
                         debug!(%origin, %pubkey, %name, "found records in pkarr zone");
                         let rrkey = RrKey::new(name.into(), record_type);
-                        let records = records.get(&rrkey).unwrap();
+                        let matches = records.get(&rrkey);
+                        if matches.is_none() {
+                            if records.len() > 0 {
+                                println!("Name exists but not record type match.");
+                                return Err(LookupError::NameExists);
+                            } else {
+                                return Err(err_nx_domain("no matches"));
+                            };
+                        };
+                        let records = matches.unwrap();
                         let new_origin = Name::parse(&pubkey.to_z32(), Some(&origin)).map_err(err_refused)?;
 
                         let record_set =
                             record_set_append_origin(records, &new_origin, self.serial()).map_err(err_refused)?;
+                            
                         let records = LookupRecords::new(lookup_options, Arc::new(record_set));
+                        
                         let answers = AuthLookup::answers(records, None);
+                        println!("Found answers!");
                         Ok(answers)
                     }
                     None => Err(err_nx_domain("not found")),
@@ -134,29 +144,23 @@ impl Authority for PkarrAuthority {
 
 fn parse_name_as_pkarr_with_origin(
     name: impl Into<Name>,
-    allowed_origins: &[Name],
+    origin: &Name,
 ) -> Result<(Name, PublicKey, Name)> {
     let name = name.into();
-    println!("resolve {name}");
-    for origin in allowed_origins.iter() {
-        println!("try {origin}");
-        if !origin.zone_of(&name) {
-            continue;
-        }
-        if name.num_labels() < origin.num_labels() + 1 {
-            println!("not a valid pkarr name: missing pubkey");
-        }
-        println!("parse {origin}");
-        let labels = name.iter().rev();
-        let mut labels_without_origin = labels.skip(origin.num_labels() as usize);
-        let pkey_label = labels_without_origin.next().expect("length checked above");
-        let pkey_str = std::str::from_utf8(pkey_label)?;
-        let pkey = PublicKey::try_from(pkey_str)?;
-        let remaining_name = Name::from_labels(labels_without_origin.rev())?;
-        return Ok((remaining_name, pkey, origin.clone()));
+    println!("try pkarr parsing {origin}");
+    if !origin.zone_of(&name) {
+        bail!("Not in pkarr zone");
     }
-    println!("name does not match any allowed origin");
-    Err(err_nx_domain("not found").into())
+    if name.num_labels() == 1 {
+        bail!("Not pkarr subdomain");
+    }
+    let labels = name.iter().rev();
+    let mut labels_without_origin = labels.skip(origin.num_labels() as usize);
+    let pkey_label = labels_without_origin.next().with_context(|| "should have public key")?;
+    let pkey_str = std::str::from_utf8(pkey_label)?;
+    let pkey = PublicKey::try_from(pkey_str)?;
+    let remaining_name = Name::from_labels(labels_without_origin.rev())?;
+    return Ok((remaining_name, pkey, origin.clone()));
 }
 
 fn err_refused(e: impl fmt::Debug) -> LookupError {
@@ -234,5 +238,6 @@ pub fn signed_packet_to_hickory_records_without_origin(
             }
         }
     }
+    // let mem_auth = InMemoryAuthority::new(origin, output, zone_type, allow_axfr);
     Ok((common_zone, output))
 }
