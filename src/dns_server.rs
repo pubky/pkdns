@@ -16,7 +16,6 @@ impl DnsServer {
     pub async fn new(dns_handler: DnsHandler) -> Self {
         const TCP_TIMEOUT: Duration = Duration::from_millis(1000);
         let mut server = hickory_server::ServerFuture::new(dns_handler);
-
         let bind_addr: SocketAddr = "0.0.0.0:53".parse().unwrap();
 
         let socket = UdpSocket::bind(bind_addr).await.unwrap();
@@ -74,7 +73,7 @@ impl DnsHandler {
 
         let pkarr_auth = PkarrAuthority::new().await;
         let pkarr_auth = Arc::new(pkarr_auth);
-        catalog.upsert(pkarr_auth.first_origin().clone(), Box::new(Arc::clone(&pkarr_auth)));
+        catalog.upsert(pkarr_auth.top_level_domain().clone(), Box::new(Arc::clone(&pkarr_auth)));
 
 
         Self{
