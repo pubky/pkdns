@@ -1,6 +1,7 @@
 use any_dns::{Builder, CustomHandler, CustomHandlerError, DnsSocket};
 use async_trait::async_trait;
 
+use dns_server::{DnsHandler, DnsServer};
 use pknames_resolver::PknamesResolver;
 use std::{error::Error, net::SocketAddr};
 
@@ -8,6 +9,8 @@ mod packet_lookup;
 mod pkarr_cache;
 mod pkarr_resolver;
 mod pknames_resolver;
+mod dns_server;
+mod pkarr_authority;
 
 #[derive(Clone)]
 struct MyHandler {
@@ -130,18 +133,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
         std::process::exit(1);
     }));
 
-    let anydns = Builder::new()
-        .handler(MyHandler::new(cache_ttl, directory).await)
-        .verbose(verbose)
-        .icann_resolver(forward)
-        .listen(socket)
-        .build()
-        .await?;
+    // let anydns = Builder::new()
+    //     .handler(MyHandler::new(cache_ttl, directory).await)
+    //     .verbose(verbose)
+    //     .icann_resolver(forward)
+    //     .listen(socket)
+    //     .build()
+    //     .await?;
+    let server = DnsServer::new(DnsHandler::new().await).await;
+
     println!("Listening on {}. Waiting for Ctrl-C...", socket);
 
-    anydns.wait_on_ctrl_c().await;
+    server.wait_on_ctrl_c().await;
     println!("Got it! Exiting...");
-    anydns.stop();
+    server.shutdown().await;
 
     Ok(())
 }
