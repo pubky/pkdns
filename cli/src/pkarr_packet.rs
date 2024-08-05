@@ -55,7 +55,7 @@ impl fmt::Display for PkarrPacket {
         let records = self.to_records();
         write!(f, "Packet {}\n", records.get(0).unwrap().pubkey()).unwrap();
         for record in self.to_records() {
-            write!(f, "- {record}\n").unwrap();
+            write!(f, "{record}\n").unwrap();
         };
         Ok(())
     }

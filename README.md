@@ -106,6 +106,8 @@ Options:
 
 Use the `pkdns-cli` to inspect and announce your pkarr records on the Mainline DHT. Download the [latest release](https://github.com/SeverinAlexB/pkdns/releases/latest/) for your plattform.
 
+> The cli currently only supports `A`, `AAAA`, `TXT`, `CNAME`, `NS`, and `MX` records.
+
 
 **Inspect records by public key** List all records published by a public key.
 
@@ -130,7 +132,7 @@ Use the `pkdns-cli` to inspect and announce your pkarr records on the Mainline D
 Lookups on pkarr DNS records are limited. These two approach are supported:
 
 EASY - All in pkarr:
-- Direct record resolution (A, AAAA, TXT, ...).
+- Direct record resolution (A, AAAA, TXT).
 - CNAME pointing directly to another record in the same pkarr.
 - No recursion.
 
