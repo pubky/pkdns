@@ -1,20 +1,7 @@
-[package]
-name = "pkdns"
-version = "0.4.0"
-edition = "2021"
+[workspace]
+members = [
+  "server", "cli"
+]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-[dependencies]
-ctrlc = "3.4.2"
-simple-dns = "0.6.0"
-pknames_core = "0.1.1"
-pkarr = { version = "1.0.4", features = ["dht", "async"]}
-zbase32 = "0.1.2"
-ttl_cache = "0.5.1"
-clap = "4.4.18"
-any-dns = "0.2.4"
-chrono = "0.4.33"
-tokio = { version = "1.36.0", features = ["full"] }
-async-trait = "0.1.77"
-anyhow = "1.0.79"
+# See: https://github.com/rust-lang/rust/issues/90148#issuecomment-949194352
+resolver = "2"

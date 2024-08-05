@@ -1,0 +1,12 @@
+@	IN	NS	dns1.example.com.       
+@	IN	NS	dns2.example.com.        
+
+@	IN	MX	10	mail.example.com.       
+@	IN	MX	20	mail2.example.com.   
+
+@       IN  A 127.0.0.1
+test    IN  A 127.0.0.1
+dns1	IN	A	10.0.1.1
+dns2	IN	A	10.0.1.2
+
+bitcoin    IN  TXT  testsev
