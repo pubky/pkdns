@@ -2,8 +2,11 @@
 
 ![GitHub Release](https://img.shields.io/github/v/release/severinalexb/pkdns)
 
+A DNS server providing self-sovereign and censorship-resistant domain names.
 
-DNS server resolving [pkarr](https://github.com/nuhvi/pkarr) self-sovereign domains on the [mainline DHT](https://en.wikipedia.org/wiki/Mainline_DHT).
+
+- Resolves public key domain names like [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/).
+- DNS records are hosted on the [Mainline DHT](https://en.wikipedia.org/wiki/Mainline_DHT), the biggest DHT on the planet with ~15M nodes that services torrents since 15 years.
 
 ## Getting Started
 

@@ -19,9 +19,11 @@ mkdir -p target/github-release/$WINDOWS64_DIR_NAME
 echo Tar files
 cd target/github-release
 tar -czf $OSX64_DIR_NAME.tar.gz $OSX64_DIR_NAME
+rm -rf $OSX64_DIR_NAME
 tar -czf $LINUX64_DIR_NAME.tar.gz $LINUX64_DIR_NAME
+rm -rf $LINUX64_DIR_NAME
 tar -czf $WINDOWS64_DIR_NAME.tar.gz $WINDOWS64_DIR_NAME
-
+rm -rf $WINDOWS64_DIR_NAME
 
 
 echo
