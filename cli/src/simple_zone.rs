@@ -147,6 +147,17 @@ $TTL 86400
                             packet.answers.push(rr);
                             packet.build_bytes_vec_compressed()?
                         },
+                        domain::rdata::ZoneRecordData::Cname(val) => {
+                            let value = val.to_string();
+                            let value = Name::try_from(value.as_str()).unwrap();
+                            let rdata: pkarr::dns::rdata::RData = pkarr::dns::rdata::RData::CNAME(
+                                pkarr::dns::rdata::CNAME(value)
+                            );
+                            let rr = ResourceRecord::new(simple_name, pkarr::dns::CLASS::IN, 60*60, rdata);
+                            let mut packet = pkarr::dns::Packet::new_reply(0);
+                            packet.answers.push(rr);
+                            packet.build_bytes_vec_compressed()?
+                        },
                         _ => return Err(anyhow!("Not support record type."))
                     };
                     simple_data
@@ -212,6 +223,23 @@ text    IN  TXT  hero=satoshi
     fn test_transform() {
         let simplified_zone = simplified_zone();
         let zone = SimpleZone::read(simplified_zone, "123456").unwrap();
+        let packet = zone.packet.parsed();
+
+        println!("{:#?}", packet.answers);
+    }
+
+    #[test]
+    fn test_pkarr_records() {
+        let records = "
+@				IN 		A		37.27.13.182
+pknames.p2p		IN 		A		37.27.13.182
+www.pknames.p2p	IN		CNAME	pknames.p2p.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy.
+sub				IN		NS		ns.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy.
+ns				IN		A		95.217.214.181
+cname			IN		CNAME	example.com.
+_text			IN		TXT		hero=satoshi";
+
+        let zone = SimpleZone::read(records.to_string(), "123456").unwrap();
         let packet = zone.packet.parsed();
 
         println!("{:#?}", packet.answers);
