@@ -193,7 +193,7 @@ test    IN  A 127.0.0.1
 dns1	IN	A	10.0.1.1
 dns2	IN	A	10.0.1.2
 
-yolo    IN  TXT  testsev
+text    IN  TXT  hero=satoshi 
 ",
         )
     }
@@ -205,7 +205,7 @@ yolo    IN  TXT  testsev
         let zone = zone.unwrap();
         assert_eq!(zone.packet.parsed().answers.len(), 9);
 
-        println!("{zone:#?}");
+        println!("{}", zone.packet);
     }
 
     #[test]
