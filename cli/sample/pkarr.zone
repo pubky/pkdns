@@ -1,0 +1,9 @@
+@	IN	NS	dns1.example.com.              
+
+@	IN	MX	10	mail.example.com.       
+@	IN	MX	20	mail2.example.com.   
+
+@       IN  A 127.0.0.1
+sub    IN  A 127.0.0.1
+
+text    IN  TXT  hero=satoshi

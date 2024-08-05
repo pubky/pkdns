@@ -21,7 +21,7 @@ Use one of the [hosted DNS servers](./servers.txt) to try out pkdns quickly.
 1. Download the [latest release](https://github.com/SeverinAlexB/pkdns/releases/latest/) for your plattform.
 2. Extract the tar file. Should be something like `tar -xvf tarfile.tar.gz`.
 3. Run `pkdns -f 8.8.8.8`.
-4. [Verify](#verify-pkdns-is-working) the server is working. Your server ip is `127.0.0.1`.
+4. [Verify](#verify-pkdns-is-working) the server is working. Your dns server ip is `127.0.0.1`.
 5. [Configure](#change-your-system-dns) your system dns.
 6. [Browse](#browse-the-self-sovereign-web) the self-sovereign web.
 
@@ -32,7 +32,7 @@ Make sure you have the [Rust toolchain](https://rustup.rs/) installed.
 
 1. Clone repository `git clone https://github.com/SeverinAlexB/pkdns.git`.
 2. Switch directory `cd pkdns`.
-3. Run `cargo run -- -f 8.8.8.8`.
+3. Run `cargo run --package=pkdns -- -f 8.8.8.8`.
 4. [Verify](#verify-pkdns-is-working) the server is working. Your server ip is `127.0.0.1`.
 6. [Configure](#change-your-system-dns) your system dns.
 7. [Browse](#browse-the-self-sovereign-web) the self-sovereign web.
@@ -102,12 +102,37 @@ Options:
   -V, --version                Print version
 ```
 
+## Announce Your Own Records
+
+Use the `pkdns-cli` to inspect and announce your pkarr records on the Mainline DHT. Download the [latest release](https://github.com/SeverinAlexB/pkdns/releases/latest/) for your plattform.
+
+> The cli currently only supports `A`, `AAAA`, `TXT`, `CNAME`, `NS`, and `MX` records.
+
+
+**Inspect records by public key** List all records published by a public key.
+
+```bash
+./pkdns-cli resolve 7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy
+```
+
+**Generate seed** Generate a zbase32 seed to publish your own records.
+
+```bash
+./pkdns-cli generate > seed.txt
+```
+
+**Publish your own records** Create a dns zone file and publish its content. See [example](./cli/sample/) for more details.
+
+```bash
+./pkdns-cli publish seed.txt pkarr.zone
+```
+
 ## Limitations
 
 Lookups on pkarr DNS records are limited. These two approach are supported:
 
 EASY - All in pkarr:
-- Direct record resolution (A, AAAA, TXT, ...).
+- Direct record resolution (A, AAAA, TXT).
 - CNAME pointing directly to another record in the same pkarr.
 - No recursion.
 
