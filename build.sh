@@ -1,4 +1,5 @@
 export VERSION=$(cd server && cargo get package.version)
+mkdir -p target
 rm -rf target/github-release
 mkdir target/github-release
 
