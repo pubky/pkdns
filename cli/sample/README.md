@@ -2,7 +2,7 @@
 
 This is an example on how to announce your own records on the mainline DHT.
 
-- `seed.txt` contains a 32 bytes zbase32 encoded seed that the records are published under.
+- `seed.txt` contains a 32 bytes zbase32 encoded seed that the records are published under. You can generate one with `./pkdns-cli generate > seed.txt`.
 - `pkarr.zone` is a dns zone file without the SOA record. The SOA record is optional.
 
 Publish the records by pointing to the seed and zone files.
