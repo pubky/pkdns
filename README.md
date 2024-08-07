@@ -85,7 +85,7 @@ Hint: Always add a `/` to the end of a pkarr domain. Otherwise browsers will sea
 
 ### Address already in use
 
-Other services might occupy the port 53 already. For example, [Docker Desktop](https://github.com/docker/for-mac/issues/7008) uses the port 53 on MacOS. Make sure to free those.
+Other services might occupy the port 53 already. For example, [Docker Desktop](https://github.com/docker/for-mac/issues/7008) uses the port 53 on MacOS. [systemd-resolved](https://www.linuxuprising.com/2020/07/ubuntu-how-to-free-up-port-53-used-by.html) is using it on Ubuntu. Make sure to free those.
 
 ## Options
 
