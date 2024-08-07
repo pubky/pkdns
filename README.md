@@ -143,10 +143,10 @@ bind9 is a fully fledged name server and should be able to handle recursion and 
 
 Currently, pkdns only supports `A`, `AAAA`, `TXT`, `CNAME`, and `MX` records. For any other types, use bind9.
 
+## Future Developments Ideas
 
-
-
-
+- Regular ICANN DNS <> pkdns bridge. `{publicKey}.example.com`?
+- TLS/HTTPS
 
 
 ---
