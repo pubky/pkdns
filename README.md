@@ -1,6 +1,6 @@
 # pkdns
 
-[![GitHub Release](https://img.shields.io/github/v/release/severinalexb/pkdns)](https://github.com/SeverinAlexB/pkdns/releases/latest/)
+[![GitHub Release](https://img.shields.io/github/v/release/pubky/pkdns)](https://github.com/pubky/pkdns/releases/latest/)
 [![Demo](https://img.shields.io/badge/Demo-7fmjpc-green)](http://pkdns.sevsol.com/)
 
 A DNS server providing self-sovereign and censorship-resistant domain names. It resolves records hosted on the [Mainline DHT](https://en.wikipedia.org/wiki/Mainline_DHT), the biggest DHT on the planet with ~15M nodes that services torrents since 15 years.
@@ -19,7 +19,7 @@ Use one of the [hosted DNS servers](./servers.txt) to try out pkdns quickly.
 
 ### Pre-Built Binaries
 
-1. Download the [latest release](https://github.com/SeverinAlexB/pkdns/releases/latest/) for your plattform.
+1. Download the [latest release](https://github.com/pubky/pkdns/releases/latest/) for your plattform.
 2. Extract the tar file. Should be something like `tar -xvf tarfile.tar.gz`.
 3. Run `pkdns -f 8.8.8.8`.
 4. [Verify](#verify-pkdns-is-working) the server is working. Your dns server ip is `127.0.0.1`.
@@ -31,7 +31,7 @@ Use one of the [hosted DNS servers](./servers.txt) to try out pkdns quickly.
 
 Make sure you have the [Rust toolchain](https://rustup.rs/) installed.
 
-1. Clone repository `git clone https://github.com/SeverinAlexB/pkdns.git`.
+1. Clone repository `git clone https://github.com/pubky/pkdns.git`.
 2. Switch directory `cd pkdns`.
 3. Run `cargo run --package=pkdns -- -f 8.8.8.8`.
 4. [Verify](#verify-pkdns-is-working) the server is working. Your server ip is `127.0.0.1`.
@@ -105,7 +105,7 @@ Options:
 
 ## Announce Your Own Records
 
-Use the `pkdns-cli` to inspect and announce your pkarr records on the Mainline DHT. Download the [latest release](https://github.com/SeverinAlexB/pkdns/releases/latest/) for your plattform.
+Use the `pkdns-cli` to inspect and announce your pkarr records on the Mainline DHT. Download the [latest release](https://github.com/pubky/pkdns/releases/latest/) for your plattform.
 
 > The cli currently only supports `A`, `AAAA`, `TXT`, `CNAME`, `NS`, and `MX` records.
 
