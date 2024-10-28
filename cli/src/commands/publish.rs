@@ -46,6 +46,11 @@ fn read_seed_file(matches: &ArgMatches) -> Keypair {
         std::process::exit(1);
     };
     let seed = seed.unwrap();
+    parse_seed(&seed)
+}
+
+fn parse_seed(seed: &str) -> Keypair {
+    let seed = seed.trim();
     let decode_result = zbase32::decode_full_bytes_str(&seed);
     if let Err(e) = decode_result {
         eprintln!("Failed to parse the seed file. {e} {seed}");
@@ -93,3 +98,4 @@ pub async fn cli_publish(matches: &ArgMatches) {
         publisher.run(interval);
     }
 }
+
