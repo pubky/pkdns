@@ -1,6 +1,7 @@
 [workspace]
 members = [
-  "server", "cli"
+  "server", 
+  "cli"
 ]
 
 # See: https://github.com/rust-lang/rust/issues/90148#issuecomment-949194352

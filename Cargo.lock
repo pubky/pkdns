@@ -1364,7 +1364,7 @@ dependencies = [
 
 [[package]]
 name = "pkdns"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "any-dns",
  "anyhow",
@@ -1382,7 +1382,7 @@ dependencies = [
 
 [[package]]
 name = "pkdns-cli"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "anyhow",
  "bytes",
