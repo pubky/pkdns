@@ -6,10 +6,11 @@ This is an example on how to announce your own records on the mainline DHT.
 - `pkarr.zone` is a dns zone file without the SOA record. The SOA record is optional.
 
 Publish the records by pointing to the seed and zone files.
-```bash
-$ ./pkdns-cli publish seed.txt pkarr.zone
 
 > ⚠️ The mainline DHT will take some minutes to propagate your changes. In the meantime, pkdns might return a mix of old and new packages. This is normal.
+
+```bash
+$ ./pkdns-cli publish seed.txt pkarr.zone
 
 Packet eqa3q4o3dixqow5e6k75ifx5dwkahjyg7rx3j8eoh1s1fescys6o
 @                    NS     dns1.example.com
