@@ -124,6 +124,8 @@ Use the `pkdns-cli` to inspect and announce your pkarr records on the Mainline D
 
 **Publish your own records** Create a dns zone file and publish its content. See [example](./cli/sample/) for more details.
 
+> ⚠️ The mainline DHT will take some minutes to propagate your changes.
+
 ```bash
 ./pkdns-cli publish seed.txt pkarr.zone
 ```

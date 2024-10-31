@@ -9,6 +9,8 @@ Publish the records by pointing to the seed and zone files.
 ```bash
 $ ./pkdns-cli publish seed.txt pkarr.zone
 
+> ⚠️ The mainline DHT will take some minutes to propagate your changes. In the meantime, pkdns might return a mix of old and new packages. This is normal.
+
 Packet eqa3q4o3dixqow5e6k75ifx5dwkahjyg7rx3j8eoh1s1fescys6o
 @                    NS     dns1.example.com
 @                    NS     dns2.example.com
