@@ -128,6 +128,9 @@ Use the `pkdns-cli` to inspect and announce your pkarr records on the Mainline D
 ./pkdns-cli publish seed.txt pkarr.zone
 ```
 
+
+> ⚠️ The mainline DHT will take some minutes to propagate your changes.
+
 ## Limitations
 
 ### Recursion
