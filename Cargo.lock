@@ -110,9 +110,9 @@ dependencies = [
 
 [[package]]
 name = "any-dns"
-version = "0.2.4"
+version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "be1edacbeccbc03fc35a62525fbe01ad2aee22b1008a1b93b2fa121feaa27980"
+checksum = "3b82d1252692c20073ce26a0bd1189659050d756ea08506948207d043e94a7e4"
 dependencies = [
  "async-trait",
  "dyn-clone",
@@ -1364,7 +1364,7 @@ dependencies = [
 
 [[package]]
 name = "pkdns"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "any-dns",
  "anyhow",
@@ -1382,7 +1382,7 @@ dependencies = [
 
 [[package]]
 name = "pkdns-cli"
-version = "0.5.1"
+version = "0.5.2"
 dependencies = [
  "anyhow",
  "bytes",
