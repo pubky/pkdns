@@ -1,0 +1,14 @@
+# https://github.com/pubky/pkdns/blob/master/server/pkdns.service
+[Unit]
+Description=pkdns - Self-Sovereign And Censorship-Resistant Domain Names
+After=network-online.target
+
+[Service]
+# Update the binary path and optionally the forward DNS server.
+ExecStart=/usr/local/bin/pkdns --forward 8.8.8.8:53 --verbose
+Environment="RUST_BACKTRACE=full"
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
