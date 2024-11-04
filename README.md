@@ -49,7 +49,7 @@ Follow one of the guides to change your DNS server on your system:
 - [Windows guide](https://www.windowscentral.com/how-change-your-pcs-dns-settings-windows-10)
 
 
-Verify your server with this domain [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/).
+Verify your server with this domain [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./).
 
 ### Verify pkdns is working
 
@@ -78,8 +78,8 @@ nslookup example.com PKDNS_SERVER_IP
 
 Here are some example pkarr domains:
 
-- [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/).
-- [http://pknames.p2p.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/](http://pknames.p2p.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/).
+- [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./).
+- [http://pkdns.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./](http://pkdns.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./).
 
 Hint: Always add a `/` to the end of a pkarr domain. Otherwise browsers will search instead of resolve the website.
 
@@ -98,7 +98,6 @@ Options:
   -v, --verbose                Show verbose output.
       --cache-ttl <cache-ttl>  Pkarr packet cache ttl in seconds.
       --threads <threads>      Number of threads to process dns queries. [default: 4]
-  -d, --directory <directory>  pknames source directory. [default: ~/.pknames]
   -h, --help                   Print help
   -V, --version                Print version
 ```
