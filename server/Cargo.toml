@@ -8,8 +8,7 @@ edition = "2021"
 [dependencies]
 ctrlc = "3.4.2"
 simple-dns = "0.6.0"
-pknames_core = "0.1.1"
-pkarr = { version = "1.0.4", features = ["dht", "async"]}
+pkarr = { version = "2.2.0", features = ["dht", "async", "rand"]}
 zbase32 = "0.1.2"
 ttl_cache = "0.5.1"
 clap = "4.4.18"

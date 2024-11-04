@@ -1,23 +1,22 @@
 use any_dns::{Builder, CustomHandler, CustomHandlerError, DnsSocket};
 use async_trait::async_trait;
 
-use pknames_resolver::PknamesResolver;
+use pkarr_resolver::PkarrResolver;
 use std::{error::Error, net::SocketAddr};
 
 mod packet_lookup;
 mod pkarr_cache;
 mod pkarr_resolver;
-mod pknames_resolver;
 
 #[derive(Clone)]
 struct MyHandler {
-    pub pkarr: PknamesResolver,
+    pub pkarr: PkarrResolver,
 }
 
 impl MyHandler {
-    pub async fn new(max_cache_ttl: u64, config_dir_path: &str) -> Self {
+    pub async fn new(max_cache_ttl: u64) -> Self {
         Self {
-            pkarr: PknamesResolver::new(max_cache_ttl, config_dir_path).await,
+            pkarr: PkarrResolver::new(max_cache_ttl).await,
         }
     }
 }
@@ -131,7 +130,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }));
 
     let anydns = Builder::new()
-        .handler(MyHandler::new(cache_ttl, directory).await)
+        .handler(MyHandler::new(cache_ttl).await)
         .verbose(verbose)
         .icann_resolver(forward)
         .listen(socket)

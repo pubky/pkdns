@@ -3,7 +3,7 @@ use anyhow::anyhow;
 
 use crate::{packet_lookup::resolve_query, pkarr_cache::PkarrPacketTtlCache};
 use chrono::{DateTime, Utc};
-use pkarr::{dns::Packet, PkarrClient, PublicKey, SignedPacket};
+use pkarr::{dns::Packet, PkarrClient, PkarrClientAsync, PublicKey, Settings, SignedPacket};
 
 trait SignedPacketTimestamp {
     fn chrono_timestamp(&self) -> DateTime<Utc>;
@@ -22,14 +22,14 @@ impl SignedPacketTimestamp for SignedPacket {
  */
 #[derive(Clone)]
 pub struct PkarrResolver {
-    client: PkarrClient,
+    client: PkarrClientAsync,
     cache: PkarrPacketTtlCache,
 }
 
 impl PkarrResolver {
     pub async fn new(max_cache_ttl: u64) -> Self {
         Self {
-            client: PkarrClient::new(),
+            client: PkarrClient::new(Settings::default()).unwrap().as_async(),
             cache: PkarrPacketTtlCache::new(max_cache_ttl).await,
         }
     }
@@ -54,11 +54,15 @@ impl PkarrResolver {
             return Some(reply_bytes);
         };
 
-        let packet_option = self.client.resolve(pubkey.clone()).await;
-        if packet_option.is_none() {
+        let packet_option = self.client.resolve(pubkey).await;
+        if packet_option.is_err() {
             return None;
         };
         let signed_packet = packet_option.unwrap();
+        if signed_packet.is_none() {
+            return None;
+        }
+        let signed_packet = signed_packet.unwrap();
         let reply_bytes = signed_packet.packet().build_bytes_vec_compressed().unwrap();
         self.cache.add(pubkey.clone(), reply_bytes.clone()).await;
         Some(reply_bytes)
@@ -86,7 +90,6 @@ impl PkarrResolver {
             return Err(anyhow!("Invalid pkarr pubkey"));
         }
         let pubkey = parsed_option.unwrap();
-
         let packet_option = self.resolve_pubkey_respect_cache(&pubkey).await;
         if packet_option.is_none() {
             return Err(anyhow!("No pkarr packet found for pubkey"));
@@ -103,8 +106,7 @@ impl PkarrResolver {
 mod tests {
     use any_dns::{EmptyHandler, HandlerHolder};
     use pkarr::{
-        dns::{Name, Packet, Question, ResourceRecord},
-        Keypair, SignedPacket,
+        dns::{Name, Packet, Question, ResourceRecord}, Keypair, Settings, SignedPacket
     };
 
     // use simple_dns::{Name, Question, Packet};
@@ -144,8 +146,8 @@ mod tests {
         packet.answers.push(record);
         let signed_packet = SignedPacket::from_packet(&keypair, &packet).unwrap();
 
-        let client = PkarrClient::new();
-        let result = client.publish(&signed_packet).await;
+        let client = PkarrClient::new(Settings::default()).unwrap();
+        let result = client.publish(&signed_packet);
         result.expect("Should have published.");
     }
 
@@ -257,8 +259,8 @@ mod tests {
     #[tokio::test]
     async fn pkarr_invalid_packet2() {
         let pubkey = PkarrResolver::parse_pkarr_uri("7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy").unwrap();
-        let client = PkarrClient::new();
-        let signed_packet = client.resolve(pubkey).await.unwrap();
+        let client = PkarrClient::new(Settings::default()).unwrap();
+        let signed_packet = client.resolve(&pubkey).unwrap().unwrap();
         println!("Timestamp {}", signed_packet.chrono_timestamp());
         let reply_bytes = signed_packet.packet().build_bytes_vec_compressed().unwrap();
         Packet::parse(&reply_bytes).unwrap();
