@@ -5,7 +5,7 @@ After=network-online.target
 
 [Service]
 # Update the binary path and optionally the forward DNS server.
-ExecStart=/usr/local/bin/pkdns --forward 1.1.1.1:53 --verbose
+ExecStart=/usr/local/bin/pkdns --forward 8.8.8.8:53 --verbose
 Environment="RUST_BACKTRACE=full"
 Restart=on-failure
 RestartSec=5s
