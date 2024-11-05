@@ -4,6 +4,7 @@ use anyhow::anyhow;
 use crate::{packet_lookup::resolve_query, pkarr_cache::PkarrPacketTtlCache};
 use chrono::{DateTime, Utc};
 use pkarr::{dns::Packet, PkarrClient, PkarrClientAsync, PublicKey, Settings, SignedPacket};
+use tracing::{event, span, Level};
 
 trait SignedPacketTimestamp {
     fn chrono_timestamp(&self) -> DateTime<Utc>;
@@ -50,16 +51,21 @@ impl PkarrResolver {
     async fn resolve_pubkey_respect_cache(&mut self, pubkey: &PublicKey) -> Option<Vec<u8>> {
         let cached_opt = self.cache.get(pubkey).await;
         if cached_opt.is_some() {
+            tracing::debug!("Pkarr packet found [{pubkey}] in cache.");
             let reply_bytes = cached_opt.unwrap();
             return Some(reply_bytes);
         };
 
+        tracing::debug!("Lookup [{pubkey}] on the DHT.");
         let packet_option = self.client.resolve(pubkey).await;
         if packet_option.is_err() {
+            let err = packet_option.unwrap_err();
+            tracing::error!("DHT lookup for [{pubkey}] errored. {err}");
             return None;
         };
         let signed_packet = packet_option.unwrap();
         if signed_packet.is_none() {
+            tracing::debug!("DHT lookup for [{pubkey}] failed. Nothing found.");
             return None;
         }
         let signed_packet = signed_packet.unwrap();
@@ -73,31 +79,41 @@ impl PkarrResolver {
      */
     pub async fn resolve(&mut self, query: &Vec<u8>, socket: &mut DnsSocket) -> std::prelude::v1::Result<Vec<u8>, anyhow::Error> {
         let request = Packet::parse(query)?;
+        let span = tracing::span!(Level::INFO, "", query_id = request.id());
+        let _guard = span.enter();
+
+        tracing::debug!("New query received.");
 
         let question_opt = request.questions.first();
         if question_opt.is_none() {
+            tracing::debug!("DNS packet doesn't include a question.");
             return Err(anyhow!("Missing question"));
         }
         let question = question_opt.unwrap();
         let labels = question.qname.get_labels();
         if labels.len() == 0 {
-            return Err(anyhow!("No label in question.qname."));
+            tracing::debug!("DNS packet question with no domain.");
+            return Err(anyhow!("No label in question."));
         };
+
+
 
         let raw_pubkey = labels.last().unwrap().to_string();
         let parsed_option = Self::parse_pkarr_uri(&raw_pubkey);
         if parsed_option.is_none() {
+            tracing::debug!("Top level domain is not a pkarr public key. Fallback to ICANN DNS. [{}]", question.qname.to_string());
             return Err(anyhow!("Invalid pkarr pubkey"));
         }
         let pubkey = parsed_option.unwrap();
         let packet_option = self.resolve_pubkey_respect_cache(&pubkey).await;
         if packet_option.is_none() {
+            tracing::info!("No pkarr packet found on the DHT [{raw_pubkey}].");
             return Err(anyhow!("No pkarr packet found for pubkey"));
         }
         let pkarr_packet = packet_option.unwrap();
         let pkarr_packet = Packet::parse(&pkarr_packet).unwrap();
+        tracing::debug!("Pkarr packet resolved [{raw_pubkey}].");
         let reply = resolve_query(&pkarr_packet, &request, socket).await;
-
         Ok(reply)
     }
 }

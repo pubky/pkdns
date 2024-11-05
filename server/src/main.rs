@@ -35,6 +35,8 @@ impl CustomHandler for MyHandler {
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
+    tracing_subscriber::fmt::init();
+    tracing::debug!("Starting pkdns v{VERSION}");
 
     let cmd = clap::Command::new("pkdns")
         .about("A DNS server for pkarr self-sovereign domains.")
@@ -75,14 +77,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .required(false)
                 .default_value("4")
                 .help("Number of threads to process dns queries."),
-        )
-        .arg(
-            clap::Arg::new("directory")
-                .short('d')
-                .long("directory")
-                .required(false)
-                .help("pknames source directory.")
-                .default_value("~/.pknames"),
         );
 
     let matches = cmd.get_matches();
@@ -92,7 +86,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let cache_ttl: u64 = cache_ttl
         .parse()
         .expect("cache-ttl should be a valid valid positive integer (u64).");
-    let directory: &String = matches.get_one("directory").unwrap();
     let threads: &String = matches.get_one("threads").unwrap();
     let threads: u8 = threads.parse().expect("threads should be valid positive integer.");
     let forward: &String = matches.get_one("forward").unwrap();
@@ -105,26 +98,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let socket: SocketAddr = socket.parse().expect("socket should be valid IP:Port combination.");
 
     if verbose {
-        println!("Verbose mode");
+        tracing::info!("Verbose mode");
     }
     if cache_ttl != 60 {
-        println!("Set cache-ttl to {cache_ttl}s")
+        tracing::info!("Set cache-ttl to {cache_ttl}s");
     }
     if threads != 4 {
-        println!("Use {} threads", threads);
+        tracing::info!("Use {threads} threads");
     }
-    if directory != "~/.pknames" {
-        println!("Use pknames directory {}", directory);
-    }
-    if forward.to_string() != "192.168.1.1:53" {
-        println!("Forward ICANN queries to {}", forward);
-    }
+
+    tracing::info!("Forward ICANN queries to {}", forward);
 
     // Exit the main thread if a anydns thread panics. Todo: Add to anydns
     let orig_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |panic_info| {
         // invoke the default handler and exit the process
-        println!("Thread paniced. Stop main thread too.");
+        tracing::error!("Thread paniced. Stop main thread too.");
         orig_hook(panic_info);
         std::process::exit(1);
     }));
@@ -136,10 +125,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .listen(socket)
         .build()
         .await?;
-    println!("Listening on {}. Waiting for Ctrl-C...", socket);
+    tracing::info!("Listening on {socket}. Waiting for Ctrl-C...");
 
     anydns.wait_on_ctrl_c().await;
-    println!("Got it! Exiting...");
+    println!();
+    tracing::info!("Got it! Exiting...");
     anydns.stop();
 
     Ok(())
