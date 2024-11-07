@@ -2,21 +2,8 @@ use any_dns::DnsSocket;
 use anyhow::anyhow;
 
 use crate::{packet_lookup::resolve_query, pkarr_cache::PkarrPacketTtlCache};
-use chrono::{DateTime, Utc};
-use pkarr::{dns::Packet, PkarrClient, PkarrClientAsync, PublicKey, Settings, SignedPacket};
-use tracing::{event, span, Level};
+use pkarr::{dns::Packet, PkarrClient, PkarrClientAsync, PublicKey, Settings};
 
-trait SignedPacketTimestamp {
-    fn chrono_timestamp(&self) -> DateTime<Utc>;
-}
-
-impl SignedPacketTimestamp for SignedPacket {
-    fn chrono_timestamp(&self) -> DateTime<Utc> {
-        let timestamp = self.timestamp() / 1_000_000;
-        let timestamp = DateTime::from_timestamp((timestamp as u32).into(), 0).unwrap();
-        timestamp
-    }
-}
 
 /**
  * Pkarr resolver with cache.
@@ -79,8 +66,8 @@ impl PkarrResolver {
      */
     pub async fn resolve(&mut self, query: &Vec<u8>, socket: &mut DnsSocket) -> std::prelude::v1::Result<Vec<u8>, anyhow::Error> {
         let request = Packet::parse(query)?;
-        let span = tracing::span!(Level::INFO, "", query_id = request.id());
-        let _guard = span.enter();
+        // let span = tracing::span!(Level::INFO, "", query_id = request.id());
+        // let _guard = span.enter();
 
         let question_opt = request.questions.first();
         if question_opt.is_none() {
@@ -94,12 +81,12 @@ impl PkarrResolver {
             return Err(anyhow!("No label in question."));
         };
 
-        tracing::debug!("New query received: {} {:?}", question.qname.to_string(), question.qtype);
+        tracing::debug!("New query: {} {:?}", question.qname.to_string(), question.qtype);
 
         let tld = labels.last().unwrap().to_string();
         let parsed_option = Self::parse_pkarr_uri(&tld);
         if parsed_option.is_none() {
-            tracing::debug!("Top level domain .{tld} is not a pkarr public key. Fallback to ICANN DNS. ");
+            tracing::debug!("TLD .{tld} is not a pkarr key. Fallback to ICANN. ");
             return Err(anyhow!("Invalid pkarr pubkey"));
         }
         let pubkey = parsed_option.unwrap();
@@ -122,11 +109,24 @@ mod tests {
     use pkarr::{
         dns::{Name, Packet, Question, ResourceRecord}, Keypair, Settings, SignedPacket
     };
+    use chrono::{DateTime, Utc};
 
     // use simple_dns::{Name, Question, Packet};
     use super::*;
     use std::net::Ipv4Addr;
     use zbase32;
+
+    trait SignedPacketTimestamp {
+        fn chrono_timestamp(&self) -> DateTime<Utc>;
+    }
+    
+    impl SignedPacketTimestamp for SignedPacket {
+        fn chrono_timestamp(&self) -> DateTime<Utc> {
+            let timestamp = self.timestamp() / 1_000_000;
+            let timestamp = DateTime::from_timestamp((timestamp as u32).into(), 0).unwrap();
+            timestamp
+        }
+    }
 
     fn get_test_keypair() -> Keypair {
         // pk:cb7xxx6wtqr5d6yqudkt47drqswxk57dzy3h7qj3udym5puy9cso

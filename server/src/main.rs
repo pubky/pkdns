@@ -1,7 +1,7 @@
 use any_dns::{Builder, CustomHandler, CustomHandlerError, DnsSocket};
 use async_trait::async_trait;
 
-use helpers::set_full_stacktrace_as_default;
+use helpers::{enable_logging, set_full_stacktrace_as_default};
 use pkarr_resolver::PkarrResolver;
 use std::{error::Error, net::SocketAddr};
 
@@ -38,8 +38,6 @@ impl CustomHandler for MyHandler {
 async fn main() -> Result<(), Box<dyn Error>> {
     set_full_stacktrace_as_default();
     const VERSION: &str = env!("CARGO_PKG_VERSION");
-    tracing_subscriber::fmt::init();
-    tracing::debug!("Starting pkdns v{VERSION}");
 
     let cmd = clap::Command::new("pkdns")
         .about("A DNS server for pkarr self-sovereign domains.")
@@ -100,9 +98,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let socket: &String = matches.get_one("socket").unwrap();
     let socket: SocketAddr = socket.parse().expect("socket should be valid IP:Port combination.");
 
-    if verbose {
-        tracing::info!("--verbose flag is deprecated. Set the environment variable `RUST_LOG=pkdns=debug` instead.");
-    }
+
+    enable_logging(verbose);
+    
+    tracing::info!("Starting pkdns v{VERSION}");
+
     if cache_ttl != 60 {
         tracing::info!("Set cache-ttl to {cache_ttl}s");
     }

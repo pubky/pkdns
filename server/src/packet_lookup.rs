@@ -23,7 +23,7 @@ pub async fn resolve_query<'a>(pkarr_packet: &Packet<'a>, query: &Packet<'a>, so
     reply.answers = pkarr_reply.answers;
     reply.additional_records = pkarr_reply.additional_records;
     reply.name_servers = pkarr_reply.name_servers;
-    tracing::debug!("Built reply with {} answers, {} name servers, and {} additional records.", reply.answers.len(), reply.name_servers.len(), reply.additional_records.len());
+    tracing::debug!("Reply with {} answers.", reply.answers.len());
 
     reply.build_bytes_vec_compressed().unwrap()
 }
