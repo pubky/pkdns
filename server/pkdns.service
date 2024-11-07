@@ -4,8 +4,8 @@ Description=pkdns - Self-Sovereign And Censorship-Resistant Domain Names
 After=network-online.target
 
 [Service]
-# Update the binary path. 
-ExecStart=/usr/local/bin/pkdns --forward 8.8.8.8:53 --verbose
+# Update the binary path. Add --verbose to the command if you want to have more insights.
+ExecStart=/usr/local/bin/pkdns --forward 8.8.8.8:53
 Environment="RUST_BACKTRACE=full"
 Restart=on-failure
 RestartSec=5s
