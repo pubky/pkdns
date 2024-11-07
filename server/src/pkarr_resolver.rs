@@ -56,7 +56,7 @@ impl PkarrResolver {
             return Some(reply_bytes);
         };
 
-        tracing::debug!("Lookup [{pubkey}] on the DHT.");
+        tracing::trace!("Lookup [{pubkey}] on the DHT.");
         let packet_option = self.client.resolve(pubkey).await;
         if packet_option.is_err() {
             let err = packet_option.unwrap_err();
@@ -82,8 +82,6 @@ impl PkarrResolver {
         let span = tracing::span!(Level::INFO, "", query_id = request.id());
         let _guard = span.enter();
 
-        tracing::debug!("New query received.");
-
         let question_opt = request.questions.first();
         if question_opt.is_none() {
             tracing::debug!("DNS packet doesn't include a question.");
@@ -96,23 +94,23 @@ impl PkarrResolver {
             return Err(anyhow!("No label in question."));
         };
 
+        tracing::debug!("New query received: {} {:?}", question.qname.to_string(), question.qtype);
 
-
-        let raw_pubkey = labels.last().unwrap().to_string();
-        let parsed_option = Self::parse_pkarr_uri(&raw_pubkey);
+        let tld = labels.last().unwrap().to_string();
+        let parsed_option = Self::parse_pkarr_uri(&tld);
         if parsed_option.is_none() {
-            tracing::debug!("Top level domain is not a pkarr public key. Fallback to ICANN DNS. [{}]", question.qname.to_string());
+            tracing::debug!("Top level domain .{tld} is not a pkarr public key. Fallback to ICANN DNS. ");
             return Err(anyhow!("Invalid pkarr pubkey"));
         }
         let pubkey = parsed_option.unwrap();
         let packet_option = self.resolve_pubkey_respect_cache(&pubkey).await;
         if packet_option.is_none() {
-            tracing::info!("No pkarr packet found on the DHT [{raw_pubkey}].");
+            tracing::info!("No pkarr packet found on the DHT [{tld}].");
             return Err(anyhow!("No pkarr packet found for pubkey"));
         }
         let pkarr_packet = packet_option.unwrap();
         let pkarr_packet = Packet::parse(&pkarr_packet).unwrap();
-        tracing::debug!("Pkarr packet resolved [{raw_pubkey}].");
+        tracing::trace!("Pkarr packet resolved [{tld}].");
         let reply = resolve_query(&pkarr_packet, &request, socket).await;
         Ok(reply)
     }
@@ -169,7 +167,7 @@ mod tests {
 
     async fn get_dnssocket() -> DnsSocket {
         let handler = HandlerHolder::new(EmptyHandler::new());
-        DnsSocket::new("127.0.0.1:20384".parse().unwrap(), "8.8.8.8:53".parse().unwrap(), handler, false).await.unwrap()
+        DnsSocket::new("127.0.0.1:20384".parse().unwrap(), "8.8.8.8:53".parse().unwrap(), handler).await.unwrap()
     }
 
     #[tokio::test]

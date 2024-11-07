@@ -1,12 +1,14 @@
 use any_dns::{Builder, CustomHandler, CustomHandlerError, DnsSocket};
 use async_trait::async_trait;
 
+use helpers::set_full_stacktrace_as_default;
 use pkarr_resolver::PkarrResolver;
 use std::{error::Error, net::SocketAddr};
 
 mod packet_lookup;
 mod pkarr_cache;
 mod pkarr_resolver;
+mod helpers;
 
 #[derive(Clone)]
 struct MyHandler {
@@ -34,6 +36,7 @@ impl CustomHandler for MyHandler {
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
+    set_full_stacktrace_as_default();
     const VERSION: &str = env!("CARGO_PKG_VERSION");
     tracing_subscriber::fmt::init();
     tracing::debug!("Starting pkdns v{VERSION}");
@@ -98,7 +101,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let socket: SocketAddr = socket.parse().expect("socket should be valid IP:Port combination.");
 
     if verbose {
-        tracing::info!("Verbose mode");
+        tracing::info!("--verbose flag is deprecated. Set the environment variable `RUST_LOG=pkdns=debug` instead.");
     }
     if cache_ttl != 60 {
         tracing::info!("Set cache-ttl to {cache_ttl}s");
@@ -120,7 +123,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let anydns = Builder::new()
         .handler(MyHandler::new(cache_ttl).await)
-        .verbose(verbose)
         .icann_resolver(forward)
         .listen(socket)
         .build()
