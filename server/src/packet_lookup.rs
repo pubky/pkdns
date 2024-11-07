@@ -23,6 +23,7 @@ pub async fn resolve_query<'a>(pkarr_packet: &Packet<'a>, query: &Packet<'a>, so
     reply.answers = pkarr_reply.answers;
     reply.additional_records = pkarr_reply.additional_records;
     reply.name_servers = pkarr_reply.name_servers;
+    tracing::debug!("Reply with {} answers.", reply.answers.len());
 
     reply.build_bytes_vec_compressed().unwrap()
 }
@@ -187,7 +188,7 @@ mod tests {
 
     async fn get_dnssocket() -> DnsSocket {
         let handler = HandlerHolder::new(EmptyHandler::new());
-        DnsSocket::new("127.0.0.1:20384".parse().unwrap(), "8.8.8.8:53".parse().unwrap(), handler, false).await.unwrap()
+        DnsSocket::new("127.0.0.1:20384".parse().unwrap(), "8.8.8.8:53".parse().unwrap(), handler).await.unwrap()
     }
 
     fn example_pkarr_reply() -> (Vec<u8>, PublicKey) {

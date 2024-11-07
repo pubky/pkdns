@@ -2,20 +2,8 @@ use any_dns::DnsSocket;
 use anyhow::anyhow;
 
 use crate::{packet_lookup::resolve_query, pkarr_cache::PkarrPacketTtlCache};
-use chrono::{DateTime, Utc};
-use pkarr::{dns::Packet, PkarrClient, PkarrClientAsync, PublicKey, Settings, SignedPacket};
+use pkarr::{dns::Packet, PkarrClient, PkarrClientAsync, PublicKey, Settings};
 
-trait SignedPacketTimestamp {
-    fn chrono_timestamp(&self) -> DateTime<Utc>;
-}
-
-impl SignedPacketTimestamp for SignedPacket {
-    fn chrono_timestamp(&self) -> DateTime<Utc> {
-        let timestamp = self.timestamp() / 1_000_000;
-        let timestamp = DateTime::from_timestamp((timestamp as u32).into(), 0).unwrap();
-        timestamp
-    }
-}
 
 /**
  * Pkarr resolver with cache.
@@ -50,16 +38,21 @@ impl PkarrResolver {
     async fn resolve_pubkey_respect_cache(&mut self, pubkey: &PublicKey) -> Option<Vec<u8>> {
         let cached_opt = self.cache.get(pubkey).await;
         if cached_opt.is_some() {
+            tracing::debug!("Pkarr packet found [{pubkey}] in cache.");
             let reply_bytes = cached_opt.unwrap();
             return Some(reply_bytes);
         };
 
+        tracing::trace!("Lookup [{pubkey}] on the DHT.");
         let packet_option = self.client.resolve(pubkey).await;
         if packet_option.is_err() {
+            let err = packet_option.unwrap_err();
+            tracing::error!("DHT lookup for [{pubkey}] errored. {err}");
             return None;
         };
         let signed_packet = packet_option.unwrap();
         if signed_packet.is_none() {
+            tracing::debug!("DHT lookup for [{pubkey}] failed. Nothing found.");
             return None;
         }
         let signed_packet = signed_packet.unwrap();
@@ -73,31 +66,39 @@ impl PkarrResolver {
      */
     pub async fn resolve(&mut self, query: &Vec<u8>, socket: &mut DnsSocket) -> std::prelude::v1::Result<Vec<u8>, anyhow::Error> {
         let request = Packet::parse(query)?;
+        // let span = tracing::span!(Level::INFO, "", query_id = request.id());
+        // let _guard = span.enter();
 
         let question_opt = request.questions.first();
         if question_opt.is_none() {
+            tracing::debug!("DNS packet doesn't include a question.");
             return Err(anyhow!("Missing question"));
         }
         let question = question_opt.unwrap();
         let labels = question.qname.get_labels();
         if labels.len() == 0 {
-            return Err(anyhow!("No label in question.qname."));
+            tracing::debug!("DNS packet question with no domain.");
+            return Err(anyhow!("No label in question."));
         };
 
-        let raw_pubkey = labels.last().unwrap().to_string();
-        let parsed_option = Self::parse_pkarr_uri(&raw_pubkey);
+        tracing::debug!("New query: {} {:?}", question.qname.to_string(), question.qtype);
+
+        let tld = labels.last().unwrap().to_string();
+        let parsed_option = Self::parse_pkarr_uri(&tld);
         if parsed_option.is_none() {
+            tracing::debug!("TLD .{tld} is not a pkarr key. Fallback to ICANN. ");
             return Err(anyhow!("Invalid pkarr pubkey"));
         }
         let pubkey = parsed_option.unwrap();
         let packet_option = self.resolve_pubkey_respect_cache(&pubkey).await;
         if packet_option.is_none() {
+            tracing::info!("No pkarr packet found on the DHT [{tld}].");
             return Err(anyhow!("No pkarr packet found for pubkey"));
         }
         let pkarr_packet = packet_option.unwrap();
         let pkarr_packet = Packet::parse(&pkarr_packet).unwrap();
+        tracing::trace!("Pkarr packet resolved [{tld}].");
         let reply = resolve_query(&pkarr_packet, &request, socket).await;
-
         Ok(reply)
     }
 }
@@ -108,11 +109,24 @@ mod tests {
     use pkarr::{
         dns::{Name, Packet, Question, ResourceRecord}, Keypair, Settings, SignedPacket
     };
+    use chrono::{DateTime, Utc};
 
     // use simple_dns::{Name, Question, Packet};
     use super::*;
     use std::net::Ipv4Addr;
     use zbase32;
+
+    trait SignedPacketTimestamp {
+        fn chrono_timestamp(&self) -> DateTime<Utc>;
+    }
+    
+    impl SignedPacketTimestamp for SignedPacket {
+        fn chrono_timestamp(&self) -> DateTime<Utc> {
+            let timestamp = self.timestamp() / 1_000_000;
+            let timestamp = DateTime::from_timestamp((timestamp as u32).into(), 0).unwrap();
+            timestamp
+        }
+    }
 
     fn get_test_keypair() -> Keypair {
         // pk:cb7xxx6wtqr5d6yqudkt47drqswxk57dzy3h7qj3udym5puy9cso
@@ -153,7 +167,7 @@ mod tests {
 
     async fn get_dnssocket() -> DnsSocket {
         let handler = HandlerHolder::new(EmptyHandler::new());
-        DnsSocket::new("127.0.0.1:20384".parse().unwrap(), "8.8.8.8:53".parse().unwrap(), handler, false).await.unwrap()
+        DnsSocket::new("127.0.0.1:20384".parse().unwrap(), "8.8.8.8:53".parse().unwrap(), handler).await.unwrap()
     }
 
     #[tokio::test]
