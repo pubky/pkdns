@@ -9,6 +9,7 @@ mod packet_lookup;
 mod pkarr_cache;
 mod pkarr_resolver;
 mod helpers;
+mod bootstrap_nodes;
 
 #[derive(Clone)]
 struct MyHandler {
@@ -16,9 +17,9 @@ struct MyHandler {
 }
 
 impl MyHandler {
-    pub async fn new(max_cache_ttl: u64) -> Self {
+    pub async fn new(max_cache_ttl: u64, forward_dns_server: SocketAddr) -> Self {
         Self {
-            pkarr: PkarrResolver::new(max_cache_ttl).await,
+            pkarr: PkarrResolver::new(max_cache_ttl, Some(forward_dns_server)).await,
         }
     }
 }
@@ -47,7 +48,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .short('f')
                 .long("forward")
                 .required(false)
-                .default_value("192.168.1.1:53")
+                .default_value("8.8.8.8:53")
                 .help("ICANN fallback DNS server. IP:Port"),
         )
         .arg(
@@ -122,7 +123,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }));
 
     let anydns = Builder::new()
-        .handler(MyHandler::new(cache_ttl).await)
+        .handler(MyHandler::new(cache_ttl, forward.clone()).await)
         .icann_resolver(forward)
         .listen(socket)
         .build()
