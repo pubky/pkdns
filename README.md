@@ -105,6 +105,8 @@ Options:
   -V, --version                Print version
 ```
 
+For extended logs, see [here](./docs/logging.md).
+
 ## Announce Your Own Records
 
 Use the `pkdns-cli` to inspect and announce your pkarr records on the Mainline DHT. Download the [latest release](https://github.com/pubky/pkdns/releases/latest/) for your plattform.

@@ -1,5 +1,5 @@
 use std::env;
-use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 use tracing::{Level};
 
 /**
@@ -18,12 +18,18 @@ pub (crate) fn set_full_stacktrace_as_default() -> () {
 
 pub (crate) fn enable_logging(verbose: bool) {
     let key = "RUST_LOG";
-    let is_env_var_set = env::var(key).is_ok();
+    let value = match env::var(key) {
+        Ok(val) => val,
+        Err(_) => "".to_string()
+    };
 
-    if is_env_var_set {
-        tracing_subscriber::fmt().init();
+
+    if value.len() > 0 {
+        tracing_subscriber::fmt().with_env_filter(EnvFilter::from_default_env()).init();
+        tracing::info!("Used RUST_LOG={} env variable to set logging output.", value);
+        tracing::debug!("test");
         if verbose {
-            tracing::warn!("Custom RUST_LOG= env variable is set. Ignore --verbose flag.")
+            tracing::warn!("RUST_LOG= is set. Ignore --verbose flag.")
         }
         return
     }
