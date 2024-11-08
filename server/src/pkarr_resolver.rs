@@ -1,8 +1,12 @@
+
+
+use std::net::SocketAddr;
+
 use any_dns::DnsSocket;
 use anyhow::anyhow;
 
-use crate::{packet_lookup::resolve_query, pkarr_cache::PkarrPacketTtlCache};
-use pkarr::{dns::Packet, PkarrClient, PkarrClientAsync, PublicKey, Settings};
+use crate::{bootstrap_nodes::MainlineBootstrapResolver, packet_lookup::resolve_query, pkarr_cache::PkarrPacketTtlCache};
+use pkarr::{dns::Packet, mainline::dht::DhtSettings, PkarrClient, PkarrClientAsync, PublicKey};
 
 
 /**
@@ -15,9 +19,34 @@ pub struct PkarrResolver {
 }
 
 impl PkarrResolver {
-    pub async fn new(max_cache_ttl: u64) -> Self {
+
+    /**
+     * Resolves the DHT boostrap nodes with the forward server.
+     */
+    fn resolve_bootstrap_nodes(forward_dns_server: Option<SocketAddr>) -> Vec<String> {
+        let mut dns_server: SocketAddr = "8.8.8.8:53".parse().unwrap();
+        if let Some(val) = forward_dns_server {
+            dns_server = val;
+        };
+        tracing::debug!("Connecting to the DNS forward server {}. Hold on...", dns_server.to_string());
+        let addrs = MainlineBootstrapResolver::get_addrs(dns_server); 
+        if addrs.is_err() {
+            let err = addrs.unwrap_err();
+            tracing::error!("{}", err);
+            tracing::error!("Connecting to the DNS forward server failed. Couldn't resolve the DHT bootstrap nodes. Is the DNS forward server active?");
+            panic!("Resolving bootstrap nodes failed. {}", err);
+        }
+        tracing::debug!("Success. DNS forward server reply received.");
+        addrs.unwrap()
+    }
+
+    pub async fn new(max_cache_ttl: u64, forward_dns_server: Option<SocketAddr>) -> Self {
+        let addrs = Self::resolve_bootstrap_nodes(forward_dns_server);
+        let mut settings = DhtSettings::default();
+        settings.bootstrap = Some(addrs);
+        let client = PkarrClient::builder().dht_settings(settings).build().unwrap();
         Self {
-            client: PkarrClient::new(Settings::default()).unwrap().as_async(),
+            client: client.as_async(),
             cache: PkarrPacketTtlCache::new(max_cache_ttl).await,
         }
     }
@@ -66,8 +95,6 @@ impl PkarrResolver {
      */
     pub async fn resolve(&mut self, query: &Vec<u8>, socket: &mut DnsSocket) -> std::prelude::v1::Result<Vec<u8>, anyhow::Error> {
         let request = Packet::parse(query)?;
-        // let span = tracing::span!(Level::INFO, "", query_id = request.id());
-        // let _guard = span.enter();
 
         let question_opt = request.questions.first();
         if question_opt.is_none() {
@@ -186,7 +213,7 @@ mod tests {
         );
         query.questions.push(question);
 
-        let mut resolver = PkarrResolver::new(0).await;
+        let mut resolver = PkarrResolver::new(0, None).await;
         let mut socket = get_dnssocket().await;
         let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket).await;
         assert!(result.is_ok());
@@ -214,7 +241,7 @@ mod tests {
             true,
         );
         query.questions.push(question);
-        let mut resolver = PkarrResolver::new(0).await;
+        let mut resolver = PkarrResolver::new(0, None).await;
         let mut socket = get_dnssocket().await;
         let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket).await;
         assert!(result.is_ok());
@@ -239,7 +266,7 @@ mod tests {
             true,
         );
         query.questions.push(question);
-        let mut resolver = PkarrResolver::new(0).await;
+        let mut resolver = PkarrResolver::new(0, None).await;
         let mut socket = get_dnssocket().await;
         let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket).await;
         assert!(result.is_err());
@@ -265,7 +292,7 @@ mod tests {
     async fn pkarr_invalid_packet1() {
         let pubkey = PkarrResolver::parse_pkarr_uri("7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy").unwrap();
 
-        let mut resolver = PkarrResolver::new(0).await;
+        let mut resolver = PkarrResolver::new(0, None).await;
         let _result = resolver.resolve_pubkey_respect_cache(&pubkey).await;
         // assert!(result.is_some());
     }

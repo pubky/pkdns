@@ -20,3 +20,4 @@ async-trait = "0.1.77"
 anyhow = "1.0.79"
 tracing = "0.1.40"
 tracing-subscriber = {version = "0.3.18", features = ["smallvec", "fmt", "ansi", "tracing-log", "std", "env-filter"]}
+rustdns = "0.4.0"
