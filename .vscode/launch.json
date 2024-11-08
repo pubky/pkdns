@@ -21,7 +21,11 @@
             },
             "args": [
             ],
-            "cwd": "${workspaceFolder}"
+            "cwd": "${workspaceFolder}",
+            "env": {
+                "RUST_LOG": "debug"
+                // "RUST_LOG": "pkdns=debug,any_dns=debug,pkarr=debug,mainline=debug"
+            }
         },
     ]
 }
