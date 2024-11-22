@@ -17,9 +17,9 @@ struct MyHandler {
 }
 
 impl MyHandler {
-    pub async fn new(max_cache_ttl: u64, forward_dns_server: SocketAddr) -> Self {
+    pub async fn new(forward_dns_server: SocketAddr) -> Self {
         Self {
-            pkarr: PkarrResolver::new(max_cache_ttl, Some(forward_dns_server)).await,
+            pkarr: PkarrResolver::new(Some(forward_dns_server)).await,
         }
     }
 }
@@ -67,7 +67,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .num_args(0)
                 .help("Show verbose output."),
         )
-        .arg(
+        .arg( // TODO: Unused, remove or add deprecated warning.
             clap::Arg::new("cache-ttl")
                 .long("cache-ttl")
                 .required(false)
@@ -123,7 +123,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }));
 
     let anydns = Builder::new()
-        .handler(MyHandler::new(cache_ttl, forward.clone()).await)
+        .handler(MyHandler::new(forward.clone()).await)
         .icann_resolver(forward)
         .listen(socket)
         .build()

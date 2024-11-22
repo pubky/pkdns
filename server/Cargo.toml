@@ -10,7 +10,6 @@ ctrlc = "3.4.2"
 simple-dns = "0.6.0"
 pkarr = { version = "2.2.0", features = ["dht", "async", "rand"]}
 zbase32 = "0.1.2"
-ttl_cache = "0.5.1"
 clap = "4.4.18"
 any-dns = "0.3.2"
 chrono = "0.4.33"
@@ -20,3 +19,6 @@ anyhow = "1.0.79"
 tracing = "0.1.40"
 tracing-subscriber = {version = "0.3.18", features = ["smallvec", "fmt", "ansi", "tracing-log", "std", "env-filter"]}
 rustdns = "0.4.0"
+moka = { version = "0.12.8", features = ["future"] }
+dashmap = "6.1.0"
+
