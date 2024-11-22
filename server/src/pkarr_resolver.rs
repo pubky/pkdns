@@ -150,22 +150,17 @@ impl PkarrResolver {
     async fn resolve_pubkey_respect_cache(&mut self, pubkey: &PublicKey) -> Option<Vec<u8>> {
         if let Some(cached) = self.cache.get(pubkey).await {
             let refresh_needed_in_s = cached.next_refresh_needed_in_s(self.settings.min_ttl, self.settings.max_ttl);
-            tracing::trace!("Pkarr packet [{pubkey}] found in cache. Refresh in {}s", refresh_needed_in_s);
-            if refresh_needed_in_s == 0 {
-                tracing::trace!("Initiate background refresh for [{pubkey}].");
-                let mut me = self.clone();
-                let public_key = pubkey.clone();
-                tokio::spawn(async move { // Background refresh
-                    me.lookup_dht_and_cache(public_key).await
-                });
-            };
 
-            if cached.is_not_found() {
-                return None
+
+            if refresh_needed_in_s > 0 {
+                tracing::trace!("Pkarr packet [{pubkey}] found in cache. Cache valid for {}s", refresh_needed_in_s);
+                if cached.is_not_found() {
+                    return None
+                }
+    
+                let bytes = cached.unwrap().packet().build_bytes_vec().expect("Expect valid pkarr packet from cache");
+                return Some(bytes);
             }
-
-            let bytes = cached.unwrap().packet().build_bytes_vec().expect("Expect valid pkarr packet from cache");
-            return Some(bytes);
         };
 
         let packet = self.lookup_dht_and_cache(pubkey.clone()).await;
