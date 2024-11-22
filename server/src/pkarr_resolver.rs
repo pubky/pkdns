@@ -7,7 +7,7 @@ use anyhow::anyhow;
 use dashmap::DashMap;
 use tokio::sync::Mutex;
 
-use crate::{bootstrap_nodes::MainlineBootstrapResolver, packet_lookup::resolve_query, pkarr_cache::{CachedSignedPacket, PkarrPacketLruCache}};
+use crate::{bootstrap_nodes::MainlineBootstrapResolver, packet_lookup::resolve_query, pkarr_cache::{CacheItem, PkarrPacketLruCache}};
 use pkarr::{dns::Packet, mainline::dht::DhtSettings, PkarrClient, PkarrClientAsync, PublicKey};
 
 
@@ -75,36 +75,43 @@ impl PkarrResolver {
         trying.ok()
     }
 
+    /**
+     * Resolves a public key. Checks the cache first.
+     */
     async fn resolve_pubkey_respect_cache(&mut self, pubkey: &PublicKey) -> Option<Vec<u8>> {
         if let Some(cached) = self.cache.get(pubkey).await {
-            tracing::debug!("Pkarr packet [{pubkey}] found in cache. Expires in {}s", cached.ttl_expires_in_s());
+            tracing::trace!("Pkarr packet [{pubkey}] found in cache. Expires in {}s", cached.ttl_expires_in_s());
             if cached.is_ttl_expired() {
-                tracing::debug!("Initiate background refresh for [{pubkey}].");
+                tracing::trace!("Initiate background refresh for [{pubkey}].");
                 let mut me = self.clone();
                 let public_key = pubkey.clone();
-                tokio::spawn(async move {
-                    me.lookup_dht_without_cache(public_key).await
+                tokio::spawn(async move { // Background refresh
+                    me.lookup_dht_and_cache(public_key).await
                 });
             };
-            let bytes = cached.packet.packet().build_bytes_vec().expect("Expect valid pkarr packet from cache");
+
+            if cached.is_not_found() {
+                return None
+            }
+
+            let bytes = cached.unwrap().packet().build_bytes_vec().expect("Expect valid pkarr packet from cache");
             return Some(bytes);
         };
 
-        tracing::trace!("Lookup [{pubkey}] on the DHT.");
-        let packet = self.lookup_dht_without_cache(pubkey.clone()).await;
-        if packet.is_none() {
+        let packet = self.lookup_dht_and_cache(pubkey.clone()).await;
+        if packet.is_not_found() {
             return None;
         };
-        let signed_packet = packet.unwrap().packet;
+        let signed_packet = packet.unwrap();
         let reply_bytes = signed_packet.packet().build_bytes_vec_compressed().unwrap();
-        self.cache.add(signed_packet).await;
+        self.cache.add_packet(signed_packet).await;
         Some(reply_bytes)
     }
 
     /**
      * Lookup DHT to pull pkarr packet. Will not check the cache first but store any new value in the cache. Returns cached value if lookup fails.
      */
-    async fn lookup_dht_without_cache(&mut self, pubkey: PublicKey) -> Option<CachedSignedPacket> {
+    async fn lookup_dht_and_cache(&mut self, pubkey: PublicKey) -> CacheItem {
         let mutex = self.lock_map.entry(pubkey.clone()).or_insert_with(|| Arc::new(Mutex::new(())));
         let _guard = mutex.lock().await;
 
@@ -112,27 +119,27 @@ impl PkarrResolver {
             if !cache.is_ttl_expired() {
                 // Value got updated in the meantime while aquiring the lock.
                 tracing::trace!("Refresh for [{pubkey}] not needed. Value got updated in the meantime.");
-                return Some(cache);
+                return cache;
             }
         }
 
+        tracing::trace!("Lookup [{pubkey}] on the DHT.");
         let packet_option = self.client.resolve(&pubkey).await;
         if packet_option.is_err() {
             let err = packet_option.unwrap_err();
             tracing::error!("DHT lookup for [{pubkey}] errored. {err}");
-
-            return self.cache.get(&pubkey).await
+            return self.cache.add_not_found(pubkey).await;
         };
 
         let signed_packet = packet_option.unwrap();
         if signed_packet.is_none() {
             tracing::debug!("DHT lookup for [{pubkey}] failed. Nothing found.");
-            return self.cache.get(&pubkey).await
+            return self.cache.add_not_found(pubkey).await;
         };
 
         tracing::trace!("Refreshed cache for [{pubkey}].");
         let new_packet = signed_packet.unwrap();
-        Some(self.cache.add(new_packet).await)
+        self.cache.add_packet(new_packet).await
     }
 
     /**
