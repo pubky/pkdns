@@ -66,6 +66,7 @@ impl CacheItem {
         }
     }
 
+    #[allow(dead_code)]
     pub fn is_packet(&self) -> bool {
         if let CacheItem::Packet {
             packet: _,
@@ -279,10 +280,12 @@ impl PkarrPacketLruCache {
     /**
      * Approximated size of the cache in bytes. May not be 100% accurate due to pending counts.
      */
+    #[allow(dead_code)]
     pub fn approx_size_bytes(&self) -> u64 {
         self.cache.weighted_size()
     }
-
+    
+    #[allow(dead_code)]
     pub fn entry_count(&self) -> u64 {
         self.cache.entry_count()
     }

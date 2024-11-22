@@ -21,6 +21,11 @@ pub struct ResolverSettings {
      */
     min_ttl: u64,
 
+    /**
+     * Maximum size of the pkarr packet cache in megabytes.
+     */
+    cache_mb: u64,
+
     forward_dns_server: SocketAddr
 }
 
@@ -29,6 +34,7 @@ impl ResolverSettings {
         Self {
             max_ttl: 60*60*24, // 1 day
             min_ttl: 60*5,
+            cache_mb: 100,
             forward_dns_server: "8.8.8.8:53".parse().expect("forward should be valid IP:Port combination.")
         }
     }
@@ -60,8 +66,9 @@ impl PkarrResolverBuilder {
         self
     }
 
-    pub async fn build(self) -> PkarrResolver {
-        PkarrResolver::new(self.settings).await
+    pub fn cache_mb(mut self, megabytes: u64) -> Self {
+        self.settings.cache_mb = megabytes;
+        self
     }
 
     pub fn build_settings(self) -> ResolverSettings {
@@ -102,6 +109,7 @@ impl PkarrResolver {
         addrs.unwrap()
     }
 
+    #[allow(dead_code)]
     pub async fn default() -> Self {
         Self::new(ResolverSettings::default()).await
     }
@@ -120,7 +128,7 @@ impl PkarrResolver {
         .build().unwrap();
         Self {
             client: client.as_async(),
-            cache: PkarrPacketLruCache::new(None),
+            cache: PkarrPacketLruCache::new(Some(settings.cache_mb)),
             lock_map: Arc::new(DashMap::new()),
             settings,
         }

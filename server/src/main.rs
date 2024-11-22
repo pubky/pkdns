@@ -80,6 +80,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .required(false)
                 .default_value("86400") // 24hrs
                 .help("Maximum number of seconds before a cached value gets auto-refreshed."),
+        )
+        .arg(
+            clap::Arg::new("cache-mb")
+                .long("cache-mb")
+                .required(false)
+                .default_value("100")
+                .help("Maximum size of the pkarr packet cache in megabytes."),
         );
 
     let matches = cmd.get_matches();
@@ -92,6 +99,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let min_ttl: u64 = min_ttl
         .parse()
         .expect("min-ttl should be a valid valid positive integer.");
+    let cache_mb: &String = matches.get_one("cache-mb").unwrap();
+    let cache_mb: u64 = cache_mb
+        .parse()
+        .expect("cache-mb should be a valid valid positive integer of at least 1.");
     let forward: &String = matches.get_one("forward").unwrap();
     let mut forward: String = forward.clone();
     if !forward.contains(":") {
@@ -103,9 +114,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 
     enable_logging(verbose);
+
+    if cache_mb <= 0 {
+        tracing::error!("--cache-mb must be at least 1. Given {cache_mb}.")
+    }
     
     tracing::info!("Starting pkdns v{VERSION}");
-    tracing::trace!("min_ttl={min_ttl} max_ttl={max_ttl} verbose={verbose} forward={forward}");
+    tracing::trace!("min_ttl={min_ttl} max_ttl={max_ttl} cache_mb={cache_mb} verbose={verbose} forward={forward}");
 
     tracing::info!("Forward ICANN queries to {}", forward);
 
@@ -118,7 +133,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         std::process::exit(1);
     }));
 
-    let resolver_settings = PkarrResolver::builder().forward_server(forward).max_ttl(max_ttl).min_ttl(min_ttl).build_settings();
+    let resolver_settings = PkarrResolver::builder().forward_server(forward).max_ttl(max_ttl).min_ttl(min_ttl).cache_mb(cache_mb).build_settings();
     let anydns = Builder::new()
         .handler(MyHandler::new(resolver_settings).await)
         .icann_resolver(forward)
