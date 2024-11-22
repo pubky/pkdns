@@ -110,8 +110,8 @@ impl MainlineBootstrapResolver {
         }
     }
 
-    pub fn get_addrs(dns_server: SocketAddr) -> Result<Vec<String>, anyhow::Error> {
-        let resolver = MainlineBootstrapResolver::new(dns_server).unwrap();
+    pub fn get_addrs(dns_server: &SocketAddr) -> Result<Vec<String>, anyhow::Error> {
+        let resolver = MainlineBootstrapResolver::new(dns_server.clone()).unwrap();
         let addrs = resolver.get_bootstrap_nodes()?;
         let addrs: Vec<String> = addrs.into_iter().map(|addr| addr.to_string()).collect();
         Ok(addrs)

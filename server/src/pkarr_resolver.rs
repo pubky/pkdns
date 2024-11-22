@@ -10,6 +10,64 @@ use tokio::sync::Mutex;
 use crate::{bootstrap_nodes::MainlineBootstrapResolver, packet_lookup::resolve_query, pkarr_cache::{CacheItem, PkarrPacketLruCache}};
 use pkarr::{dns::Packet, mainline::dht::DhtSettings, PkarrClient, PkarrClientAsync, PublicKey};
 
+#[derive(Clone, Debug)]
+pub struct ResolverSettings {
+    /**
+     * Maximum number of seconds before a cached value gets auto-refreshed.
+     */
+    max_ttl: u64,
+    /**
+     * Minimum number of seconds a value is cached for before being refreshed.
+     */
+    min_ttl: u64,
+
+    forward_dns_server: SocketAddr
+}
+
+impl ResolverSettings {
+    pub fn default() -> Self {
+        Self {
+            max_ttl: 60*60*24, // 1 day
+            min_ttl: 60*5,
+            forward_dns_server: "8.8.8.8:53".parse().expect("forward should be valid IP:Port combination.")
+        }
+    }
+}
+
+pub struct PkarrResolverBuilder {
+    settings: ResolverSettings
+}
+
+impl PkarrResolverBuilder {
+    pub fn new() -> Self {
+        Self {
+            settings: ResolverSettings::default()
+        }
+    }
+
+    pub fn forward_server(mut self, socket: SocketAddr) -> Self {
+        self.settings.forward_dns_server = socket;
+        self
+    }
+
+    pub fn max_ttl(mut self, rate_s: u64) -> Self {
+        self.settings.max_ttl = rate_s;
+        self
+    }
+
+    pub fn min_ttl(mut self, rate_s: u64) -> Self {
+        self.settings.min_ttl = rate_s;
+        self
+    }
+
+    pub async fn build(self) -> PkarrResolver {
+        PkarrResolver::new(self.settings).await
+    }
+
+    pub fn build_settings(self) -> ResolverSettings {
+        self.settings
+    }
+}
 
 
 /**
@@ -22,7 +80,8 @@ pub struct PkarrResolver {
     /**
      * Locks to use to update pkarr packets. This avoids concurrent updates.
      */
-    lock_map: Arc<DashMap<PublicKey, Arc<Mutex<()>>>>
+    lock_map: Arc<DashMap<PublicKey, Arc<Mutex<()>>>>,
+    settings: ResolverSettings
 }
 
 impl PkarrResolver {
@@ -30,13 +89,9 @@ impl PkarrResolver {
     /**
      * Resolves the DHT boostrap nodes with the forward server.
      */
-    fn resolve_bootstrap_nodes(forward_dns_server: Option<SocketAddr>) -> Vec<String> {
-        let mut dns_server: SocketAddr = "8.8.8.8:53".parse().unwrap();
-        if let Some(val) = forward_dns_server {
-            dns_server = val;
-        };
-        tracing::debug!("Connecting to the DNS forward server {}. Hold on...", dns_server.to_string());
-        let addrs = MainlineBootstrapResolver::get_addrs(dns_server); 
+    fn resolve_bootstrap_nodes(forward_dns_server: &SocketAddr) -> Vec<String> {
+        tracing::debug!("Connecting to the DNS forward server {}. Hold on...", forward_dns_server.to_string());
+        let addrs = MainlineBootstrapResolver::get_addrs(forward_dns_server); 
         if addrs.is_err() {
             let err = addrs.unwrap_err();
             tracing::error!("{}", err);
@@ -47,18 +102,27 @@ impl PkarrResolver {
         addrs.unwrap()
     }
 
-    pub async fn new(forward_dns_server: Option<SocketAddr>) -> Self {
-        let addrs = Self::resolve_bootstrap_nodes(forward_dns_server);
-        let mut settings = DhtSettings::default();
-        settings.bootstrap = Some(addrs);
+    pub async fn default() -> Self {
+        Self::new(ResolverSettings::default()).await
+    }
+
+    pub fn builder() -> PkarrResolverBuilder {
+        PkarrResolverBuilder::new()
+    }
+
+    pub async fn new(settings: ResolverSettings) -> Self {
+        let addrs = Self::resolve_bootstrap_nodes(&settings.forward_dns_server);
+        let mut dht_settings = DhtSettings::default();
+        dht_settings.bootstrap = Some(addrs);
         let client = PkarrClient::builder()
         .minimum_ttl(0).maximum_ttl(0) // Disable Pkarr caching
-        .dht_settings(settings) // Use resolved bootstrap node
+        .dht_settings(dht_settings) // Use resolved bootstrap node
         .build().unwrap();
         Self {
             client: client.as_async(),
             cache: PkarrPacketLruCache::new(None),
-            lock_map: Arc::new(DashMap::new())
+            lock_map: Arc::new(DashMap::new()),
+            settings,
         }
     }
 
@@ -75,13 +139,19 @@ impl PkarrResolver {
         trying.ok()
     }
 
+    fn is_refresh_needed(&self, item: &CacheItem) -> bool {
+        let refresh_needed_in_s = item.next_refresh_needed_in_s(self.settings.min_ttl, self.settings.max_ttl);
+        refresh_needed_in_s == 0
+    }
+
     /**
      * Resolves a public key. Checks the cache first.
      */
     async fn resolve_pubkey_respect_cache(&mut self, pubkey: &PublicKey) -> Option<Vec<u8>> {
         if let Some(cached) = self.cache.get(pubkey).await {
-            tracing::trace!("Pkarr packet [{pubkey}] found in cache. Expires in {}s", cached.ttl_expires_in_s());
-            if cached.is_ttl_expired() {
+            let refresh_needed_in_s = cached.next_refresh_needed_in_s(self.settings.min_ttl, self.settings.max_ttl);
+            tracing::trace!("Pkarr packet [{pubkey}] found in cache. Refresh in {}s", refresh_needed_in_s);
+            if refresh_needed_in_s == 0 {
                 tracing::trace!("Initiate background refresh for [{pubkey}].");
                 let mut me = self.clone();
                 let public_key = pubkey.clone();
@@ -116,7 +186,7 @@ impl PkarrResolver {
         let _guard = mutex.lock().await;
 
         if let Some(cache) = self.cache.get(&pubkey).await {
-            if !cache.is_ttl_expired() {
+            if !self.is_refresh_needed(&cache) {
                 // Value got updated in the meantime while aquiring the lock.
                 tracing::trace!("Refresh for [{pubkey}] not needed. Value got updated in the meantime.");
                 return cache;
@@ -268,7 +338,7 @@ mod tests {
         );
         query.questions.push(question);
 
-        let mut resolver = PkarrResolver::new(None).await;
+        let mut resolver = PkarrResolver::default().await;
         let mut socket = get_dnssocket().await;
         let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket).await;
         assert!(result.is_ok());
@@ -296,7 +366,7 @@ mod tests {
             true,
         );
         query.questions.push(question);
-        let mut resolver = PkarrResolver::new(None).await;
+        let mut resolver = PkarrResolver::default().await;
         let mut socket = get_dnssocket().await;
         let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket).await;
         assert!(result.is_ok());
@@ -321,7 +391,7 @@ mod tests {
             true,
         );
         query.questions.push(question);
-        let mut resolver = PkarrResolver::new(None).await;
+        let mut resolver = PkarrResolver::default().await;
         let mut socket = get_dnssocket().await;
         let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket).await;
         assert!(result.is_err());
@@ -347,7 +417,7 @@ mod tests {
     async fn pkarr_invalid_packet1() {
         let pubkey = PkarrResolver::parse_pkarr_uri("7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy").unwrap();
 
-        let mut resolver = PkarrResolver::new(None).await;
+        let mut resolver = PkarrResolver::default().await;
         let _result = resolver.resolve_pubkey_respect_cache(&pubkey).await;
         // assert!(result.is_some());
     }

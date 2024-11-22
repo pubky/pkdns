@@ -8,8 +8,6 @@ use pkarr::{PublicKey, SignedPacket};
  * Goal2: Prevent attackers from overflowing the cache and evict values this way.
  */
 
-const DEFAULT_MIN_TTL: u64 = 60;
-
 /**
  * Timestamp in seconds since UNIX_EPOCH
  */
@@ -30,14 +28,14 @@ pub enum CacheItem {
         /**
          * When the packet got added to the cache or cache got updated. Seconds timestamp since UNIX_EPOCH.
          */
-        cached_at: u64,
+        last_updated_at: u64,
     },
     Packet {
         packet: SignedPacket,
         /**
          * When the packet got added to the cache or cache got updated. Seconds timestamp since UNIX_EPOCH.
          */
-        cached_at: u64,
+        last_updated_at: u64,
     },
 }
 
@@ -45,21 +43,21 @@ impl CacheItem {
     pub fn new_packet(packet: SignedPacket) -> Self {
         Self::Packet {
             packet: packet,
-            cached_at: get_timestamp_seconds(),
+            last_updated_at: get_timestamp_seconds(),
         }
     }
 
     pub fn new_not_found(pubkey: PublicKey) -> Self {
         Self::NotFound {
             public_key: pubkey,
-            cached_at: get_timestamp_seconds(),
+            last_updated_at: get_timestamp_seconds(),
         }
     }
 
     pub fn is_not_found(&self) -> bool {
         if let CacheItem::NotFound {
             public_key: _,
-            cached_at: _,
+            last_updated_at: _,
         } = self
         {
             true
@@ -71,7 +69,7 @@ impl CacheItem {
     pub fn is_packet(&self) -> bool {
         if let CacheItem::Packet {
             packet: _,
-            cached_at: _,
+            last_updated_at: _,
         } = self
         {
             true
@@ -84,7 +82,7 @@ impl CacheItem {
      * Returns signed packet. Panics if not found.
      */
     pub fn unwrap(self) -> SignedPacket {
-        if let CacheItem::Packet { packet, cached_at: _ } = self {
+        if let CacheItem::Packet { packet, last_updated_at: _ } = self {
             return packet;
         } else {
             panic!("Can not unwrap CacheItem without a packet.")
@@ -95,24 +93,24 @@ impl CacheItem {
         match self {
             CacheItem::NotFound {
                 public_key,
-                cached_at: _,
+                last_updated_at: _,
             } => public_key.clone(),
-            CacheItem::Packet { packet, cached_at: _ } => packet.public_key(),
+            CacheItem::Packet { packet, last_updated_at: _ } => packet.public_key(),
         }
     }
 
     /**
      * Updates the cached_at timestamp to now.
      */
-    pub fn refresh_cached_at(&mut self) {
+    pub fn refresh_updated_at(&mut self) {
         match self {
             CacheItem::NotFound {
                 public_key: _,
-                cached_at,
+                last_updated_at: cached_at,
             } => {
                 *cached_at = get_timestamp_seconds();
             }
-            CacheItem::Packet { packet: _, cached_at } => {
+            CacheItem::Packet { packet: _, last_updated_at: cached_at } => {
                 *cached_at = get_timestamp_seconds();
             }
         }
@@ -126,19 +124,19 @@ impl CacheItem {
         match self {
             CacheItem::NotFound {
                 public_key: _,
-                cached_at: _,
+                last_updated_at: _,
             } => 0,
-            CacheItem::Packet { packet, cached_at: _ } => packet.timestamp(),
+            CacheItem::Packet { packet, last_updated_at: _ } => packet.timestamp(),
         }
     }
 
-    fn cached_at(&self) -> u64 {
+    fn last_updated_at(&self) -> u64 {
         match self {
             CacheItem::NotFound {
                 public_key: _,
-                cached_at,
+                last_updated_at: cached_at,
             } => cached_at.clone(),
-            CacheItem::Packet { packet: _, cached_at } => cached_at.clone(),
+            CacheItem::Packet { packet: _, last_updated_at: cached_at } => cached_at.clone(),
         }
     }
 
@@ -150,9 +148,9 @@ impl CacheItem {
         match self {
             CacheItem::NotFound {
                 public_key: _,
-                cached_at: _,
+                last_updated_at: _,
             } => None,
-            CacheItem::Packet { packet, cached_at: _ } => {
+            CacheItem::Packet { packet, last_updated_at: _ } => {
                 packet.packet().answers.iter().map(|answer| answer.ttl as u64).min()
             }
         }
@@ -165,40 +163,44 @@ impl CacheItem {
         match self {
             CacheItem::NotFound {
                 public_key: _,
-                cached_at: _,
+                last_updated_at: _,
             } => {
                 32 + 8 // Public key 32 + cached_at 8
             }
-            CacheItem::Packet { packet, cached_at: _ } => packet.as_bytes().len() + 8,
+            CacheItem::Packet { packet, last_updated_at: _ } => packet.as_bytes().len() + 8,
         }
     }
 
     /**
-     * If this value is outdated and should be refreshed
+     * When the next refresh of this cached element is needed.
      */
-    pub fn is_ttl_expired(&self) -> bool {
-        self.ttl_expires_in_s() == 0
-    }
-
-    /**
-     * When the smallest ttl expires in seconds.
-     */
-    pub fn ttl_expires_in_s(&self) -> u64 {
-        let min_ttl = self
+    pub fn next_refresh_needed_in_s(&self, min_ttl: u64, max_ttl: u64) -> u64 {
+        let ttl = self
             .lowest_answer_ttl()
-            .map(|val| if val < DEFAULT_MIN_TTL { DEFAULT_MIN_TTL } else { val })
-            .unwrap_or(DEFAULT_MIN_TTL);
+            .unwrap_or(min_ttl);
+
+        let ttl = if ttl < min_ttl {
+            min_ttl
+        } else {
+            ttl
+        };
+
+        let ttl = if ttl > max_ttl {
+            max_ttl
+        } else {
+            ttl
+        };
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("Time went backwards")
             .as_secs();
 
-        let age_seconds = now - self.cached_at();
-        if age_seconds > min_ttl {
+        let age_seconds = now - self.last_updated_at();
+        if age_seconds > ttl {
             0
         } else {
-            min_ttl - age_seconds
+            ttl - age_seconds
         }
     }
 }
@@ -219,6 +221,7 @@ impl PkarrPacketLruCache {
                 .weigher(|_key, value: &CacheItem| -> u32 { value.memory_size() as u32 })
                 .max_capacity(cache_size_mb * 1024 * 1024)
                 .build(),
+
         }
     }
 
@@ -231,7 +234,7 @@ impl PkarrPacketLruCache {
             let same_age = new_item.controller_timestamp() == already_cached.controller_timestamp();
             if same_age {
                 // Update cached_at timestamp
-                already_cached.refresh_cached_at();
+                already_cached.refresh_updated_at();
                 self.cache
                     .insert(already_cached.public_key(), already_cached.clone())
                     .await;
