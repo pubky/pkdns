@@ -96,13 +96,13 @@ Other services might occupy the port 53 already. For example, [Docker Desktop](h
 Usage: pkdns [OPTIONS]
 
 Options:
-  -f, --forward <forward>      ICANN fallback DNS server. IP:Port [default: 192.168.1.1:53]
-  -s, --socket <socket>        Socket the server should listen on. IP:Port [default: 0.0.0.0:53]
-  -v, --verbose                Show verbose output.
-      --cache-ttl <cache-ttl>  Pkarr packet cache ttl in seconds.
-      --threads <threads>      Number of threads to process dns queries. [default: 4]
-  -h, --help                   Print help
-  -V, --version                Print version
+  -f, --forward <forward>  ICANN fallback DNS server. IP:Port [default: 8.8.8.8:53]
+  -s, --socket <socket>    Socket the server should listen on. IP:Port [default: 0.0.0.0:53]
+  -v, --verbose            Show verbose output.
+      --min-ttl <min-ttl>  Minimum number of seconds a value is cached for before being refreshed. [default: 300]
+      --max-ttl <max-ttl>  Maximum number of seconds before a cached value gets auto-refreshed. [default: 86400]
+  -h, --help               Print help
+  -V, --version            Print version
 ```
 
 For extended logs, see [here](./docs/logging.md).
@@ -133,7 +133,7 @@ Use the `pkdns-cli` to inspect and announce your pkarr records on the Mainline D
 ```
 
 
-> ⚠️ The mainline DHT will take some minutes to propagate your changes.
+> ⚠️ pkdns caches DHT packets for at least 5 minutes to improve latency. Run your own instance with `pkdns --max-ttl 0` to disable caching.
 
 ## Limitations
 

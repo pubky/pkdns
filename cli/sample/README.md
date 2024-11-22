@@ -7,7 +7,7 @@ This is an example on how to announce your own records on the mainline DHT.
 
 Publish the records by pointing to the seed and zone files.
 
-> ⚠️ The mainline DHT will take some minutes to propagate your changes. In the meantime, pkdns might return a mix of old and new packages. This is normal.
+> ⚠️ pkdns caches DHT packets for at least 5 minutes to improve latency. Run your own instance with `pkdns --max-ttl 0` to disable caching.
 
 ```bash
 $ ./pkdns-cli publish seed.txt pkarr.zone

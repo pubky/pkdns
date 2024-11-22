@@ -2,7 +2,7 @@ use any_dns::{Builder, CustomHandler, CustomHandlerError, DnsSocket};
 use async_trait::async_trait;
 
 use helpers::{enable_logging, set_full_stacktrace_as_default};
-use pkarr_resolver::PkarrResolver;
+use pkarr_resolver::{PkarrResolver, ResolverSettings};
 use std::{error::Error, net::SocketAddr};
 
 mod packet_lookup;
@@ -17,9 +17,9 @@ struct MyHandler {
 }
 
 impl MyHandler {
-    pub async fn new(max_cache_ttl: u64, forward_dns_server: SocketAddr) -> Self {
+    pub async fn new(settings: ResolverSettings) -> Self {
         Self {
-            pkarr: PkarrResolver::new(max_cache_ttl, Some(forward_dns_server)).await,
+            pkarr: PkarrResolver::new(settings).await,
         }
     }
 }
@@ -41,7 +41,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
 
     let cmd = clap::Command::new("pkdns")
-        .about("A DNS server for pkarr self-sovereign domains.")
+        .about("A DNS server for Public Key Domains (PDK).")
         .version(VERSION)
         .arg(
             clap::Arg::new("forward")
@@ -68,28 +68,41 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .help("Show verbose output."),
         )
         .arg(
-            clap::Arg::new("cache-ttl")
-                .long("cache-ttl")
+            clap::Arg::new("min-ttl")
+                .long("min-ttl")
                 .required(false)
-                .help("Pkarr packet cache ttl in seconds."),
+                .default_value("300")
+                .help("Minimum number of seconds a value is cached for before being refreshed."),
         )
         .arg(
-            clap::Arg::new("threads")
-                .long("threads")
+            clap::Arg::new("max-ttl")
+                .long("max-ttl")
                 .required(false)
-                .default_value("4")
-                .help("Number of threads to process dns queries."),
+                .default_value("86400") // 24hrs
+                .help("Maximum number of seconds before a cached value gets auto-refreshed."),
+        )
+        .arg(
+            clap::Arg::new("cache-mb")
+                .long("cache-mb")
+                .required(false)
+                .default_value("100")
+                .help("Maximum size of the pkarr packet cache in megabytes."),
         );
 
     let matches = cmd.get_matches();
     let verbose: bool = *matches.get_one("verbose").unwrap();
-    let default_cache_ttl = "60".to_string();
-    let cache_ttl: &String = matches.get_one("cache-ttl").unwrap_or(&default_cache_ttl);
-    let cache_ttl: u64 = cache_ttl
+    let max_ttl: &String = matches.get_one("max-ttl").unwrap();
+    let max_ttl: u64 = max_ttl
         .parse()
-        .expect("cache-ttl should be a valid valid positive integer (u64).");
-    let threads: &String = matches.get_one("threads").unwrap();
-    let threads: u8 = threads.parse().expect("threads should be valid positive integer.");
+        .expect("max-ttl should be a valid valid positive integer.");
+    let min_ttl: &String = matches.get_one("min-ttl").unwrap();
+    let min_ttl: u64 = min_ttl
+        .parse()
+        .expect("min-ttl should be a valid valid positive integer.");
+    let cache_mb: &String = matches.get_one("cache-mb").unwrap();
+    let cache_mb: u64 = cache_mb
+        .parse()
+        .expect("cache-mb should be a valid valid positive integer of at least 1.");
     let forward: &String = matches.get_one("forward").unwrap();
     let mut forward: String = forward.clone();
     if !forward.contains(":") {
@@ -101,15 +114,13 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
 
     enable_logging(verbose);
+
+    if cache_mb <= 0 {
+        tracing::error!("--cache-mb must be at least 1. Given {cache_mb}.")
+    }
     
     tracing::info!("Starting pkdns v{VERSION}");
-
-    if cache_ttl != 60 {
-        tracing::info!("Set cache-ttl to {cache_ttl}s");
-    }
-    if threads != 4 {
-        tracing::info!("Use {threads} threads");
-    }
+    tracing::trace!("min_ttl={min_ttl} max_ttl={max_ttl} cache_mb={cache_mb} verbose={verbose} forward={forward}");
 
     tracing::info!("Forward ICANN queries to {}", forward);
 
@@ -122,8 +133,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         std::process::exit(1);
     }));
 
+    let resolver_settings = PkarrResolver::builder().forward_server(forward).max_ttl(max_ttl).min_ttl(min_ttl).cache_mb(cache_mb).build_settings();
     let anydns = Builder::new()
-        .handler(MyHandler::new(cache_ttl, forward.clone()).await)
+        .handler(MyHandler::new(resolver_settings).await)
         .icann_resolver(forward)
         .listen(socket)
         .build()
