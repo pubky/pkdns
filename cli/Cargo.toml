@@ -1,6 +1,6 @@
 [package]
 name = "pkdns-cli"
-version = "0.5.4"
+version = "0.6.0-rc.0"
 authors = ["SeverinAlexB <severin@synonym.to>"]
 edition = "2021"
 
