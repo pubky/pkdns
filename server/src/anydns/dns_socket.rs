@@ -2,9 +2,8 @@
 use super::{
     custom_handler::{CustomHandlerError, HandlerHolder},
     pending_request::{PendingRequest, PendingRequestStore},
-    query_id_manager::QueryIdManager,
+    query_id_manager::QueryIdManager, rate_limiter::RateLimiter,
 };
-use governor::{DefaultKeyedRateLimiter, NotUntil, Quota, RateLimiter};
 use simple_dns::{Packet, SimpleDnsError, RCODE};
 use std::hash::{Hash, Hasher};
 use std::num;
@@ -28,68 +27,8 @@ pub enum RequestError {
 
     #[error("Timeout. No answer received from forward server.")]
     Timeout(#[from] tokio::time::error::Elapsed),
-
-    #[error("Client IP hit rate limit.")]
-    RateLimited,
 }
 
-/**
- * Custom rate limiting key. A device usually gets
- * either one IPv4 address OR a /64 bit IPv6 address.
- * To prevent IPv6 abuse, RateLimitingKey only uses the first 64 bits
- * of the IPv6 address to rate limit.
- */
-#[derive(Clone, Debug, Eq, PartialEq)]
-enum RateLimitingKey {
-    Ipv4(Ipv4Addr),
-    IpV6 { significant_bits: u64 },
-}
-
-impl RateLimitingKey {
-    /**
-     * Generates a key from a ip address.
-     */
-    pub fn from_ip(ip: IpAddr) -> Self {
-        match ip {
-            IpAddr::V4(val) => Self::from_ipv4(val),
-            IpAddr::V6(val) => Self::from_ipv6(val),
-        }
-    }
-
-    /**
-     * Generate a key from an IPv4 address.
-     */
-    pub fn from_ipv4(ip: Ipv4Addr) -> Self {
-        Self::Ipv4(ip)
-    }
-
-    /**
-     * Generate a key from an IPv6 address.
-     */
-    pub fn from_ipv6(ip: Ipv6Addr) -> Self {
-        let segments = ip.segments();
-        let key = ((segments[0] as u64) << 48)
-            | ((segments[1] as u64) << 32)
-            | ((segments[2] as u64) << 16)
-            | (segments[3] as u64);
-        return Self::IpV6 { significant_bits: key };
-    }
-}
-
-impl Hash for RateLimitingKey {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        match self {
-            RateLimitingKey::Ipv4(ipv4_addr) => {
-                ipv4_addr.hash(state);
-                (0 as u8).hash(state); // IPv4 indicator to prevent overlap with the Ipv6 space.
-            }
-            RateLimitingKey::IpV6 { significant_bits } => {
-                significant_bits.hash(state);
-                (1 as u8).hash(state); // IPv6 indicator to prevent overlap with the Ipv6 space.
-            }
-        }
-    }
-}
 
 /**
  * DNS UDP socket
@@ -101,7 +40,7 @@ pub struct DnsSocket {
     handler: HandlerHolder,
     icann_fallback: SocketAddr,
     id_manager: QueryIdManager,
-    rate_limiter: Option<Arc<DefaultKeyedRateLimiter<RateLimitingKey>>>,
+    rate_limiter: Arc<RateLimiter>,
 }
 
 impl DnsSocket {
@@ -116,17 +55,13 @@ impl DnsSocket {
     ) -> tokio::io::Result<Self> {
         let socket = UdpSocket::bind(listening).await?;
 
-        let rater = max_queries_per_ip_per_second.map(|limit| {
-            let quota = Quota::per_second(limit);
-            Arc::new(RateLimiter::keyed(quota))
-        });
         Ok(Self {
             socket: Arc::new(socket),
             pending: PendingRequestStore::new(),
             handler,
             icann_fallback,
             id_manager: QueryIdManager::new(),
-            rate_limiter: rater,
+            rate_limiter: Arc::new(RateLimiter::new(max_queries_per_ip_per_second)),
         })
     }
 
@@ -175,11 +110,11 @@ impl DnsSocket {
         };
 
         // New query
-        if self.is_rate_limited(from.ip()) {
-            tracing::debug!("Rate limited {from}.");
+        if self.rate_limiter.check_is_limited_and_increase(from.ip()) {
+            tracing::trace!("Rate limited {}.", from.ip());
             let reply = self.construct_rate_limited_response(packet.id());
             self.send_to(&reply, &from).await?;
-            return Err(RequestError::RateLimited);
+            return Ok(());
         };
 
         let mut socket = self.clone();
@@ -218,18 +153,6 @@ impl DnsSocket {
         });
 
         Ok(())
-    }
-
-    /**
-     * Checks if this ip address is rate limited.
-     */
-    fn is_rate_limited(&self, ip: IpAddr) -> bool {
-        if let Some(limiter) = &self.rate_limiter {
-            let key = RateLimitingKey::from_ip(ip.clone());
-            let is_rate_limited = limiter.check_key(&key).is_err();
-            return is_rate_limited;
-        };
-        return false
     }
 
     /**
