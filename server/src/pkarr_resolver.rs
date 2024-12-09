@@ -2,7 +2,7 @@
 
 use std::{net::SocketAddr, sync::Arc};
 
-use any_dns::DnsSocket;
+use crate::anydns::DnsSocket;
 use anyhow::anyhow;
 use dashmap::DashMap;
 use tokio::sync::Mutex;
@@ -260,7 +260,7 @@ impl PkarrResolver {
 
 #[cfg(test)]
 mod tests {
-    use any_dns::{EmptyHandler, HandlerHolder};
+    use crate::anydns::{EmptyHandler, HandlerHolder};
     use pkarr::{
         dns::{Name, Packet, Question, ResourceRecord}, Keypair, Settings, SignedPacket
     };
