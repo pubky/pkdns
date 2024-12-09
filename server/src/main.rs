@@ -1,10 +1,11 @@
-use any_dns::{Builder, CustomHandler, CustomHandlerError, DnsSocket};
+use anydns::{Builder, CustomHandler, CustomHandlerError, DnsSocket};
 use async_trait::async_trait;
 
 use helpers::{enable_logging, set_full_stacktrace_as_default};
 use pkarr_resolver::{PkarrResolver, ResolverSettings};
 use std::{error::Error, net::SocketAddr};
 
+mod anydns;
 mod packet_lookup;
 mod pkarr_cache;
 mod pkarr_resolver;

@@ -1,6 +1,6 @@
 use std::{net::{Ipv4Addr, Ipv6Addr, SocketAddr}, time::Duration};
 
-use any_dns::DnsSocket;
+use crate::anydns::DnsSocket;
 use simple_dns::{
     rdata::{self, RData}, Name, Packet, PacketFlag, Question, ResourceRecord, QTYPE, TYPE
 };
@@ -177,7 +177,7 @@ async fn resolve_with_ns<'a>(question: &Question<'a>, name_servers: &Vec<Resourc
 mod tests {
     use std::net::Ipv4Addr;
 
-    use any_dns::{DnsSocket, EmptyHandler, HandlerHolder};
+    use crate::anydns::{DnsSocket, EmptyHandler, HandlerHolder};
     use pkarr::{
         dns::{Name, Packet, ResourceRecord},
         Keypair, PublicKey,
