@@ -3,14 +3,14 @@ use async_trait::async_trait;
 
 use helpers::{enable_logging, set_full_stacktrace_as_default};
 use pkarr_resolver::{PkarrResolver, ResolverSettings};
-use std::{error::Error, net::SocketAddr};
+use std::{error::Error, net::SocketAddr, num::NonZeroU32};
 
 mod anydns;
+mod bootstrap_nodes;
+mod helpers;
 mod packet_lookup;
 mod pkarr_cache;
 mod pkarr_resolver;
-mod helpers;
-mod bootstrap_nodes;
 
 #[derive(Clone)]
 struct MyHandler {
@@ -88,6 +88,12 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .required(false)
                 .default_value("100")
                 .help("Maximum size of the pkarr packet cache in megabytes."),
+        ).arg(
+            clap::Arg::new("ip-rate-limit")
+                .long("ip-rate-limit")
+                .required(false)
+                .default_value("0")
+                .help("Maximum number of queries per second one IP address can make before it is rate limited. 0 is disabled."),
         );
 
     let matches = cmd.get_matches();
@@ -112,16 +118,17 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let forward: SocketAddr = forward.parse().expect("forward should be valid IP:Port combination.");
     let socket: &String = matches.get_one("socket").unwrap();
     let socket: SocketAddr = socket.parse().expect("socket should be valid IP:Port combination.");
-
+    let ip_rate_limit: &String = matches.get_one("ip-rate-limit").unwrap();
+    let ip_rate_limit: u32 = ip_rate_limit.parse().expect("ip-rate-limit must be a >=0.");
 
     enable_logging(verbose);
 
     if cache_mb <= 0 {
         tracing::error!("--cache-mb must be at least 1. Given {cache_mb}.")
     }
-    
+
     tracing::info!("Starting pkdns v{VERSION}");
-    tracing::trace!("min_ttl={min_ttl} max_ttl={max_ttl} cache_mb={cache_mb} verbose={verbose} forward={forward}");
+    tracing::debug!("min_ttl={min_ttl} max_ttl={max_ttl} cache_mb={cache_mb} verbose={verbose} forward={forward} ip_rate_limit={ip_rate_limit}");
 
     tracing::info!("Forward ICANN queries to {}", forward);
 
@@ -134,13 +141,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
         std::process::exit(1);
     }));
 
-    let resolver_settings = PkarrResolver::builder().forward_server(forward).max_ttl(max_ttl).min_ttl(min_ttl).cache_mb(cache_mb).build_settings();
-    let anydns = Builder::new()
-        .handler(MyHandler::new(resolver_settings).await)
+    let pkarr_settings = PkarrResolver::builder()
+        .forward_server(forward)
+        .max_ttl(max_ttl)
+        .min_ttl(min_ttl)
+        .cache_mb(cache_mb)
+        .build_settings();
+
+    let mut builder = Builder::new()
+        .handler(MyHandler::new(pkarr_settings).await)
         .icann_resolver(forward)
-        .listen(socket)
-        .build()
-        .await?;
+        .listen(socket);
+    if ip_rate_limit > 0 {
+        builder = builder.max_queries_per_ip_per_second(NonZeroU32::new(ip_rate_limit).unwrap())
+    }
+    let anydns = builder.build().await?;
     tracing::info!("Listening on {socket}. Waiting for Ctrl-C...");
 
     anydns.wait_on_ctrl_c().await;

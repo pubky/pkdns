@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use std::{net::SocketAddr, sync::mpsc::channel};
+use std::{net::SocketAddr, num::NonZeroU32, sync::mpsc::channel};
 
 use super::{
     custom_handler::{CustomHandler, EmptyHandler, HandlerHolder},
@@ -11,6 +11,7 @@ pub struct Builder {
     icann_resolver: SocketAddr,
     listen: SocketAddr,
     handler: HandlerHolder,
+    max_queries_per_ip_per_second: Option<NonZeroU32>,
 }
 
 impl Builder {
@@ -19,7 +20,14 @@ impl Builder {
             icann_resolver: SocketAddr::from(([192, 168, 1, 1], 53)),
             listen: SocketAddr::from(([0, 0, 0, 0], 53)),
             handler: HandlerHolder::new(EmptyHandler::new()),
+            max_queries_per_ip_per_second: None,
         }
+    }
+
+    /// Rate limit the number of queries coming from a single IP address.
+    pub fn max_queries_per_ip_per_second(mut self, limit: NonZeroU32) -> Self {
+        self.max_queries_per_ip_per_second = Some(limit);
+        self
     }
 
     /// Set the DNS resolver for normal ICANN domains. Defaults to 192.168.1.1:53
@@ -42,7 +50,13 @@ impl Builder {
 
     // /** Build and start server. */
     pub async fn build(self) -> tokio::io::Result<AnyDNS> {
-        AnyDNS::new(self.listen, self.icann_resolver, self.handler).await
+        AnyDNS::new(
+            self.listen,
+            self.icann_resolver,
+            self.handler,
+            self.max_queries_per_ip_per_second,
+        )
+        .await
     }
 }
 
@@ -56,8 +70,9 @@ impl AnyDNS {
         listener: SocketAddr,
         icann_fallback: SocketAddr,
         handler: HandlerHolder,
+        max_queries_per_ip_per_second: Option<NonZeroU32>,
     ) -> tokio::io::Result<Self> {
-        let mut socket = DnsSocket::new(listener, icann_fallback, handler).await?;
+        let mut socket = DnsSocket::new(listener, icann_fallback, handler, max_queries_per_ip_per_second).await?;
         let join_handle = tokio::spawn(async move {
             socket.receive_loop().await;
         });
