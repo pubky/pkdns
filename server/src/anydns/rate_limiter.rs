@@ -9,8 +9,7 @@ use governor::{DefaultKeyedRateLimiter, Quota, RateLimiter as GovenerRateLimiter
 /**
  * Custom rate limiting key. A device usually gets
  * either one IPv4 address OR a /64 bit IPv6 address.
- * To prevent IPv6 abuse, RateLimitingKey only uses the first 64 bits
- * of the IPv6 address to rate limit.
+ * To prevent IPv6 abuse, RateLimitingKey only uses the first 64 bits.
  */
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum RateLimitingKey {
@@ -19,16 +18,6 @@ enum RateLimitingKey {
 }
 
 impl RateLimitingKey {
-    /**
-     * Generates a key from a ip address.
-     */
-    pub fn from_ip(ip: IpAddr) -> Self {
-        match ip {
-            IpAddr::V4(val) => Self::from_ipv4(val),
-            IpAddr::V6(val) => Self::from_ipv6(val),
-        }
-    }
-
     /**
      * Generate a key from an IPv4 address.
      */
@@ -49,16 +38,26 @@ impl RateLimitingKey {
     }
 }
 
+impl From<IpAddr> for RateLimitingKey {
+    fn from(value: IpAddr) -> Self {
+        match value {
+            IpAddr::V4(val) => Self::from_ipv4(val),
+            IpAddr::V6(val) => Self::from_ipv6(val),
+        }
+    }
+}
+
 impl Hash for RateLimitingKey {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
             RateLimitingKey::Ipv4(ipv4_addr) => {
-                ipv4_addr.hash(state);
                 (0 as u8).hash(state); // IPv4 indicator to prevent overlap with the Ipv6 space.
+                ipv4_addr.hash(state);
+
             }
             RateLimitingKey::IpV6 { significant_bits } => {
+                (1 as u8).hash(state); // IPv6 indicator to prevent overlap with the Ipv4 space.
                 significant_bits.hash(state);
-                (1 as u8).hash(state); // IPv6 indicator to prevent overlap with the Ipv6 space.
             }
         }
     }
@@ -84,8 +83,7 @@ impl RateLimiter {
      */
     pub fn check_is_limited_and_increase(&self, ip: IpAddr) -> bool {
         if let Some(limiter) = &self.limiter {
-            let key = RateLimitingKey::from_ip(ip.clone());
-            let is_rate_limited = limiter.check_key(&key).is_err();
+            let is_rate_limited = limiter.check_key(&ip.into()).is_err();
             return is_rate_limited;
         };
         return false
