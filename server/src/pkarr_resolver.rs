@@ -1,8 +1,8 @@
 
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::{IpAddr, SocketAddr}, num::NonZeroU32, sync::Arc};
 
-use crate::anydns::DnsSocket;
+use crate::anydns::{DnsSocket, RateLimiter};
 use anyhow::anyhow;
 use dashmap::DashMap;
 use tokio::sync::Mutex;
@@ -26,7 +26,12 @@ pub struct ResolverSettings {
      */
     cache_mb: u64,
 
-    forward_dns_server: SocketAddr
+    forward_dns_server: SocketAddr,
+
+    /**
+     * Maximum number of DHT queries one IP address can make per second.
+     */
+    max_dht_queries_per_ip_per_second: Option<NonZeroU32>,
 }
 
 impl ResolverSettings {
@@ -35,7 +40,8 @@ impl ResolverSettings {
             max_ttl: 60*60*24, // 1 day
             min_ttl: 60*5,
             cache_mb: 100,
-            forward_dns_server: "8.8.8.8:53".parse().expect("forward should be valid IP:Port combination.")
+            forward_dns_server: "8.8.8.8:53".parse().expect("forward should be valid IP:Port combination."),
+            max_dht_queries_per_ip_per_second: None
         }
     }
 }
@@ -71,6 +77,12 @@ impl PkarrResolverBuilder {
         self
     }
 
+    /// Rate the number of DHT queries by ip addresses.
+    pub fn max_dht_queries_per_ip_per_second(mut self, limit: Option<NonZeroU32>) -> Self {
+        self.settings.max_dht_queries_per_ip_per_second = limit;
+        self
+    }
+
     pub fn build_settings(self) -> ResolverSettings {
         self.settings
     }
@@ -88,7 +100,8 @@ pub struct PkarrResolver {
      * Locks to use to update pkarr packets. This avoids concurrent updates.
      */
     lock_map: Arc<DashMap<PublicKey, Arc<Mutex<()>>>>,
-    settings: ResolverSettings
+    settings: ResolverSettings,
+    rate_limiter: Arc<RateLimiter>
 }
 
 impl PkarrResolver {
@@ -130,6 +143,7 @@ impl PkarrResolver {
             client: client.as_async(),
             cache: PkarrPacketLruCache::new(Some(settings.cache_mb)),
             lock_map: Arc::new(DashMap::new()),
+            rate_limiter: Arc::new(RateLimiter::new_per_minute(settings.max_dht_queries_per_ip_per_second.clone())),
             settings,
         }
     }
@@ -155,10 +169,9 @@ impl PkarrResolver {
     /**
      * Resolves a public key. Checks the cache first.
      */
-    async fn resolve_pubkey_respect_cache(&mut self, pubkey: &PublicKey) -> Option<Vec<u8>> {
+    async fn resolve_pubkey_respect_cache(&mut self, pubkey: &PublicKey, from: Option<IpAddr>) -> Option<Vec<u8>> {
         if let Some(cached) = self.cache.get(pubkey).await {
             let refresh_needed_in_s = cached.next_refresh_needed_in_s(self.settings.min_ttl, self.settings.max_ttl);
-
 
             if refresh_needed_in_s > 0 {
                 tracing::trace!("Pkarr packet [{pubkey}] found in cache. Cache valid for {}s", refresh_needed_in_s);
@@ -170,6 +183,15 @@ impl PkarrResolver {
                 return Some(bytes);
             }
         };
+
+        if let Some(ip) = from {
+            let is_rate_limited = self.rate_limiter.check_is_limited_and_increase(ip);
+            if is_rate_limited {
+                tracing::debug!("{ip} is rate limited from querying the DHT.");
+                return None
+            }
+        }
+
 
         let packet = self.lookup_dht_and_cache(pubkey.clone()).await;
         if packet.is_not_found() {
@@ -218,7 +240,7 @@ impl PkarrResolver {
     /**
      * Resolves a domain with pkarr.
      */
-    pub async fn resolve(&mut self, query: &Vec<u8>, socket: &mut DnsSocket) -> std::prelude::v1::Result<Vec<u8>, anyhow::Error> {
+    pub async fn resolve(&mut self, query: &Vec<u8>, socket: &mut DnsSocket, from: Option<IpAddr>) -> std::prelude::v1::Result<Vec<u8>, anyhow::Error> {
         let request = Packet::parse(query)?;
 
         let question_opt = request.questions.first();
@@ -242,7 +264,7 @@ impl PkarrResolver {
             return Err(anyhow!("Invalid pkarr pubkey"));
         }
         let pubkey = parsed_option.unwrap();
-        let packet_option = self.resolve_pubkey_respect_cache(&pubkey).await;
+        let packet_option = self.resolve_pubkey_respect_cache(&pubkey, from).await;
         if packet_option.is_none() {
             tracing::info!("No pkarr packet found on the DHT [{tld}].");
             return Err(anyhow!("No pkarr packet found for pubkey"));
@@ -343,7 +365,7 @@ mod tests {
 
         let mut resolver = PkarrResolver::default().await;
         let mut socket = get_dnssocket().await;
-        let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket).await;
+        let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket, None).await;
         assert!(result.is_ok());
         let reply_bytes = result.unwrap();
         let reply = Packet::parse(&reply_bytes).unwrap();
@@ -371,7 +393,7 @@ mod tests {
         query.questions.push(question);
         let mut resolver = PkarrResolver::default().await;
         let mut socket = get_dnssocket().await;
-        let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket).await;
+        let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket, None).await;
         assert!(result.is_ok());
         let reply_bytes = result.unwrap();
         let reply = Packet::parse(&reply_bytes).unwrap();
@@ -396,7 +418,7 @@ mod tests {
         query.questions.push(question);
         let mut resolver = PkarrResolver::default().await;
         let mut socket = get_dnssocket().await;
-        let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket).await;
+        let result = resolver.resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket, None).await;
         assert!(result.is_err());
         // println!("{}", result.unwrap_err());
     }
@@ -421,7 +443,7 @@ mod tests {
         let pubkey = PkarrResolver::parse_pkarr_uri("7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy").unwrap();
 
         let mut resolver = PkarrResolver::default().await;
-        let _result = resolver.resolve_pubkey_respect_cache(&pubkey).await;
+        let _result = resolver.resolve_pubkey_respect_cache(&pubkey, None).await;
         // assert!(result.is_some());
     }
 

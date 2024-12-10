@@ -61,7 +61,7 @@ impl DnsSocket {
             handler,
             icann_fallback,
             id_manager: QueryIdManager::new(),
-            rate_limiter: Arc::new(RateLimiter::new(max_queries_per_ip_per_second)),
+            rate_limiter: Arc::new(RateLimiter::new_per_second(max_queries_per_ip_per_second)),
         })
     }
 
@@ -159,7 +159,7 @@ impl DnsSocket {
      * New query received.
      */
     async fn on_query(&mut self, query: &Vec<u8>, from: &SocketAddr) -> Result<(), RequestError> {
-        match self.query(query).await {
+        match self.query(query, Some(from.ip())).await {
             Ok(reply) => {
                 self.send_to(&reply, from).await?;
                 Ok(())
@@ -171,9 +171,9 @@ impl DnsSocket {
     /**
      * Query this dns for data
      */
-    pub async fn query(&mut self, query: &Vec<u8>) -> Result<Vec<u8>, RequestError> {
+    pub async fn query(&mut self, query: &Vec<u8>, from: Option<IpAddr>) -> Result<Vec<u8>, RequestError> {
         tracing::trace!("Try to resolve the query with the custom handler.");
-        let result = self.handler.call(query, self.clone()).await;
+        let result = self.handler.call(query, self.clone(), from).await;
         if let Ok(reply) = result {
             tracing::trace!("Custom handler resolved the query.");
             // All good. Handler handled the query

@@ -122,7 +122,7 @@ async fn resolve_ns_ip<'a>(ns_name: &Name<'a>, socket: &mut DnsSocket) -> Option
     query.set_flags(PacketFlag::RECURSION_DESIRED);
     let query = query.build_bytes_vec_compressed().unwrap();
 
-    let reply = socket.query(&query).await.ok()?;
+    let reply = socket.query(&query, None).await.ok()?;
     let reply = Packet::parse(&reply).ok()?;
     if reply.answers.len() == 0 {
         return None;

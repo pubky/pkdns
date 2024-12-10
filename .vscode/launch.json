@@ -20,6 +20,7 @@
                 }
             },
             "args": [
+                "--ip-rate-limit-dht", "1",
             ],
             "cwd": "${workspaceFolder}",
             "env": {

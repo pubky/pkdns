@@ -69,7 +69,7 @@ pub struct RateLimiter {
 }
 
 impl RateLimiter {
-    pub fn new(max_per_second: Option<NonZeroU32>) -> Self {
+    pub fn new_per_second(max_per_second: Option<NonZeroU32>) -> Self {
         Self {
             limiter: max_per_second.map(|limit| {
                 let quota = Quota::per_second(limit);
@@ -77,6 +77,16 @@ impl RateLimiter {
             }),
         }
     }
+
+    pub fn new_per_minute(max_per_minute: Option<NonZeroU32>) -> Self {
+        Self {
+            limiter: max_per_minute.map(|limit| {
+                let quota = Quota::per_minute(limit);
+                GovenerRateLimiter::keyed(quota)
+            }),
+        }
+    }
+    
 
     /**
      * Checks if this IP address is limited. Increases the usage by one.

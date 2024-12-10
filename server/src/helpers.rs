@@ -27,7 +27,6 @@ pub (crate) fn enable_logging(verbose: bool) {
     if value.len() > 0 {
         tracing_subscriber::fmt().with_env_filter(EnvFilter::from_default_env()).init();
         tracing::info!("Used RUST_LOG={} env variable to set logging output.", value);
-        tracing::debug!("test");
         if verbose {
             tracing::warn!("RUST_LOG= is set. Ignore --verbose flag.")
         }
