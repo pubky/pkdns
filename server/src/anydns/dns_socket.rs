@@ -104,7 +104,7 @@ impl DnsSocket {
         // New query
         if self.rate_limiter.check_is_limited_and_increase(from.ip()) {
             tracing::trace!("Rate limited {}. query_id={packet_id}", from.ip());
-            let reply = self.create_refused_reply(packet_id);
+            let reply = Self::create_refused_reply(packet_id);
             self.send_to(&reply, &from).await?;
             return Ok(());
         };
@@ -178,17 +178,17 @@ impl DnsSocket {
                     Ok(reply) => reply,
                     Err(e) => {
                         tracing::warn!("Forward dns server error. {e}. query_id={query_id}");
-                        self.create_server_fail_reply(query_id)
+                        Self::create_server_fail_reply(query_id)
                     },
                 }
             }
             CustomHandlerError::Failed(err) => {
                 tracing::error!("Internal error: {}", err);
-                self.create_server_fail_reply(query_id)
+                Self::create_server_fail_reply(query_id)
             },
             CustomHandlerError::RateLimited(ip) => {
                 tracing::error!("IP is rate limited: {}", ip);
-                self.create_refused_reply(query_id)
+                Self::create_refused_reply(query_id)
             },
         }
 
@@ -250,14 +250,14 @@ impl DnsSocket {
     }
 
     /// Create a REFUSED reply
-    fn create_refused_reply(&self, query_id: u16) -> Vec<u8> {
+    fn create_refused_reply(query_id: u16) -> Vec<u8> {
         let mut reply = Packet::new_reply(query_id);
         *reply.rcode_mut() = RCODE::Refused;
         reply.build_bytes_vec_compressed().unwrap()
     }
 
     /// Create SRVFAIL reply
-    fn create_server_fail_reply(&self, query_id: u16) -> Vec<u8> {
+    fn create_server_fail_reply(query_id: u16) -> Vec<u8> {
         let mut reply = Packet::new_reply(query_id);
         *reply.rcode_mut() = RCODE::ServerFailure;
         reply.build_bytes_vec_compressed().unwrap()

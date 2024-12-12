@@ -1,4 +1,4 @@
-use crate::{anydns::{CustomHandlerError, DnsSocket, DnsSocketError, RateLimiter}, packet_lookup::create_domain_not_found_reply};
+use crate::{anydns::{CustomHandlerError, DnsSocket, DnsSocketError, RateLimiter}, pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply};
 use dashmap::DashMap;
 use std::{
     net::{IpAddr, SocketAddr},
@@ -9,7 +9,7 @@ use tokio::sync::Mutex;
 
 use crate::{
     bootstrap_nodes::MainlineBootstrapResolver,
-    packet_lookup::resolve_query,
+    query_matcher::resolve_query,
     pkarr_cache::{CacheItem, PkarrPacketLruCache},
 };
 use pkarr::{dns::Packet, mainline::dht::DhtSettings, Error as PkarrError, PkarrClient, PkarrClientAsync, PublicKey};
@@ -161,24 +161,11 @@ impl PkarrResolver {
             client: client.as_async(),
             cache: PkarrPacketLruCache::new(Some(settings.cache_mb)),
             lock_map: Arc::new(DashMap::new()),
-            rate_limiter: Arc::new(RateLimiter::new_per_minute(
+            rate_limiter: Arc::new(RateLimiter::new_per_second(
                 settings.max_dht_queries_per_ip_per_second.clone(),
             )),
             settings,
         }
-    }
-
-    fn parse_pkarr_uri(uri: &str) -> Option<PublicKey> {
-        let decoded = zbase32::decode_full_bytes_str(uri);
-        if decoded.is_err() {
-            return None;
-        };
-        let decoded = decoded.unwrap();
-        if decoded.len() != 32 {
-            return None;
-        };
-        let trying: Result<PublicKey, _> = uri.try_into();
-        trying.ok()
     }
 
     fn is_refresh_needed(&self, item: &CacheItem) -> bool {
@@ -256,7 +243,7 @@ impl PkarrResolver {
         socket: &mut DnsSocket,
         from: Option<IpAddr>,
     ) -> std::prelude::v1::Result<Vec<u8>, CustomHandlerError> {
-        // Use lots of expect() because anydns validated the query before.
+        // anydns validated the query before.
         let request = Packet::parse(query).expect("Unparsable query in pkarr_resolver.");
         let question = request.questions.first().expect("No question in query in pkarr_resolver.");
         let labels = question.qname.get_labels();
@@ -264,11 +251,20 @@ impl PkarrResolver {
         tracing::debug!("New query: {} {:?} id={}", question.qname.to_string(), question.qtype, request.id());
 
         let tld = labels.last().expect("Question labels with no domain in pkarr_resolver").to_string();
-        let parsed_option = Self::parse_pkarr_uri(&tld);
-        if parsed_option.is_none() {
-            tracing::trace!("TLD .{tld} is not a pkarr key. Fallback to ICANN. ");
-            return Err(CustomHandlerError::Unhandled);
+        let parsed_option = parse_pkarr_uri(&tld);
+        if let Err(e) = parsed_option {
+            return match e {
+                crate::pubkey_parser::PubkeyParserError::InvalidKey(_) => {
+                    tracing::trace!("TLD .{tld} is not a pkarr key. Fallback to ICANN.");
+                    Err(CustomHandlerError::Unhandled)
+                },
+                crate::pubkey_parser::PubkeyParserError::ValidButDifferent => {
+                    tracing::trace!("TLD .{tld} is a pkarr key but its last bits are invalid.");
+                    Ok(create_domain_not_found_reply(request.id()))
+                },
+            }
         }
+
         let pubkey = parsed_option.unwrap();
 
         match self.resolve_pubkey_respect_cache(&pubkey, from).await {
@@ -461,7 +457,7 @@ mod tests {
 
     #[tokio::test]
     async fn pkarr_invalid_packet1() {
-        let pubkey = PkarrResolver::parse_pkarr_uri("7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy").unwrap();
+        let pubkey = parse_pkarr_uri("7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy").unwrap();
 
         let mut resolver = PkarrResolver::default().await;
         let _result = resolver.resolve_pubkey_respect_cache(&pubkey, None).await;
@@ -470,7 +466,7 @@ mod tests {
 
     #[tokio::test]
     async fn pkarr_invalid_packet2() {
-        let pubkey = PkarrResolver::parse_pkarr_uri("7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy").unwrap();
+        let pubkey = parse_pkarr_uri("7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy").unwrap();
         let client = PkarrClient::new(Settings::default()).unwrap();
         let signed_packet = client.resolve(&pubkey).unwrap().unwrap();
         println!("Timestamp {}", signed_packet.chrono_timestamp());

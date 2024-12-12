@@ -8,9 +8,10 @@ use std::{error::Error, net::{IpAddr, SocketAddr}, num::NonZeroU32};
 mod anydns;
 mod bootstrap_nodes;
 mod helpers;
-mod packet_lookup;
+mod query_matcher;
 mod pkarr_cache;
 mod pkarr_resolver;
+mod pubkey_parser;
 
 #[derive(Clone)]
 struct MyHandler {
