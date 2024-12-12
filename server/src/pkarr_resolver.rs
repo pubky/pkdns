@@ -266,7 +266,7 @@ impl PkarrResolver {
         let tld = labels.last().expect("Question labels with no domain in pkarr_resolver").to_string();
         let parsed_option = Self::parse_pkarr_uri(&tld);
         if parsed_option.is_none() {
-            tracing::debug!("TLD .{tld} is not a pkarr key. Fallback to ICANN. ");
+            tracing::trace!("TLD .{tld} is not a pkarr key. Fallback to ICANN. ");
             return Err(CustomHandlerError::Unhandled);
         }
         let pubkey = parsed_option.unwrap();

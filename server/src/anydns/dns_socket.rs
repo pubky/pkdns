@@ -44,9 +44,7 @@ pub struct DnsSocket {
 }
 
 impl DnsSocket {
-    /**
-     * Creates a new DNS socket
-     */
+    // Create a new DNS socket
     pub async fn new(
         listening: SocketAddr,
         icann_fallback: SocketAddr,
@@ -65,16 +63,12 @@ impl DnsSocket {
         })
     }
 
-    /**
-     * Send message to address
-     */
+    // Send message to address
     pub async fn send_to(&self, buffer: &[u8], target: &SocketAddr) -> tokio::io::Result<usize> {
         self.socket.send_to(buffer, target).await
     }
 
-    /**
-     * Run receive loop
-     */
+    // Run receive loop
     pub async fn receive_loop(&mut self) {
         loop {
             if let Err(err) = self.receive_datagram().await {
@@ -92,9 +86,11 @@ impl DnsSocket {
             data.drain((size + 1)..data.len());
         }
         let packet = Packet::parse(&data)?;
-
-        let pending = self.pending.remove_by_forward_id(&packet.id(), &from);
+        let packet_id = packet.id();
+        tracing::info!("Received packet with id={packet_id}");
+        let pending = self.pending.remove_by_forward_id(&packet_id, &from);
         if pending.is_some() {
+            tracing::info!("Response from forward id {packet_id}");
             tracing::trace!("Received response from forward server. Send back to client.");
             let query = pending.unwrap();
             query.tx.send(data).unwrap();
@@ -103,16 +99,14 @@ impl DnsSocket {
 
         let is_reply = packet.questions.len() == 0;
         if is_reply {
-            let span = tracing::span!(Level::DEBUG, "", forward_id = packet.id());
-            let guard = span.enter();
-            tracing::debug!("Received reply without an associated query {:?}. Ignore.", packet);
+            tracing::debug!("Received reply without an associated query {:?}. forward_id={packet_id} Ignore.", packet);
             return Ok(());
         };
 
         // New query
         if self.rate_limiter.check_is_limited_and_increase(from.ip()) {
-            tracing::trace!("Rate limited {}.", from.ip());
-            let reply = self.create_refused_reply(packet.id());
+            tracing::trace!("Rate limited {}. query_id={packet_id}", from.ip());
+            let reply = self.create_refused_reply(packet_id);
             self.send_to(&reply, &from).await?;
             return Ok(());
         };
@@ -121,37 +115,37 @@ impl DnsSocket {
         tokio::spawn(async move {
             let start = Instant::now();
             let query_packet = Packet::parse(&data).unwrap();
-            let span = tracing::span!(Level::INFO, "", query_id = query_packet.id());
-            let guard = span.enter();
 
             let question = query_packet.questions.first();
             if question.is_none() {
-                tracing::debug!("Query with no associated a question {:?}. Ignore.", query_packet);
+                tracing::debug!("Query with no associated a question {:?}. Ignore. query_id={}", query_packet, query_packet.id());
                 return;
             };
             let question = question.unwrap();
             let labels = question.qname.get_labels();
             if labels.len() == 0 {
-                tracing::debug!("DNS packet question with no domain. Ignore.");
+                tracing::debug!("DNS packet question with no domain. Ignore. query_id={}", query_packet.id());
                 return;
             };
-            tracing::trace!("Received new query {} {:?}", question.qname, question.qtype);
+            tracing::trace!("Received new query {} {:?}. query_id={}", question.qname, question.qtype, query_packet.id());
             let query_result = socket.on_query(&data, &from).await;
             match query_result {
                 Ok(_) => {
                     tracing::debug!(
-                        "Processed query {} {:?} within {}ms",
+                        "Processed query {} {:?} within {}ms. query_id={}",
                         question.qname,
                         question.qtype,
-                        start.elapsed().as_millis()
+                        start.elapsed().as_millis(),
+                        query_packet.id()
                     );
                 }
                 Err(err) => {
                     tracing::error!(
-                        "Failed to respond to query {} {:?}: {}",
+                        "Failed to respond to query {} {:?}: {} query_id={}",
                         question.qname,
                         question.qtype,
-                        err
+                        err,
+                        query_packet.id()
                     );
                 }
             };
@@ -176,7 +170,7 @@ impl DnsSocket {
             // All good. Handler handled the query
             return result.unwrap();
         }
-        let query_id = self.extract_query_id(query).expect("Valid query. Prevalidated already.");
+        let query_id = self.extract_query_id(query).expect("Should be valid query. Prevalidated already.");
 
         match result.unwrap_err() {
             CustomHandlerError::Unhandled => {
@@ -184,7 +178,10 @@ impl DnsSocket {
                 tracing::trace!("Custom handler rejected the query.");
                 match self.forward_to_icann(query, Duration::from_secs(5)).await {
                     Ok(reply) => reply,
-                    Err(_) => self.create_server_fail_reply(query_id),
+                    Err(e) => {
+                        tracing::warn!("Forward dns server error. {e}. query_id={query_id}");
+                        self.create_server_fail_reply(query_id)
+                    },
                 }
             }
             CustomHandlerError::Failed(err) => {
@@ -199,18 +196,14 @@ impl DnsSocket {
 
     }
 
-    /**
-     * Replaces the id of the dns packet.
-     */
+    /// Replaces the id of the dns packet.
     fn replace_packet_id(&self, packet: &mut Vec<u8>, new_id: u16) {
         let id_bytes = new_id.to_be_bytes();
         std::mem::replace(&mut packet[0], id_bytes[0]);
         std::mem::replace(&mut packet[1], id_bytes[1]);
     }
 
-    /**
-     * Send dns request
-     */
+    /// Send dns request to configured forward server
     pub async fn forward(
         &mut self,
         query: &Vec<u8>,
@@ -221,9 +214,7 @@ impl DnsSocket {
         let (tx, rx) = oneshot::channel::<Vec<u8>>();
         let forward_id = self.id_manager.get_next(to);
         let original_id = packet.id();
-        let span = tracing::span!(Level::DEBUG, "", forward_id = forward_id);
-        let guard = span.enter();
-        tracing::trace!("Fallback to forward server {to:?}.");
+        tracing::info!("Fallback to forward server {to:?}. orignal_id={original_id} forward_id={forward_id}");
         let request = PendingRequest {
             original_query_id: original_id,
             forward_query_id: forward_id,
@@ -242,7 +233,7 @@ impl DnsSocket {
         let reply = tokio::time::timeout(timeout, rx).await;
         if reply.is_err() {
             // Timeout, remove pending again
-            tracing::trace!("Forwarded query original_id={original_id} forward_id={forward_id} timed out.");
+            tracing::info!("Forwarded query original_id={original_id} forward_id={forward_id} timed out.");
             self.pending.remove_by_forward_id(&forward_id, &to);
         };
         let mut reply = reply?.unwrap();
@@ -250,9 +241,7 @@ impl DnsSocket {
         Ok(reply)
     }
 
-    /**
-     * Forward query to icann
-     */
+    /// Forward query to icann
     pub async fn forward_to_icann(&mut self, query: &Vec<u8>, timeout: Duration) -> Result<Vec<u8>, DnsSocketError> {
         self.forward(query, &self.icann_fallback.clone(), timeout).await
     }
