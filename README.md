@@ -96,13 +96,26 @@ Other services might occupy the port 53 already. For example, [Docker Desktop](h
 Usage: pkdns [OPTIONS]
 
 Options:
-  -f, --forward <forward>  ICANN fallback DNS server. IP:Port [default: 8.8.8.8:53]
-  -s, --socket <socket>    Socket the server should listen on. IP:Port [default: 0.0.0.0:53]
-  -v, --verbose            Show verbose output.
-      --min-ttl <min-ttl>  Minimum number of seconds a value is cached for before being refreshed. [default: 300]
-      --max-ttl <max-ttl>  Maximum number of seconds before a cached value gets auto-refreshed. [default: 86400]
-  -h, --help               Print help
-  -V, --version            Print version
+  -f, --forward <forward>
+          ICANN fallback DNS server. IP:Port [default: 8.8.8.8:53]
+  -s, --socket <socket>
+          Socket the server should listen on. IP:Port [default: 0.0.0.0:53]
+  -v, --verbose
+          Show verbose output.
+      --min-ttl <min-ttl>
+          Minimum number of seconds a value is cached for before being refreshed. [default: 300]
+      --max-ttl <max-ttl>
+          Maximum number of seconds before a cached value gets auto-refreshed. [default: 86400]
+      --cache-mb <cache-mb>
+          Maximum size of the pkarr packet cache in megabytes. [default: 100]
+      --query-rate-limit <query-rate-limit>
+          Maximum number of queries per second one IP address can make before it is rate limited. 0 is disabled. [default: 0]
+      --dht-rate-limit <dht-rate-limit>
+          Maximum number of queries per second one IP address can make to the DHT before it is rate limited. 0 is disabled. [default: 0]
+  -h, --help
+          Print help
+  -V, --version
+          Print version
 ```
 
 For extended logs, see [here](./docs/logging.md).

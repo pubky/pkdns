@@ -25,8 +25,8 @@ impl Builder {
     }
 
     /// Rate limit the number of queries coming from a single IP address.
-    pub fn max_queries_per_ip_per_second(mut self, limit: NonZeroU32) -> Self {
-        self.max_queries_per_ip_per_second = Some(limit);
+    pub fn max_queries_per_ip_per_second(mut self, limit: Option<NonZeroU32>) -> Self {
+        self.max_queries_per_ip_per_second = limit;
         self
     }
 

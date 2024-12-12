@@ -85,14 +85,14 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .default_value("100")
                 .help("Maximum size of the pkarr packet cache in megabytes."),
         ).arg(
-            clap::Arg::new("ip-rate-limit")
-                .long("ip-rate-limit")
+            clap::Arg::new("query-rate-limit")
+                .long("query-rate-limit")
                 .required(false)
                 .default_value("0")
                 .help("Maximum number of queries per second one IP address can make before it is rate limited. 0 is disabled."),
         ).arg(
-            clap::Arg::new("ip-rate-limit-dht")
-                .long("ip-rate-limit-dht")
+            clap::Arg::new("dht-rate-limit")
+                .long("dht-rate-limit")
                 .required(false)
                 .default_value("0")
                 .help("Maximum number of queries per second one IP address can make to the DHT before it is rate limited. 0 is disabled."),
@@ -121,10 +121,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let socket: &String = matches.get_one("socket").unwrap();
     let socket: SocketAddr = socket.parse().expect("socket should be valid IP:Port combination.");
 
-    let ip_rate_limit: &String = matches.get_one("ip-rate-limit").unwrap();
-    let ip_rate_limit: u32 = ip_rate_limit.parse().expect("ip-rate-limit must be a >=0.");
-    let ip_rate_limit_dht: &String = matches.get_one("ip-rate-limit-dht").unwrap();
-    let ip_rate_limit_dht: u32 = ip_rate_limit_dht.parse().expect("ip-rate-limit-dht must be a >=0.");
+    let query_rate_limit: &String = matches.get_one("query-rate-limit").unwrap();
+    let query_rate_limit: u32 = query_rate_limit.parse().expect("query-rate-limit must be a >=0.");
+    let dht_rate_limit: &String = matches.get_one("dht-rate-limit").unwrap();
+    let dht_rate_limit: u32 = dht_rate_limit.parse().expect("dht-rate-limit must be a >=0.");
 
     enable_logging(verbose);
 
@@ -133,7 +133,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     tracing::info!("Starting pkdns v{VERSION}");
-    tracing::debug!("min_ttl={min_ttl} max_ttl={max_ttl} cache_mb={cache_mb} verbose={verbose} forward={forward} ip_rate_limit={ip_rate_limit} ip_rate_limit_dht={ip_rate_limit_dht}");
+    tracing::debug!("min_ttl={min_ttl} max_ttl={max_ttl} cache_mb={cache_mb} verbose={verbose} forward={forward} query_rate_limit={query_rate_limit} dht_rate_limit={dht_rate_limit}");
 
     tracing::info!("Forward ICANN queries to {}", forward);
 
@@ -146,7 +146,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         std::process::exit(1);
     }));
 
-    let ip_rate_limit_dht_option = match ip_rate_limit_dht {
+    let dht_rate_limit_option = match dht_rate_limit {
         0 => None,
         val => Some(NonZeroU32::new(val).unwrap())
     };
@@ -155,17 +155,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .max_ttl(max_ttl)
         .min_ttl(min_ttl)
         .cache_mb(cache_mb)
-        .max_dht_queries_per_ip_per_second(ip_rate_limit_dht_option)
+        .max_dht_queries_per_ip_per_second(dht_rate_limit_option)
         .build_settings();
 
-    let mut builder = Builder::new()
+    let query_rate_limit_option = match query_rate_limit {
+        0 => None,
+        val => Some(NonZeroU32::new(val).unwrap())
+    };
+    let anydns = Builder::new()
         .handler(MyHandler::new(pkarr_settings).await)
         .icann_resolver(forward)
-        .listen(socket);
-    if ip_rate_limit > 0 {
-        builder = builder.max_queries_per_ip_per_second(NonZeroU32::new(ip_rate_limit).unwrap())
-    };
-    let anydns = builder.build().await?;
+        .listen(socket)
+        .max_queries_per_ip_per_second(query_rate_limit_option)
+        .build().await?;
+
     tracing::info!("Listening on {socket}. Waiting for Ctrl-C...");
 
     anydns.wait_on_ctrl_c().await;
