@@ -87,10 +87,8 @@ impl DnsSocket {
         }
         let packet = Packet::parse(&data)?;
         let packet_id = packet.id();
-        tracing::info!("Received packet with id={packet_id}");
         let pending = self.pending.remove_by_forward_id(&packet_id, &from);
         if pending.is_some() {
-            tracing::info!("Response from forward id {packet_id}");
             tracing::trace!("Received response from forward server. Send back to client.");
             let query = pending.unwrap();
             query.tx.send(data).unwrap();
@@ -214,7 +212,7 @@ impl DnsSocket {
         let (tx, rx) = oneshot::channel::<Vec<u8>>();
         let forward_id = self.id_manager.get_next(to);
         let original_id = packet.id();
-        tracing::info!("Fallback to forward server {to:?}. orignal_id={original_id} forward_id={forward_id}");
+        tracing::trace!("Fallback to forward server {to:?}. orignal_id={original_id} forward_id={forward_id}");
         let request = PendingRequest {
             original_query_id: original_id,
             forward_query_id: forward_id,

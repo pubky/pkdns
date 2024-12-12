@@ -261,7 +261,7 @@ impl PkarrResolver {
         let question = request.questions.first().expect("No question in query in pkarr_resolver.");
         let labels = question.qname.get_labels();
 
-        tracing::debug!("New query: {} {:?}", question.qname.to_string(), question.qtype);
+        tracing::debug!("New query: {} {:?} id={}", question.qname.to_string(), question.qtype, request.id());
 
         let tld = labels.last().expect("Question labels with no domain in pkarr_resolver").to_string();
         let parsed_option = Self::parse_pkarr_uri(&tld);
