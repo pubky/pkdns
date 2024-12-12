@@ -21,10 +21,11 @@
             },
             "args": [
                 "--ip-rate-limit-dht", "1",
+                "--verbose",
             ],
             "cwd": "${workspaceFolder}",
             "env": {
-                "RUST_LOG": "debug"
+                // "RUST_LOG": "debug"
                 // "RUST_LOG": "pkdns=debug,any_dns=debug,pkarr=debug,mainline=debug"
             }
         },

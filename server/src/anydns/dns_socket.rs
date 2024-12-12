@@ -2,7 +2,8 @@
 use super::{
     custom_handler::{CustomHandlerError, HandlerHolder},
     pending_request::{PendingRequest, PendingRequestStore},
-    query_id_manager::QueryIdManager, rate_limiter::RateLimiter,
+    query_id_manager::QueryIdManager,
+    rate_limiter::RateLimiter,
 };
 use simple_dns::{Packet, SimpleDnsError, RCODE};
 use std::hash::{Hash, Hasher};
@@ -16,9 +17,9 @@ use std::{
 use tokio::{net::UdpSocket, sync::oneshot};
 use tracing::Level;
 
-#[non_exhaustive]
+/// Any error related to receiving and sending DNS packets on the UDP socket.
 #[derive(thiserror::Error, Debug)]
-pub enum RequestError {
+pub enum DnsSocketError {
     #[error("Dns packet parse error: {0}")]
     Parse(#[from] SimpleDnsError),
 
@@ -26,9 +27,8 @@ pub enum RequestError {
     IO(#[from] tokio::io::Error),
 
     #[error("Timeout. No answer received from forward server.")]
-    Timeout(#[from] tokio::time::error::Elapsed),
+    ForwardTimeout(#[from] tokio::time::error::Elapsed),
 }
-
 
 /**
  * DNS UDP socket
@@ -83,7 +83,7 @@ impl DnsSocket {
         }
     }
 
-    async fn receive_datagram(&mut self) -> Result<(), RequestError> {
+    async fn receive_datagram(&mut self) -> Result<(), DnsSocketError> {
         let mut buffer = [0; 1024];
         let (size, from) = self.socket.recv_from(&mut buffer).await?;
 
@@ -112,7 +112,7 @@ impl DnsSocket {
         // New query
         if self.rate_limiter.check_is_limited_and_increase(from.ip()) {
             tracing::trace!("Rate limited {}.", from.ip());
-            let reply = self.construct_rate_limited_response(packet.id());
+            let reply = self.create_refused_reply(packet.id());
             self.send_to(&reply, &from).await?;
             return Ok(());
         };
@@ -130,6 +130,11 @@ impl DnsSocket {
                 return;
             };
             let question = question.unwrap();
+            let labels = question.qname.get_labels();
+            if labels.len() == 0 {
+                tracing::debug!("DNS packet question with no domain. Ignore.");
+                return;
+            };
             tracing::trace!("Received new query {} {:?}", question.qname, question.qtype);
             let query_result = socket.on_query(&data, &from).await;
             match query_result {
@@ -155,40 +160,43 @@ impl DnsSocket {
         Ok(())
     }
 
-    /**
-     * New query received.
-     */
-    async fn on_query(&mut self, query: &Vec<u8>, from: &SocketAddr) -> Result<(), RequestError> {
-        match self.query(query, Some(from.ip())).await {
-            Ok(reply) => {
-                self.send_to(&reply, from).await?;
-                Ok(())
-            }
-            Err(e) => Err(e),
-        }
+    // New query received.
+    async fn on_query(&mut self, query: &Vec<u8>, from: &SocketAddr) -> Result<usize, std::io::Error> {
+        let reply = self.query_me(query, Some(from.ip())).await;
+        self.send_to(&reply, from).await
     }
 
-    /**
-     * Query this dns for data
-     */
-    pub async fn query(&mut self, query: &Vec<u8>, from: Option<IpAddr>) -> Result<Vec<u8>, RequestError> {
+    /// Query this DNS for data
+    pub async fn query_me(&mut self, query: &Vec<u8>, from: Option<IpAddr>) -> Vec<u8> {
         tracing::trace!("Try to resolve the query with the custom handler.");
         let result = self.handler.call(query, self.clone(), from).await;
-        if let Ok(reply) = result {
+
+        if result.is_ok() {
             tracing::trace!("Custom handler resolved the query.");
             // All good. Handler handled the query
-            return Ok(reply);
-        };
+            return result.unwrap();
+        }
+        let query_id = self.extract_query_id(query).expect("Valid query. Prevalidated already.");
 
         match result.unwrap_err() {
             CustomHandlerError::Unhandled => {
                 // Fallback to ICANN
                 tracing::trace!("Custom handler rejected the query.");
-                let reply = self.forward_to_icann(query, Duration::from_secs(5)).await?;
-                Ok(reply)
+                match self.forward_to_icann(query, Duration::from_secs(5)).await {
+                    Ok(reply) => reply,
+                    Err(_) => self.create_server_fail_reply(query_id),
+                }
             }
-            CustomHandlerError::IO(e) => Err(e),
+            CustomHandlerError::Failed(err) => {
+                tracing::error!("Internal error: {}", err);
+                self.create_server_fail_reply(query_id)
+            },
+            CustomHandlerError::RateLimited(ip) => {
+                tracing::error!("IP is rate limited: {}", ip);
+                self.create_refused_reply(query_id)
+            },
         }
+
     }
 
     /**
@@ -208,7 +216,7 @@ impl DnsSocket {
         query: &Vec<u8>,
         to: &SocketAddr,
         timeout: Duration,
-    ) -> Result<Vec<u8>, RequestError> {
+    ) -> Result<Vec<u8>, DnsSocketError> {
         let packet = Packet::parse(&query)?;
         let (tx, rx) = oneshot::channel::<Vec<u8>>();
         let forward_id = self.id_manager.get_next(to);
@@ -245,16 +253,26 @@ impl DnsSocket {
     /**
      * Forward query to icann
      */
-    pub async fn forward_to_icann(&mut self, query: &Vec<u8>, timeout: Duration) -> Result<Vec<u8>, RequestError> {
+    pub async fn forward_to_icann(&mut self, query: &Vec<u8>, timeout: Duration) -> Result<Vec<u8>, DnsSocketError> {
         self.forward(query, &self.icann_fallback.clone(), timeout).await
     }
 
-    /**
-     * Constructs a reply indicating that the query got rate limited.
-     */
-    fn construct_rate_limited_response(&self, query_id: u16) -> Vec<u8> {
+    // Extracts the id of the query
+    fn extract_query_id(&self, query: &Vec<u8>) -> Result<u16, SimpleDnsError> {
+         Packet::parse(query).map(|packet| packet.id())
+    }
+
+    /// Create a REFUSED reply
+    fn create_refused_reply(&self, query_id: u16) -> Vec<u8> {
         let mut reply = Packet::new_reply(query_id);
         *reply.rcode_mut() = RCODE::Refused;
+        reply.build_bytes_vec_compressed().unwrap()
+    }
+
+    /// Create SRVFAIL reply
+    fn create_server_fail_reply(&self, query_id: u16) -> Vec<u8> {
+        let mut reply = Packet::new_reply(query_id);
+        *reply.rcode_mut() = RCODE::ServerFailure;
         reply.build_bytes_vec_compressed().unwrap()
     }
 }

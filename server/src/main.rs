@@ -27,12 +27,7 @@ impl MyHandler {
 #[async_trait]
 impl CustomHandler for MyHandler {
     async fn lookup(&mut self, query: &Vec<u8>, mut socket: DnsSocket, from: Option<IpAddr>) -> Result<Vec<u8>, CustomHandlerError> {
-        let result = self.pkarr.resolve(query, &mut socket, from).await;
-
-        match result {
-            Ok(reply) => Ok(reply),
-            Err(_) => Err(CustomHandlerError::Unhandled),
-        }
+        self.pkarr.resolve(query, &mut socket, from).await
     }
 }
 

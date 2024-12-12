@@ -6,13 +6,21 @@ use std::{fmt::Debug, net::IpAddr};
 
 use super::dns_socket::DnsSocket;
 
+/// Errors that a CustomHandler can return.
 #[derive(thiserror::Error, Debug)]
 pub enum CustomHandlerError {
+    /// Lookup failed. Error will be logged. SRVFAIL will be returned to the user.
     #[error(transparent)]
-    IO(#[from] super::dns_socket::RequestError),
+    Failed(#[from] Box<dyn std::error::Error + Send + Sync>),
 
+    /// Handler does not consider itself responsible for this query.
+    /// Will fallback to ICANN.
     #[error("Query is not processed by handler. Fallback to ICANN.")]
     Unhandled,
+
+    /// Handler rate limited the IP. Will return RCODE::Refused.
+    #[error("Source ip address {0} is rate limited.")]
+    RateLimited(IpAddr)
 }
 
 /**

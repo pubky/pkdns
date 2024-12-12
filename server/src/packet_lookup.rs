@@ -1,8 +1,11 @@
-use std::{net::{Ipv4Addr, Ipv6Addr, SocketAddr}, time::Duration};
+use std::{
+    net::{Ipv4Addr, Ipv6Addr, SocketAddr},
+    time::Duration,
+};
 
 use crate::anydns::DnsSocket;
 use simple_dns::{
-    rdata::{self, RData}, Name, Packet, PacketFlag, Question, ResourceRecord, QTYPE, TYPE
+    rdata::{self, RData}, Name, Packet, PacketFlag, Question, ResourceRecord, QTYPE, RCODE, TYPE
 };
 
 /**
@@ -50,7 +53,7 @@ async fn resolve_question<'a>(pkarr_packet: &Packet<'a>, question: &Question<'a>
             // Resolve ns
             let ns_reply = resolve_with_ns(question, &reply.name_servers, socket).await;
             if let Some(ns_reply) = ns_reply {
-                return ns_reply
+                return ns_reply;
             }
         }
     };
@@ -116,31 +119,38 @@ fn find_nameserver<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>) -> Vec<Resou
  * Resolve name server ip
  */
 async fn resolve_ns_ip<'a>(ns_name: &Name<'a>, socket: &mut DnsSocket) -> Option<Vec<SocketAddr>> {
-    let ns_question = Question::new(ns_name.clone(), QTYPE::TYPE(TYPE::A), simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN), false);
+    let ns_question = Question::new(
+        ns_name.clone(),
+        QTYPE::TYPE(TYPE::A),
+        simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN),
+        false,
+    );
     let mut query = Packet::new_query(0);
     query.questions.push(ns_question);
     query.set_flags(PacketFlag::RECURSION_DESIRED);
     let query = query.build_bytes_vec_compressed().unwrap();
 
-    let reply = socket.query(&query, None).await.ok()?;
+    let reply = socket.query_me(&query, None).await;
     let reply = Packet::parse(&reply).ok()?;
     if reply.answers.len() == 0 {
         return None;
     };
 
-    let addresses: Vec<SocketAddr> = reply.answers.into_iter().filter_map(|record| {
-        match record.rdata {
+    let addresses: Vec<SocketAddr> = reply
+        .answers
+        .into_iter()
+        .filter_map(|record| match record.rdata {
             RData::A(data) => {
                 let ip = Ipv4Addr::from(data.address);
                 Some(SocketAddr::new(ip.into(), 53))
-            },
+            }
             RData::AAAA(data) => {
                 let ip = Ipv6Addr::from(data.address);
                 Some(SocketAddr::new(ip.into(), 53))
-            },
-            _ => None
-        }
-    }).collect();
+            }
+            _ => None,
+        })
+        .collect();
 
     Some(addresses)
 }
@@ -148,18 +158,25 @@ async fn resolve_ns_ip<'a>(ns_name: &Name<'a>, socket: &mut DnsSocket) -> Option
 /**
  * Resolves the question with a single ns redirection.
  */
-async fn resolve_with_ns<'a>(question: &Question<'a>, name_servers: &Vec<ResourceRecord<'a>>, socket: &mut DnsSocket) -> Option<Vec<u8>> {
+async fn resolve_with_ns<'a>(
+    question: &Question<'a>,
+    name_servers: &Vec<ResourceRecord<'a>>,
+    socket: &mut DnsSocket,
+) -> Option<Vec<u8>> {
     if name_servers.len() == 0 {
         return None;
     };
 
-    let ns_names: Vec<Name<'_>> = name_servers.iter().filter_map(|record| {
-        if let RData::NS(data) = record.clone().rdata {
-            Some(data.0)
-        } else {
-            None
-        }
-    }).collect();
+    let ns_names: Vec<Name<'_>> = name_servers
+        .iter()
+        .filter_map(|record| {
+            if let RData::NS(data) = record.clone().rdata {
+                Some(data.0)
+            } else {
+                None
+            }
+        })
+        .collect();
 
     let ns_name = ns_names.first().unwrap();
     let addresses = resolve_ns_ip(ns_name, socket).await?;
@@ -171,6 +188,15 @@ async fn resolve_with_ns<'a>(question: &Question<'a>, name_servers: &Vec<Resourc
     let query = query.build_bytes_vec_compressed().unwrap();
 
     socket.forward(&query, addr, Duration::from_millis(1000)).await.ok()
+}
+
+/**
+ * Constructs a reply indicating that the query got rate limited.
+ */
+pub fn create_domain_not_found_reply(query_id: u16) -> Vec<u8> {
+    let mut reply = Packet::new_reply(query_id);
+    *reply.rcode_mut() = RCODE::NameError;
+    reply.build_bytes_vec_compressed().unwrap()
 }
 
 #[cfg(test)]
@@ -188,7 +214,14 @@ mod tests {
 
     async fn get_dnssocket() -> DnsSocket {
         let handler = HandlerHolder::new(EmptyHandler::new());
-        DnsSocket::new("127.0.0.1:20384".parse().unwrap(), "8.8.8.8:53".parse().unwrap(), handler, None).await.unwrap()
+        DnsSocket::new(
+            "127.0.0.1:20384".parse().unwrap(),
+            "8.8.8.8:53".parse().unwrap(),
+            handler,
+            None,
+        )
+        .await
+        .unwrap()
     }
 
     fn example_pkarr_reply() -> (Vec<u8>, PublicKey) {
