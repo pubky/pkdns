@@ -94,7 +94,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             clap::Arg::new("dht-rate-limit")
                 .long("dht-rate-limit")
                 .required(false)
-                .default_value("0")
+                .default_value("50")
                 .help("Maximum number of queries per second one IP address can make to the DHT before it is rate limited. 0 is disabled."),
         );
 
