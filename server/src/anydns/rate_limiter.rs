@@ -63,31 +63,77 @@ impl Hash for RateLimitingKey {
     }
 }
 
+
+pub struct RateLimiterBuilder {
+    max_per_second: Option<NonZeroU32>,
+    max_per_minute: Option<NonZeroU32>,
+    burst_size: Option<NonZeroU32>
+}
+
+impl RateLimiterBuilder {
+    pub fn new() -> Self {
+        Self {
+            max_per_second: None,
+            max_per_minute: None,
+            burst_size: None
+        }
+    }
+    
+    /// Maximum number of request per second. Think of a bucket that gets filled with drops.
+    /// This is the rate at which the bucket is emptied.
+    /// Either seconds or minutes is allowed. Setting both is invalid.
+    pub fn max_per_second(mut self, limit: Option<NonZeroU32>) -> Self {
+        self.max_per_second = limit;
+        self
+    }
+
+    /// Maximum number of request per minute. Think of a bucket that gets filled with drops.
+    /// This is the rate at which the bucket is emptied.
+    /// Either seconds or minutes is allowed. Setting both is invalid.
+    pub fn max_per_minute(mut self, limit: Option<NonZeroU32>) -> Self {
+        self.max_per_minute = limit;
+        self
+    }
+
+    /// Burst size of requests a minute. Think of it as the bucket size.
+    pub fn burst_size(mut self, size: Option<NonZeroU32>) -> Self {
+        self.burst_size = size;
+        self
+    }
+
+    /// Builds the RateLimiter. Panics if max_per_minute AND max_per_second is set at the same time.
+    pub fn build(self) -> RateLimiter {
+        if self.max_per_minute.is_some() && self.max_per_second.is_some() {
+            panic!("Can't set max_per_minute and max_per_second at the same time.")
+        };
+
+        let mut quota: Quota;
+        if let Some(limit) = self.max_per_minute {
+            quota = Quota::per_minute(limit);
+        } else if let Some(limit) = self.max_per_second {
+            quota = Quota::per_second(limit);
+        } else {
+            return RateLimiter {
+                limiter: None
+            }
+        }
+        if let Some(size) = self.burst_size {
+            quota = quota.allow_burst(size);
+        }
+
+        RateLimiter {
+            limiter: Some(GovenerRateLimiter::keyed(quota))
+        }
+    }
+}
+
+
 #[derive(Debug)]
 pub struct RateLimiter {
     limiter: Option<DefaultKeyedRateLimiter<RateLimitingKey>>,
 }
 
 impl RateLimiter {
-    pub fn new_per_second(max_per_second: Option<NonZeroU32>) -> Self {
-        Self {
-            limiter: max_per_second.map(|limit| {
-                let quota = Quota::per_second(limit);
-                GovenerRateLimiter::keyed(quota)
-            }),
-        }
-    }
-
-    pub fn new_per_minute(max_per_minute: Option<NonZeroU32>) -> Self {
-        Self {
-            limiter: max_per_minute.map(|limit| {
-                let quota = Quota::per_minute(limit);
-                GovenerRateLimiter::keyed(quota)
-            }),
-        }
-    }
-    
-
     /**
      * Checks if this IP address is limited. Increases the usage by one.
      */

@@ -110,12 +110,15 @@ Options:
           Maximum size of the pkarr packet cache in megabytes. [default: 100]
       --query-rate-limit <query-rate-limit>
           Maximum number of queries per second one IP address can make before it is rate limited. 0 is disabled. [default: 0]
+      --query-rate-limit-burst <query-rate-limit-burst>
+          Short term burst size of the query-rate-limit. 0 is disabled. [default: 0]
       --dht-rate-limit <dht-rate-limit>
-          Maximum number of queries per second one IP address can make to the DHT before it is rate limited. 0 is disabled. [default: 10]
+          Maximum number of queries per second one IP address can make to the DHT before it is rate limited. 0 is disabled. [default: 5]
+      --dht-rate-limit-burst <dht-rate-limit-burst>
+          Short term burst size of the dht-rate-limit. 0 is disabled. [default: 25]
   -h, --help
           Print help
   -V, --version
-          Print version
 ```
 
 For extended logs, see [here](./docs/logging.md).

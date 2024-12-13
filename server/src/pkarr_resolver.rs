@@ -1,4 +1,4 @@
-use crate::{anydns::{CustomHandlerError, DnsSocket, DnsSocketError, RateLimiter}, pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply};
+use crate::{anydns::{CustomHandlerError, DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder}, pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply};
 use dashmap::DashMap;
 use std::{
     net::{IpAddr, SocketAddr},
@@ -16,26 +16,23 @@ use pkarr::{dns::Packet, mainline::dht::DhtSettings, Error as PkarrError, PkarrC
 
 #[derive(Clone, Debug)]
 pub struct ResolverSettings {
-    /**
-     * Maximum number of seconds before a cached value gets auto-refreshed.
-     */
+    /// Maximum number of seconds before a cached value gets auto-refreshed.
     max_ttl: u64,
-    /**
-     * Minimum number of seconds a value is cached for before being refreshed.
-     */
+
+    /// Minimum number of seconds a value is cached for before being refreshed.
     min_ttl: u64,
 
-    /**
-     * Maximum size of the pkarr packet cache in megabytes.
-     */
+    /// Maximum size of the pkarr packet cache in megabytes.
     cache_mb: u64,
 
+    /// IP:port combination of the dns server regular ICANN queries should be forwarded to.
     forward_dns_server: SocketAddr,
 
-    /**
-     * Maximum number of DHT queries one IP address can make per second.
-     */
+    /// Maximum number of DHT queries one IP address can make per second.
     max_dht_queries_per_ip_per_second: Option<NonZeroU32>,
+
+    /// Burst size of the rate limit.
+    max_dht_queries_per_ip_burst: Option<NonZeroU32>,
 }
 
 impl ResolverSettings {
@@ -48,6 +45,7 @@ impl ResolverSettings {
                 .parse()
                 .expect("forward should be valid IP:Port combination."),
             max_dht_queries_per_ip_per_second: None,
+            max_dht_queries_per_ip_burst: None
         }
     }
 }
@@ -95,6 +93,12 @@ impl PkarrResolverBuilder {
     /// Rate the number of DHT queries by ip addresses.
     pub fn max_dht_queries_per_ip_per_second(mut self, limit: Option<NonZeroU32>) -> Self {
         self.settings.max_dht_queries_per_ip_per_second = limit;
+        self
+    }
+
+    /// Burst size of the rate limit.
+    pub fn max_dht_queries_per_ip_burst(mut self, burst: Option<NonZeroU32>) -> Self {
+        self.settings.max_dht_queries_per_ip_burst = burst;
         self
     }
 
@@ -157,13 +161,12 @@ impl PkarrResolver {
             .dht_settings(dht_settings) // Use resolved bootstrap node
             .build()
             .unwrap();
+        let limiter = RateLimiterBuilder::new().max_per_second(settings.max_dht_queries_per_ip_per_second.clone());
         Self {
             client: client.as_async(),
             cache: PkarrPacketLruCache::new(Some(settings.cache_mb)),
             lock_map: Arc::new(DashMap::new()),
-            rate_limiter: Arc::new(RateLimiter::new_per_second(
-                settings.max_dht_queries_per_ip_per_second.clone(),
-            )),
+            rate_limiter: Arc::new(limiter.build()),
             settings,
         }
     }
@@ -353,6 +356,7 @@ mod tests {
             "8.8.8.8:53".parse().unwrap(),
             handler,
             None,
+            None
         )
         .await
         .unwrap()

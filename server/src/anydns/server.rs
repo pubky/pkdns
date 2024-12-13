@@ -12,6 +12,7 @@ pub struct Builder {
     listen: SocketAddr,
     handler: HandlerHolder,
     max_queries_per_ip_per_second: Option<NonZeroU32>,
+    burst_size: Option<NonZeroU32>
 }
 
 impl Builder {
@@ -21,12 +22,19 @@ impl Builder {
             listen: SocketAddr::from(([0, 0, 0, 0], 53)),
             handler: HandlerHolder::new(EmptyHandler::new()),
             max_queries_per_ip_per_second: None,
+            burst_size: None,
         }
     }
 
     /// Rate limit the number of queries coming from a single IP address.
     pub fn max_queries_per_ip_per_second(mut self, limit: Option<NonZeroU32>) -> Self {
         self.max_queries_per_ip_per_second = limit;
+        self
+    }
+
+    /// Rate limit burst size
+    pub fn max_queries_per_ip_burst(mut self, burst_size: Option<NonZeroU32>) -> Self {
+        self.burst_size = burst_size;
         self
     }
 
@@ -55,6 +63,7 @@ impl Builder {
             self.icann_resolver,
             self.handler,
             self.max_queries_per_ip_per_second,
+            self.burst_size
         )
         .await
     }
@@ -71,8 +80,9 @@ impl AnyDNS {
         icann_fallback: SocketAddr,
         handler: HandlerHolder,
         max_queries_per_ip_per_second: Option<NonZeroU32>,
+        burst_size: Option<NonZeroU32>
     ) -> tokio::io::Result<Self> {
-        let mut socket = DnsSocket::new(listener, icann_fallback, handler, max_queries_per_ip_per_second).await?;
+        let mut socket = DnsSocket::new(listener, icann_fallback, handler, max_queries_per_ip_per_second, burst_size).await?;
         let join_handle = tokio::spawn(async move {
             socket.receive_loop().await;
         });

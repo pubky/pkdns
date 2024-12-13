@@ -3,7 +3,7 @@ use super::{
     custom_handler::{CustomHandlerError, HandlerHolder},
     pending_request::{PendingRequest, PendingRequestStore},
     query_id_manager::QueryIdManager,
-    rate_limiter::RateLimiter,
+    rate_limiter::{RateLimiter, RateLimiterBuilder},
 };
 use simple_dns::{Packet, SimpleDnsError, RCODE};
 use std::hash::{Hash, Hasher};
@@ -50,8 +50,12 @@ impl DnsSocket {
         icann_fallback: SocketAddr,
         handler: HandlerHolder,
         max_queries_per_ip_per_second: Option<NonZeroU32>,
+        burst_size: Option<NonZeroU32>
     ) -> tokio::io::Result<Self> {
         let socket = UdpSocket::bind(listening).await?;
+        let limiter = RateLimiterBuilder::new()
+        .max_per_second(max_queries_per_ip_per_second)
+        .burst_size(burst_size);
 
         Ok(Self {
             socket: Arc::new(socket),
@@ -59,7 +63,7 @@ impl DnsSocket {
             handler,
             icann_fallback,
             id_manager: QueryIdManager::new(),
-            rate_limiter: Arc::new(RateLimiter::new_per_second(max_queries_per_ip_per_second)),
+            rate_limiter: Arc::new(limiter.build()),
         })
     }
 
@@ -278,7 +282,7 @@ mod tests {
         let listening: SocketAddr = "0.0.0.0:34254".parse().unwrap();
         let icann_fallback: SocketAddr = "8.8.8.8:53".parse().unwrap();
         let handler = HandlerHolder::new(EmptyHandler::new());
-        let mut socket = DnsSocket::new(listening, icann_fallback, handler, None).await.unwrap();
+        let mut socket = DnsSocket::new(listening, icann_fallback, handler, None, None).await.unwrap();
 
         let mut run_socket = socket.clone();
         tokio::spawn(async move {

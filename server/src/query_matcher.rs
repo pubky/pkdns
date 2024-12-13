@@ -219,6 +219,7 @@ mod tests {
             "8.8.8.8:53".parse().unwrap(),
             handler,
             None,
+            None
         )
         .await
         .unwrap()
