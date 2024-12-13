@@ -28,6 +28,9 @@ pub enum DnsSocketError {
 
     #[error("Timeout. No answer received from forward server.")]
     ForwardTimeout(#[from] tokio::time::error::Elapsed),
+
+    #[error("Rx receive error. {0}")]
+    RxReceiedErr(#[from] oneshot::error::RecvError),
 }
 
 /**
@@ -172,6 +175,8 @@ impl DnsSocket {
             // All good. Handler handled the query
             return result.unwrap();
         }
+        let request = Packet::parse(query).unwrap();
+        let question = request.questions.first().unwrap();
         let query_id = self.extract_query_id(query).expect("Should be valid query. Prevalidated already.");
 
         match result.unwrap_err() {
@@ -181,7 +186,7 @@ impl DnsSocket {
                 match self.forward_to_icann(query, Duration::from_secs(5)).await {
                     Ok(reply) => reply,
                     Err(e) => {
-                        tracing::warn!("Forward dns server error. {e}. query_id={query_id}");
+                        tracing::warn!("Forwarding dns query failed. {e} {} {:?} query_id={query_id}", question.qname, question.qtype);
                         Self::create_server_fail_reply(query_id)
                     },
                 }
@@ -232,13 +237,7 @@ impl DnsSocket {
         self.send_to(&query, to).await?;
 
         // Wait on response
-        let reply = tokio::time::timeout(timeout, rx).await;
-        if reply.is_err() {
-            // Timeout, remove pending again
-            tracing::info!("Forwarded query original_id={original_id} forward_id={forward_id} timed out.");
-            self.pending.remove_by_forward_id(&forward_id, &to);
-        };
-        let mut reply = reply?.unwrap();
+        let mut reply = tokio::time::timeout(timeout, rx).await??;
         self.replace_packet_id(&mut reply, original_id);
         Ok(reply)
     }
