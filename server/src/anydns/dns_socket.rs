@@ -175,28 +175,30 @@ impl DnsSocket {
             // All good. Handler handled the query
             return result.unwrap();
         }
-        let request = Packet::parse(query).unwrap();
-        let question = request.questions.first().unwrap();
-        let query_id = self.extract_query_id(query).expect("Should be valid query. Prevalidated already.");
+        let request = Packet::parse(query).expect("Should be valid query. Prevalidated already.");;
+        let question = request.questions.first().expect("Should be valid query. Prevalidated already.");;
+        let query_id = request.id();
+
+        let query_name = format!("{} {:?} query_id={query_id}", question.qname, question.qtype);
 
         match result.unwrap_err() {
             CustomHandlerError::Unhandled => {
                 // Fallback to ICANN
-                tracing::trace!("Custom handler rejected the query.");
+                tracing::trace!("Custom handler rejected the query. {query_name}");
                 match self.forward_to_icann(query, Duration::from_secs(5)).await {
                     Ok(reply) => reply,
                     Err(e) => {
-                        tracing::warn!("Forwarding dns query failed. {e} {} {:?} query_id={query_id}", question.qname, question.qtype);
+                        tracing::warn!("Forwarding dns query failed. {e} {query_name}");
                         Self::create_server_fail_reply(query_id)
                     },
                 }
             }
             CustomHandlerError::Failed(err) => {
-                tracing::error!("Internal error: {}", err);
+                tracing::error!("Internal error {query_name}: {}", err);
                 Self::create_server_fail_reply(query_id)
             },
             CustomHandlerError::RateLimited(ip) => {
-                tracing::error!("IP is rate limited: {}", ip);
+                tracing::error!("IP is rate limited {query_name}: {}", ip);
                 Self::create_refused_reply(query_id)
             },
         }
