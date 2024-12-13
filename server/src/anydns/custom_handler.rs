@@ -2,17 +2,25 @@
 
 use async_trait::async_trait;
 use dyn_clone::DynClone;
-use std::fmt::Debug;
+use std::{fmt::Debug, net::IpAddr};
 
 use super::dns_socket::DnsSocket;
 
+/// Errors that a CustomHandler can return.
 #[derive(thiserror::Error, Debug)]
 pub enum CustomHandlerError {
+    /// Lookup failed. Error will be logged. SRVFAIL will be returned to the user.
     #[error(transparent)]
-    IO(#[from] super::dns_socket::RequestError),
+    Failed(#[from] Box<dyn std::error::Error + Send + Sync>),
 
+    /// Handler does not consider itself responsible for this query.
+    /// Will fallback to ICANN.
     #[error("Query is not processed by handler. Fallback to ICANN.")]
     Unhandled,
+
+    /// Handler rate limited the IP. Will return RCODE::Refused.
+    #[error("Source ip address {0} is rate limited.")]
+    RateLimited(IpAddr)
 }
 
 /**
@@ -25,6 +33,7 @@ pub trait CustomHandler: DynClone + Send + Sync {
         &mut self,
         query: &Vec<u8>,
         socket: DnsSocket,
+        from: Option<IpAddr>
     ) -> Result<Vec<u8>, CustomHandlerError>;
 }
 
@@ -63,8 +72,9 @@ impl HandlerHolder {
         &mut self,
         query: &Vec<u8>,
         socket: DnsSocket,
+        from: Option<IpAddr>
     ) -> Result<Vec<u8>, CustomHandlerError> {
-        self.func.lookup(query, socket).await
+        self.func.lookup(query, socket, from).await
     }
 }
 
@@ -83,6 +93,7 @@ impl CustomHandler for EmptyHandler {
         &mut self,
         _query: &Vec<u8>,
         _socket: DnsSocket,
+        from: Option<IpAddr>
     ) -> Result<Vec<u8>, CustomHandlerError> {
         Err(CustomHandlerError::Unhandled)
     }
@@ -92,7 +103,7 @@ impl CustomHandler for EmptyHandler {
 mod tests {
     use super::super::dns_socket::DnsSocket;
     use async_trait::async_trait;
-    use std::net::SocketAddr;
+    use std::net::{IpAddr, SocketAddr};
 
     use super::{CustomHandler, CustomHandlerError, HandlerHolder};
 
@@ -128,6 +139,7 @@ mod tests {
             &mut self,
             _query: &Vec<u8>,
             _socket: DnsSocket,
+            from: Option<IpAddr>
         ) -> Result<Vec<u8>, CustomHandlerError> {
             println!("value {}", self.value.value);
             Err(CustomHandlerError::Unhandled)
@@ -144,11 +156,13 @@ mod tests {
         let socket = DnsSocket::new(
             "0.0.0.0:18293".parse().unwrap(),
             icann_fallback,
-            holder1.clone()
+            holder1.clone(),
+            None,
+            None
         )
         .await
         .unwrap();
-        let result = cloned.call(&vec![], socket).await;
+        let result = cloned.call(&vec![], socket, None).await;
         assert!(result.is_err());
     }
 }

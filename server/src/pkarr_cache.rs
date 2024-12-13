@@ -54,16 +54,20 @@ impl CacheItem {
         }
     }
 
-    pub fn is_not_found(&self) -> bool {
-        if let CacheItem::NotFound {
-            public_key: _,
+    /// Checks if this cache includes a signed packet.
+    pub fn is_found(&self) -> bool {
+        if let CacheItem::Packet {
+            packet: _,
             last_updated_at: _,
-        } = self
-        {
+        } = self {
             true
         } else {
             false
         }
+    }
+
+    pub fn is_not_found(&self) -> bool {
+       !self.is_found()
     }
 
     #[allow(dead_code)]

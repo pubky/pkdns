@@ -10,7 +10,9 @@ mod dns_socket;
 mod pending_request;
 mod query_id_manager;
 mod server;
+mod rate_limiter;
 
 pub use custom_handler::{CustomHandler, CustomHandlerError, EmptyHandler, HandlerHolder};
-pub use dns_socket::DnsSocket;
+pub use dns_socket::{DnsSocket, DnsSocketError};
 pub use server::{AnyDNS, Builder};
+pub use rate_limiter::{RateLimiter, RateLimiterBuilder};

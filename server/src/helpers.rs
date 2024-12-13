@@ -1,6 +1,6 @@
 use std::env;
 use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
-use tracing::{Level};
+use tracing::Level;
 
 /**
  * Sets `RUST_BACKTRACE=full` as default so we always get a full stacktrace
@@ -27,7 +27,6 @@ pub (crate) fn enable_logging(verbose: bool) {
     if value.len() > 0 {
         tracing_subscriber::fmt().with_env_filter(EnvFilter::from_default_env()).init();
         tracing::info!("Used RUST_LOG={} env variable to set logging output.", value);
-        tracing::debug!("test");
         if verbose {
             tracing::warn!("RUST_LOG= is set. Ignore --verbose flag.")
         }
@@ -36,12 +35,10 @@ pub (crate) fn enable_logging(verbose: bool) {
 
     let regular_filter = tracing_subscriber::filter::Targets::new()
     .with_target("pkdns", Level::INFO)
-    .with_target("any_dns", Level::INFO)
     .with_target("mainline", Level::WARN);
 
     let verbose_filter = tracing_subscriber::filter::Targets::new()
     .with_target("pkdns", Level::DEBUG)
-    .with_target("any_dns", Level::DEBUG)
     .with_target("mainline", Level::WARN);
 
     let mut filter: Targets = regular_filter;

@@ -23,4 +23,5 @@ dashmap = "6.1.0"
 
 dyn-clone = "1.0.16"
 thiserror = "1.0.56"
+governor = "0.7.0"
 
