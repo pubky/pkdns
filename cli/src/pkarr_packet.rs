@@ -54,6 +54,7 @@ impl fmt::Display for PkarrPacket {
         };
         let records = self.to_records();
         write!(f, "Packet {}\n", records.get(0).unwrap().pubkey()).unwrap();
+        write!(f, "{0: <20} {1: <7} {2: <6} {3: <25}{4:}", "Name", "TTL", "Type", "Data", "\n").unwrap();
         for record in self.to_records() {
             write!(f, "{record}\n").unwrap();
         };
@@ -116,6 +117,11 @@ impl PkarrRecord {
         }
     }
 
+    pub fn ttl(&self) -> u32 {
+        let rr = self.get_resource_record();
+        rr.ttl
+    }
+
     pub fn data_as_strings(&self) -> (&str, String) {
         let (record_type, data) = match self.get_resource_record().rdata {
             RData::A(a) => {
@@ -157,7 +163,8 @@ impl PkarrRecord {
 impl fmt::Display for PkarrRecord {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let name = self.name();
+        let ttl = self.ttl();
         let data = self.data_as_strings();
-        write!(f, "{0: <20} {1: <6} {2: <10}", name, data.0, data.1)
+        write!(f, "{0: <20} {1: <7} {2: <6} {3: <25}", name, ttl, data.0, data.1)
     }
 }

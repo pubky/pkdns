@@ -1,4 +1,5 @@
-@    IN	  NS	    dns1.example.com.              
+$TTL 300
+@    IN	  NS	    dns1.example.com.      
 
 @    IN	  MX	10	mail.example.com.       
 @    IN	  MX	20	mail2.example.com.   
