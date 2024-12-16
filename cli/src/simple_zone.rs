@@ -31,13 +31,13 @@ impl SimpleZone {
      */
     fn generate_soa(pubkey: &str) -> String {
         let formatted = format!("$ORIGIN {pubkey}. 
-$TTL 86400 
+$TTL 300
 @	IN	SOA	127.0.0.1.	hostmaster.example.com. (
 			2001062501 ; serial                     
 			21600      ; refresh after 6 hours                     
 			3600       ; retry after 1 hour                     
 			604800     ; expire after 1 week                     
-			86400 )    ; minimum TTL of 1 day  
+			300 )    ; minimum TTL of 1 day  
             ");
         formatted
     }
@@ -80,6 +80,7 @@ $TTL 86400
             let packet = match entry {
                 Entry::Include { path, origin } => continue,
                 Entry::Record(val) => {
+                    let ttl = val.ttl().as_secs();
                     let (name, data) = val.clone().into_owner_and_data();
                     let simple_name_str = name.to_string();
                     let simple_name = Name::try_from(simple_name_str.as_str())?;
@@ -90,7 +91,7 @@ $TTL 86400
                                     address: val.addr().into()
                                 }
                             );
-                            let rr = ResourceRecord::new(simple_name, pkarr::dns::CLASS::IN, 60*60, rdata);
+                            let rr = ResourceRecord::new(simple_name, pkarr::dns::CLASS::IN, ttl, rdata);
                             let mut packet = pkarr::dns::Packet::new_reply(0);
                             packet.answers.push(rr);
                             packet.build_bytes_vec_compressed()?
@@ -101,7 +102,7 @@ $TTL 86400
                                     address: val.addr().into()
                                 }
                             );
-                            let rr = ResourceRecord::new(simple_name, pkarr::dns::CLASS::IN, 60*60, rdata);
+                            let rr = ResourceRecord::new(simple_name, pkarr::dns::CLASS::IN, ttl, rdata);
                             let mut packet = pkarr::dns::Packet::new_reply(0);
                             packet.answers.push(rr);
                             packet.build_bytes_vec_compressed()?
@@ -112,7 +113,7 @@ $TTL 86400
                                 pkarr::dns::rdata::NS(Name::try_from(ns_name.as_str())?)
                             );
                             
-                            let rr = ResourceRecord::new(simple_name, pkarr::dns::CLASS::IN, 60*60, rdata);
+                            let rr = ResourceRecord::new(simple_name, pkarr::dns::CLASS::IN, ttl, rdata);
                             let mut packet = pkarr::dns::Packet::new_reply(0);
                             packet.answers.push(rr);
                             packet.build_bytes_vec_compressed()?
@@ -126,7 +127,7 @@ $TTL 86400
                                 txt
                             );
                             
-                            let rr = ResourceRecord::new(simple_name, pkarr::dns::CLASS::IN, 60*60, rdata);
+                            let rr = ResourceRecord::new(simple_name, pkarr::dns::CLASS::IN, ttl, rdata);
                             let mut packet = pkarr::dns::Packet::new_reply(0);
                             packet.answers.push(rr);
                             packet.build_bytes_vec_compressed()?
@@ -142,7 +143,7 @@ $TTL 86400
                                 mx
                             );
                             
-                            let rr = ResourceRecord::new(simple_name, pkarr::dns::CLASS::IN, 60*60, rdata);
+                            let rr = ResourceRecord::new(simple_name, pkarr::dns::CLASS::IN, ttl, rdata);
                             let mut packet = pkarr::dns::Packet::new_reply(0);
                             packet.answers.push(rr);
                             packet.build_bytes_vec_compressed()?
@@ -153,7 +154,7 @@ $TTL 86400
                             let rdata: pkarr::dns::rdata::RData = pkarr::dns::rdata::RData::CNAME(
                                 pkarr::dns::rdata::CNAME(value)
                             );
-                            let rr = ResourceRecord::new(simple_name, pkarr::dns::CLASS::IN, 60*60, rdata);
+                            let rr = ResourceRecord::new(simple_name, pkarr::dns::CLASS::IN, ttl, rdata);
                             let mut packet = pkarr::dns::Packet::new_reply(0);
                             packet.answers.push(rr);
                             packet.build_bytes_vec_compressed()?
@@ -189,16 +190,16 @@ mod tests {
 
     fn simplified_zone() -> String {
         String::from(
-            "           
-@	IN	NS	dns1.example.com.       
-@	IN	NS	dns2.example.com.        
+            "
+@	IN	NS	dns1.example.com. 
+@ 400	IN	NS	dns2.example.com.        
 	
 	
-@	IN	MX	10	mail.example.com.       
+@ 301	IN	MX	10	mail.example.com.       
 @	IN	MX	20	mail2.example.com.   
 
 @   IN  A 127.0.0.1
-test    IN  A 127.0.0.1
+test   IN  A 127.0.0.1
 
 	
 dns1	IN	A	10.0.1.1

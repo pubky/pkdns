@@ -17,13 +17,11 @@ pub async fn run_cli() {
                 .about("Publish pkarr dns records.")
                 .arg(
                     clap::Arg::new("seed")
-                        .required(true)
                         .help("File path to the pkarr seed file.")
                         .default_value("./seed.txt"),
                 )
                 .arg(
                     clap::Arg::new("zonefile")
-                        .required(true)
                         .help("File path to the dns zone file.")
                         .default_value("./pkarr.zone"),
                 )
@@ -33,7 +31,7 @@ pub async fn run_cli() {
                         .required(false)
                         .num_args(0)
                         .help("File path to the dns records csv file."),
-                ),
+                )
         )
         .subcommand(
             clap::Command::new("resolve")
