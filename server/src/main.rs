@@ -77,7 +77,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             clap::Arg::new("min-ttl")
                 .long("min-ttl")
                 .required(false)
-                .default_value("300")
+                .default_value("60")
                 .help("Minimum number of seconds a value is cached for before being refreshed."),
         )
         .arg(
