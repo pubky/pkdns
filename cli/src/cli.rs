@@ -1,8 +1,4 @@
-use crate::commands::{generate::cli_generate_seed, publish::cli_publish, resolve::cli_resolve};
-
-
-
-
+use crate::commands::{cli_publickey, generate::cli_generate_seed, publish::cli_publish, resolve::cli_resolve};
 
 /**
  * Main cli entry function.
@@ -40,9 +36,16 @@ pub async fn run_cli() {
                 .about("Resolve pkarr dns records.")
                 .arg(clap::Arg::new("pubkey").required(false).help("Pkarr public key uri.")),
         )
+        .subcommand(clap::Command::new("generate").about("Generate a new zbase32 pkarr seed"))
         .subcommand(
-            clap::Command::new("generate")
-                .about("Generate a new zbase32 pkarr seed")
+            clap::Command::new("publickey")
+                .about("Derive the public key from the seed.")
+                .arg(
+                    clap::Arg::new("seed")
+                        .required(false)
+                        .help("File path to the pkarr seed file.")
+                        .default_value("./seed.txt"),
+                ),
         );
     let matches = cmd.get_matches();
 
@@ -55,6 +58,9 @@ pub async fn run_cli() {
         }
         Some(("generate", matches)) => {
             cli_generate_seed(matches).await;
+        }
+        Some(("publickey", matches)) => {
+            cli_publickey(matches).await;
         }
         _ => {
             unimplemented!("command not implemented")
