@@ -1,13 +1,17 @@
+use std::{thread, time::Duration};
+
 use chrono::{DateTime, Utc};
 use clap::ArgMatches;
-use pkarr::{PkarrClient, PublicKey, Settings};
+use pkarr::PublicKey;
 
-use crate::pkarr_packet::PkarrPacket;
+use crate::{helpers::construct_pkarr_client, pkarr_packet::PkarrPacket};
 
 
 fn resolve_pkarr(uri: &str) -> (PkarrPacket, DateTime<Utc>)  {
-    let client = PkarrClient::new(Settings::default()).unwrap();
+    let client = construct_pkarr_client();
     let pubkey: PublicKey = uri.try_into().expect("Should be valid pkarr public key.");
+    let _ = client.resolve(&pubkey);
+    thread::sleep(Duration::from_millis(500));
     let res = client.resolve(&pubkey);
     if let Err(e) = res {
         eprintln!("Failed to resolve. {e}");

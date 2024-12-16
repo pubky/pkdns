@@ -2,6 +2,8 @@ use std::{sync::mpsc::channel, io::{self, Write}};
 use chrono;
 use pkarr::{PkarrClient, Settings, SignedPacket};
 
+use crate::helpers::construct_pkarr_client;
+
 pub struct PkarrPublisher {
     pub packet: SignedPacket
 }
@@ -17,7 +19,7 @@ impl PkarrPublisher {
     }
     
     pub fn run_once(&self) -> () {
-        let client = PkarrClient::new(Settings::default()).unwrap();
+        let client = construct_pkarr_client();
         print!("Hang on...");
         io::stdout().flush().unwrap();
         let result = client.publish(&self.packet);

@@ -6,6 +6,7 @@ mod simple_zone;
 mod pkarr_packet;
 mod pkarr_publisher;
 mod commands;
+mod helpers;
 
 
 #[tokio::main]

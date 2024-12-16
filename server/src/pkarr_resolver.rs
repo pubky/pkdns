@@ -159,6 +159,7 @@ impl PkarrResolver {
             .minimum_ttl(0)
             .maximum_ttl(0) // Disable Pkarr caching
             .dht_settings(dht_settings) // Use resolved bootstrap node
+            .resolvers(None)
             .build()
             .unwrap();
         let limiter = RateLimiterBuilder::new().max_per_second(settings.max_dht_queries_per_ip_per_second.clone());

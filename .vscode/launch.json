@@ -29,5 +29,29 @@
                 // "RUST_LOG": "pkdns=debug,any_dns=debug,pkarr=debug,mainline=debug"
             }
         },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "CLI Publish",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=pkdns-cli",
+                    "--package=pkdns-cli"
+                ],
+                "filter": {
+                    "name": "pkdns-cli",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "publish", "./cli/sample/seed.txt", "./cli/sample/pkarr.zone", "--once"
+            ],
+            "cwd": "${workspaceFolder}",
+            "env": {
+                // "RUST_LOG": "debug"
+                // "RUST_LOG": "pkdns=debug,any_dns=debug,pkarr=debug,mainline=debug"
+            }
+        },
     ]
 }
