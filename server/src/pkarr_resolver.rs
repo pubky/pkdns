@@ -1,9 +1,6 @@
 use crate::{anydns::{CustomHandlerError, DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder}, pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply};
-use dashmap::DashMap;
 use std::{
-    net::{IpAddr, SocketAddr},
-    num::NonZeroU32,
-    sync::Arc,
+    collections::HashMap, net::{IpAddr, SocketAddr}, num::NonZeroU32, sync::Arc
 };
 use tokio::sync::Mutex;
 
@@ -117,9 +114,9 @@ pub struct PkarrResolver {
     /**
      * Locks to use to update pkarr packets. This avoids concurrent updates.
      */
-    lock_map: Arc<DashMap<PublicKey, Arc<Mutex<()>>>>,
+    lock_map: Arc<Mutex<HashMap<PublicKey, Arc<Mutex<()>>>>>,
     settings: ResolverSettings,
-    rate_limiter: Arc<RateLimiter>,
+    rate_limiter: Arc<RateLimiter>
 }
 
 impl PkarrResolver {
@@ -166,7 +163,7 @@ impl PkarrResolver {
         Self {
             client: client.as_async(),
             cache: PkarrPacketLruCache::new(Some(settings.cache_mb)),
-            lock_map: Arc::new(DashMap::new()),
+            lock_map: Arc::new(Mutex::new(HashMap::new())),
             rate_limiter: Arc::new(limiter.build()),
             settings,
         }
@@ -212,8 +209,8 @@ impl PkarrResolver {
 
     /// Lookup DHT to pull pkarr packet. Will not check the cache first but store any new value in the cache. Returns cached value if lookup fails.
     async fn lookup_dht_and_cache(&mut self, pubkey: PublicKey) -> Result<CacheItem, PkarrResolverError> {
-        let mutex = self
-            .lock_map
+        let mut locked_map = self.lock_map.lock().await;
+        let mutex = locked_map
             .entry(pubkey.clone())
             .or_insert_with(|| Arc::new(Mutex::new(())));
         let _guard = mutex.lock().await;
