@@ -1,18 +1,10 @@
-<<<<<<< Updated upstream
 use std::{fs::read_to_string, path::{Path, PathBuf}};
+use std::io::Write;
 
-use chrono::Duration;
-=======
->>>>>>> Stashed changes
 use clap::ArgMatches;
 use pkarr::{Keypair, SignedPacket};
-use std::io::Write;
-use std::{
-    fs::read_to_string,
-    path::{Path, PathBuf},
-};
 
-use crate::{pkarr_publisher::PkarrPublisher, simple_zone::SimpleZone};
+use crate::{helpers::construct_pkarr_client, simple_zone::SimpleZone};
 
 const SECRET_KEY_LENGTH: usize = 32;
 
@@ -73,7 +65,6 @@ pub async fn cli_publish(matches: &ArgMatches) {
 
     let zone = read_zone_file(matches, &pubkey);
     println!("{}", zone.packet);
-
     let packet = zone.packet.parsed();
     let packet = SignedPacket::from_packet(&keypair, &packet);
     if let Err(e) = packet {
@@ -83,20 +74,6 @@ pub async fn cli_publish(matches: &ArgMatches) {
 
     let packet = packet.unwrap();
 
-<<<<<<< Updated upstream
-
-    let publisher = PkarrPublisher::new(packet);
-    if once {
-        println!("Announce once.");
-        publisher.run_once();
-    } else {
-        println!(
-            "Announce every {}min. Stop with Ctrl-C...",
-            interval.num_minutes()
-        );
-        publisher.run(interval);
-    }
-=======
     let client = construct_pkarr_client();
     print!("Hang on...");
     std::io::stdout().flush().unwrap();
@@ -106,5 +83,6 @@ pub async fn cli_publish(matches: &ArgMatches) {
         Ok(_) => println!("{} Successfully announced.", packet.timestamp()),
         Err(e) => println!("Error {}", e.to_string()),
     };
->>>>>>> Stashed changes
+
+
 }
