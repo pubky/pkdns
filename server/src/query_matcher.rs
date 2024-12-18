@@ -5,7 +5,8 @@ use std::{
 
 use crate::anydns::DnsSocket;
 use simple_dns::{
-    rdata::{self, RData}, Name, Packet, PacketFlag, Question, ResourceRecord, QTYPE, RCODE, TYPE
+    rdata::{self, RData},
+    Name, Packet, PacketFlag, Question, ResourceRecord, QTYPE, RCODE, TYPE,
 };
 
 /**
@@ -219,7 +220,7 @@ mod tests {
             "8.8.8.8:53".parse().unwrap(),
             handler,
             None,
-            None
+            None,
         )
         .await
         .unwrap()

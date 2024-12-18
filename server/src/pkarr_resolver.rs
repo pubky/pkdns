@@ -1,13 +1,20 @@
-use crate::{anydns::{CustomHandlerError, DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder}, pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply};
+use crate::{
+    anydns::{CustomHandlerError, DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder},
+    pubkey_parser::parse_pkarr_uri,
+    query_matcher::create_domain_not_found_reply,
+};
 use std::{
-    collections::HashMap, net::{IpAddr, SocketAddr}, num::NonZeroU32, sync::Arc
+    collections::HashMap,
+    net::{IpAddr, SocketAddr},
+    num::NonZeroU32,
+    sync::Arc,
 };
 use tokio::sync::Mutex;
 
 use crate::{
     bootstrap_nodes::MainlineBootstrapResolver,
-    query_matcher::resolve_query,
     pkarr_cache::{CacheItem, PkarrPacketLruCache},
+    query_matcher::resolve_query,
 };
 use pkarr::{dns::Packet, mainline::dht::DhtSettings, Error as PkarrError, PkarrClient, PkarrClientAsync, PublicKey};
 
@@ -42,7 +49,7 @@ impl ResolverSettings {
                 .parse()
                 .expect("forward should be valid IP:Port combination."),
             max_dht_queries_per_ip_per_second: None,
-            max_dht_queries_per_ip_burst: None
+            max_dht_queries_per_ip_burst: None,
         }
     }
 }
@@ -116,7 +123,7 @@ pub struct PkarrResolver {
      */
     lock_map: Arc<Mutex<HashMap<PublicKey, Arc<Mutex<()>>>>>,
     settings: ResolverSettings,
-    rate_limiter: Arc<RateLimiter>
+    rate_limiter: Arc<RateLimiter>,
 }
 
 impl PkarrResolver {
@@ -246,24 +253,35 @@ impl PkarrResolver {
     ) -> std::prelude::v1::Result<Vec<u8>, CustomHandlerError> {
         // anydns validated the query before.
         let request = Packet::parse(query).expect("Unparsable query in pkarr_resolver.");
-        let question = request.questions.first().expect("No question in query in pkarr_resolver.");
+        let question = request
+            .questions
+            .first()
+            .expect("No question in query in pkarr_resolver.");
         let labels = question.qname.get_labels();
 
-        tracing::debug!("New query: {} {:?} id={}", question.qname.to_string(), question.qtype, request.id());
+        tracing::debug!(
+            "New query: {} {:?} id={}",
+            question.qname.to_string(),
+            question.qtype,
+            request.id()
+        );
 
-        let tld = labels.last().expect("Question labels with no domain in pkarr_resolver").to_string();
+        let tld = labels
+            .last()
+            .expect("Question labels with no domain in pkarr_resolver")
+            .to_string();
         let parsed_option = parse_pkarr_uri(&tld);
         if let Err(e) = parsed_option {
             return match e {
                 crate::pubkey_parser::PubkeyParserError::InvalidKey(_) => {
                     tracing::trace!("TLD .{tld} is not a pkarr key. Fallback to ICANN.");
                     Err(CustomHandlerError::Unhandled)
-                },
+                }
                 crate::pubkey_parser::PubkeyParserError::ValidButDifferent => {
                     tracing::trace!("TLD .{tld} is a pkarr key but its last bits are invalid.");
                     Ok(create_domain_not_found_reply(request.id()))
-                },
-            }
+                }
+            };
         }
 
         let pubkey = parsed_option.unwrap();
@@ -278,7 +296,7 @@ impl PkarrResolver {
                     let reply = resolve_query(packet, &request, socket).await;
                     Ok(reply)
                 }
-            },
+            }
             Err(err) => Err(err),
         }
     }
@@ -354,7 +372,7 @@ mod tests {
             "8.8.8.8:53".parse().unwrap(),
             handler,
             None,
-            None
+            None,
         )
         .await
         .unwrap()

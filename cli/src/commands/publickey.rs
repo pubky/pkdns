@@ -1,16 +1,15 @@
-use std::{fs::read_to_string, path::{Path, PathBuf}};
 use clap::ArgMatches;
 use pkarr::Keypair;
-
-
+use std::{
+    fs::read_to_string,
+    path::{Path, PathBuf},
+};
 
 const SECRET_KEY_LENGTH: usize = 32;
 
 fn read_seed_file(matches: &ArgMatches) -> Keypair {
     let unexpanded_path: &String = matches.get_one("seed").unwrap();
-    let expanded_path: String = shellexpand::full(unexpanded_path)
-        .expect("Valid shell path.")
-        .into();
+    let expanded_path: String = shellexpand::full(unexpanded_path).expect("Valid shell path.").into();
     let path = Path::new(&expanded_path);
     let path = PathBuf::from(path);
 
@@ -39,11 +38,8 @@ fn parse_seed(seed: &str) -> Keypair {
 }
 
 pub async fn cli_publickey(matches: &ArgMatches) {
-
     let keypair = read_seed_file(matches);
     let pubkey = keypair.to_z32();
 
     println!("{pubkey}");
-
 }
-

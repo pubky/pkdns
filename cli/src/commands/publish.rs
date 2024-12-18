@@ -1,19 +1,24 @@
+<<<<<<< Updated upstream
 use std::{fs::read_to_string, path::{Path, PathBuf}};
 
 use chrono::Duration;
+=======
+>>>>>>> Stashed changes
 use clap::ArgMatches;
 use pkarr::{Keypair, SignedPacket};
+use std::io::Write;
+use std::{
+    fs::read_to_string,
+    path::{Path, PathBuf},
+};
 
 use crate::{pkarr_publisher::PkarrPublisher, simple_zone::SimpleZone};
-
 
 const SECRET_KEY_LENGTH: usize = 32;
 
 fn read_zone_file(matches: &ArgMatches, pubkey: &str) -> SimpleZone {
     let unexpanded_path: &String = matches.get_one("zonefile").unwrap();
-    let csv_path_str: String = shellexpand::full(unexpanded_path)
-        .expect("Valid shell path.")
-        .into();
+    let csv_path_str: String = shellexpand::full(unexpanded_path).expect("Valid shell path.").into();
     let path = Path::new(&csv_path_str);
     let path = PathBuf::from(path);
 
@@ -34,9 +39,7 @@ fn read_zone_file(matches: &ArgMatches, pubkey: &str) -> SimpleZone {
 
 fn read_seed_file(matches: &ArgMatches) -> Keypair {
     let unexpanded_path: &String = matches.get_one("seed").unwrap();
-    let expanded_path: String = shellexpand::full(unexpanded_path)
-        .expect("Valid shell path.")
-        .into();
+    let expanded_path: String = shellexpand::full(unexpanded_path).expect("Valid shell path.").into();
     let path = Path::new(&expanded_path);
     let path = PathBuf::from(path);
 
@@ -65,16 +68,11 @@ fn parse_seed(seed: &str) -> Keypair {
 }
 
 pub async fn cli_publish(matches: &ArgMatches) {
-
     let keypair = read_seed_file(matches);
     let pubkey = keypair.to_z32();
 
     let zone = read_zone_file(matches, &pubkey);
     println!("{}", zone.packet);
-    
-
-    let interval = Duration::minutes(60);
-    let once: bool = *matches.get_one("once").unwrap();
 
     let packet = zone.packet.parsed();
     let packet = SignedPacket::from_packet(&keypair, &packet);
@@ -85,6 +83,7 @@ pub async fn cli_publish(matches: &ArgMatches) {
 
     let packet = packet.unwrap();
 
+<<<<<<< Updated upstream
 
     let publisher = PkarrPublisher::new(packet);
     if once {
@@ -97,5 +96,15 @@ pub async fn cli_publish(matches: &ArgMatches) {
         );
         publisher.run(interval);
     }
+=======
+    let client = construct_pkarr_client();
+    print!("Hang on...");
+    std::io::stdout().flush().unwrap();
+    let result = client.publish(&packet);
+    print!("\r");
+    match result {
+        Ok(_) => println!("{} Successfully announced.", packet.timestamp()),
+        Err(e) => println!("Error {}", e.to_string()),
+    };
+>>>>>>> Stashed changes
 }
-

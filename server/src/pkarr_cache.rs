@@ -59,7 +59,8 @@ impl CacheItem {
         if let CacheItem::Packet {
             packet: _,
             last_updated_at: _,
-        } = self {
+        } = self
+        {
             true
         } else {
             false
@@ -67,7 +68,7 @@ impl CacheItem {
     }
 
     pub fn is_not_found(&self) -> bool {
-       !self.is_found()
+        !self.is_found()
     }
 
     #[allow(dead_code)]
@@ -87,7 +88,11 @@ impl CacheItem {
      * Returns signed packet. Panics if not found.
      */
     pub fn unwrap(self) -> SignedPacket {
-        if let CacheItem::Packet { packet, last_updated_at: _ } = self {
+        if let CacheItem::Packet {
+            packet,
+            last_updated_at: _,
+        } = self
+        {
             return packet;
         } else {
             panic!("Can not unwrap CacheItem without a packet.")
@@ -100,7 +105,10 @@ impl CacheItem {
                 public_key,
                 last_updated_at: _,
             } => public_key.clone(),
-            CacheItem::Packet { packet, last_updated_at: _ } => packet.public_key(),
+            CacheItem::Packet {
+                packet,
+                last_updated_at: _,
+            } => packet.public_key(),
         }
     }
 
@@ -115,7 +123,10 @@ impl CacheItem {
             } => {
                 *cached_at = get_timestamp_seconds();
             }
-            CacheItem::Packet { packet: _, last_updated_at: cached_at } => {
+            CacheItem::Packet {
+                packet: _,
+                last_updated_at: cached_at,
+            } => {
                 *cached_at = get_timestamp_seconds();
             }
         }
@@ -131,7 +142,10 @@ impl CacheItem {
                 public_key: _,
                 last_updated_at: _,
             } => 0,
-            CacheItem::Packet { packet, last_updated_at: _ } => packet.timestamp(),
+            CacheItem::Packet {
+                packet,
+                last_updated_at: _,
+            } => packet.timestamp(),
         }
     }
 
@@ -141,7 +155,10 @@ impl CacheItem {
                 public_key: _,
                 last_updated_at: cached_at,
             } => cached_at.clone(),
-            CacheItem::Packet { packet: _, last_updated_at: cached_at } => cached_at.clone(),
+            CacheItem::Packet {
+                packet: _,
+                last_updated_at: cached_at,
+            } => cached_at.clone(),
         }
     }
 
@@ -155,9 +172,10 @@ impl CacheItem {
                 public_key: _,
                 last_updated_at: _,
             } => None,
-            CacheItem::Packet { packet, last_updated_at: _ } => {
-                packet.packet().answers.iter().map(|answer| answer.ttl as u64).min()
-            }
+            CacheItem::Packet {
+                packet,
+                last_updated_at: _,
+            } => packet.packet().answers.iter().map(|answer| answer.ttl as u64).min(),
         }
     }
 
@@ -172,7 +190,10 @@ impl CacheItem {
             } => {
                 32 + 8 // Public key 32 + cached_at 8
             }
-            CacheItem::Packet { packet, last_updated_at: _ } => packet.as_bytes().len() + 8,
+            CacheItem::Packet {
+                packet,
+                last_updated_at: _,
+            } => packet.as_bytes().len() + 8,
         }
     }
 
@@ -180,21 +201,11 @@ impl CacheItem {
      * When the next refresh of this cached element is needed.
      */
     pub fn next_refresh_needed_in_s(&self, min_ttl: u64, max_ttl: u64) -> u64 {
-        let ttl = self
-            .lowest_answer_ttl()
-            .unwrap_or(min_ttl);
+        let ttl = self.lowest_answer_ttl().unwrap_or(min_ttl);
 
-        let ttl = if ttl < min_ttl {
-            min_ttl
-        } else {
-            ttl
-        };
+        let ttl = if ttl < min_ttl { min_ttl } else { ttl };
 
-        let ttl = if ttl > max_ttl {
-            max_ttl
-        } else {
-            ttl
-        };
+        let ttl = if ttl > max_ttl { max_ttl } else { ttl };
 
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -226,7 +237,6 @@ impl PkarrPacketLruCache {
                 .weigher(|_key, value: &CacheItem| -> u32 { value.memory_size() as u32 })
                 .max_capacity(cache_size_mb * 1024 * 1024)
                 .build(),
-
         }
     }
 
@@ -288,7 +298,7 @@ impl PkarrPacketLruCache {
     pub fn approx_size_bytes(&self) -> u64 {
         self.cache.weighted_size()
     }
-    
+
     #[allow(dead_code)]
     pub fn entry_count(&self) -> u64 {
         self.cache.entry_count()
@@ -409,6 +419,4 @@ mod tests {
         let cached = cache.get(&key.public_key()).await.unwrap();
         assert_eq!(packet1.timestamp(), cached.controller_timestamp());
     }
-
-
 }

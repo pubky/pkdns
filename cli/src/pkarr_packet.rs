@@ -9,22 +9,18 @@ use pkarr::dns::{rdata::RData, Name, Packet, ResourceRecord};
  */
 #[derive(Debug)]
 pub struct PkarrPacket {
-    pub data: Vec<u8>
+    pub data: Vec<u8>,
 }
 
 impl PkarrPacket {
     pub fn empty() -> Self {
-        let packet =Packet::new_reply(0);
+        let packet = Packet::new_reply(0);
         let data = packet.build_bytes_vec_compressed().unwrap();
-        Self {
-            data
-        }
+        Self { data }
     }
 
     pub fn by_data(data: Vec<u8>) -> Self {
-        Self {
-            data
-        }
+        Self { data }
     }
 
     pub fn parsed(&self) -> Packet {
@@ -32,9 +28,11 @@ impl PkarrPacket {
     }
 
     pub fn to_records(&self) -> Vec<PkarrRecord> {
-        self.parsed().answers.iter()
-        .map(|answer| PkarrRecord::by_resource_record(answer))
-        .collect()
+        self.parsed()
+            .answers
+            .iter()
+            .map(|answer| PkarrRecord::by_resource_record(answer))
+            .collect()
     }
 
     pub fn answers_len(&self) -> usize {
@@ -54,10 +52,15 @@ impl fmt::Display for PkarrPacket {
         };
         let records = self.to_records();
         write!(f, "Packet {}\n", records.get(0).unwrap().pubkey()).unwrap();
-        write!(f, "{0: <20} {1: <7} {2: <6} {3: <25}{4:}", "Name", "TTL", "Type", "Data", "\n").unwrap();
+        write!(
+            f,
+            "{0: <20} {1: <7} {2: <6} {3: <25}{4:}",
+            "Name", "TTL", "Type", "Data", "\n"
+        )
+        .unwrap();
         for record in self.to_records() {
             write!(f, "{record}\n").unwrap();
-        };
+        }
         Ok(())
     }
 }
@@ -66,23 +69,22 @@ impl fmt::Display for PkarrPacket {
  * Simple Pkarr record
  */
 pub struct PkarrRecord {
-    pub data: Vec<u8>
+    pub data: Vec<u8>,
 }
 
 impl PkarrRecord {
+    #[allow(dead_code)]
     pub fn by_data(data: Vec<u8>) -> Result<Self, anyhow::Error> {
         let result = Packet::parse(&data);
         if let Err(e) = result {
-            return Err(e.into())
+            return Err(e.into());
         }
         let packet = result.unwrap();
         if packet.answers.len() != 1 {
-            return Err(anyhow!("packet data must contain 1 answer."))
+            return Err(anyhow!("packet data must contain 1 answer."));
         }
 
-        Ok(Self {
-            data
-        })
+        Ok(Self { data })
     }
 
     pub fn by_resource_record(rr: &ResourceRecord) -> Self {
@@ -90,7 +92,7 @@ impl PkarrRecord {
         let mut packet = Packet::new_reply(0);
         packet.answers.push(rr);
         Self {
-            data: packet.build_bytes_vec_compressed().unwrap()
+            data: packet.build_bytes_vec_compressed().unwrap(),
         }
     }
 
@@ -113,7 +115,7 @@ impl PkarrRecord {
         let name = rr.name.without(&name);
         match name {
             Some(n) => n.to_string(),
-            None => "@".to_string() 
+            None => "@".to_string(),
         }
     }
 
@@ -127,7 +129,7 @@ impl PkarrRecord {
             RData::A(a) => {
                 let ipv4 = Ipv4Addr::from(a.address);
                 ("A", ipv4.to_string())
-            },
+            }
             RData::AAAA(val) => {
                 let ipv6 = Ipv6Addr::from(val.address);
                 ("AAAA", ipv6.to_string())
@@ -141,20 +143,25 @@ impl PkarrRecord {
                 ("MX", data)
             }
             RData::TXT(val) => {
-                let data = val.attributes().iter().map(|(key, val)| {
-                    if val.is_some() {
-                        format!("{}={}", key, val.clone().unwrap())
-                    } else {
-                        format!("{}=", key)
-                    }
-                }).collect::<Vec<String>>().join(", ");
+                let data = val
+                    .attributes()
+                    .iter()
+                    .map(|(key, val)| {
+                        if val.is_some() {
+                            format!("{}={}", key, val.clone().unwrap())
+                        } else {
+                            format!("{}=", key)
+                        }
+                    })
+                    .collect::<Vec<String>>()
+                    .join(", ");
                 ("TXT", data)
             }
             RData::NS(val) => {
                 let data = val.to_string();
                 ("NS", data)
             }
-            _ => ("Unknown", "Unknown".to_string())
+            _ => ("Unknown", "Unknown".to_string()),
         };
         (record_type, data)
     }

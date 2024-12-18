@@ -27,7 +27,7 @@ pub async fn run_cli() {
                         .required(false)
                         .num_args(0)
                         .help("File path to the dns records csv file."),
-                )
+                ),
         )
         .subcommand(
             clap::Command::new("resolve")

@@ -1,21 +1,20 @@
-use std::{net::{IpAddr, SocketAddr, UdpSocket}, time::Duration};
+use std::{
+    net::{IpAddr, SocketAddr, UdpSocket},
+    time::Duration,
+};
 
 use anyhow::anyhow;
 use rustdns::{Class, Extension, Message, Resource, Type};
 
-
 #[derive(Debug)]
 pub(crate) struct DomainPortAddr {
     domain: &'static str,
-    port: u16
+    port: u16,
 }
 
 impl DomainPortAddr {
     pub const fn new(domain: &'static str, port: u16) -> Self {
-        Self {
-            domain: domain,
-            port
-        }
+        Self { domain: domain, port }
     }
 }
 
@@ -29,7 +28,7 @@ pub(crate) static DEFAULT_BOOTSTRAP_NODES: [DomainPortAddr; 4] = [
     DomainPortAddr::new("router.bittorrent.com", 6881),
     DomainPortAddr::new("dht.transmissionbt.com", 6881),
     DomainPortAddr::new("dht.libtorrent.org", 25401),
-    DomainPortAddr::new("router.utorrent.com", 6881)
+    DomainPortAddr::new("router.utorrent.com", 6881),
 ];
 
 /**
@@ -37,8 +36,8 @@ pub(crate) static DEFAULT_BOOTSTRAP_NODES: [DomainPortAddr; 4] = [
  * Used because if pkdns is set as the system dns on the machine, it can't rely
  * on itself to resolve while starting.
  */
-pub (crate) struct MainlineBootstrapResolver {
-    socket: UdpSocket
+pub(crate) struct MainlineBootstrapResolver {
+    socket: UdpSocket,
 }
 
 impl MainlineBootstrapResolver {
@@ -46,16 +45,15 @@ impl MainlineBootstrapResolver {
         let socket = UdpSocket::bind("0.0.0.0:0")?;
         socket.set_read_timeout(Some(Duration::new(5, 0)))?;
         socket.connect(dns_server)?;
-        Ok(Self {
-            socket
-        })
+        Ok(Self { socket })
     }
 
     fn lookup_domain(&self, domain: &str) -> Result<Option<IpAddr>, anyhow::Error> {
         let mut m = Message::default();
         m.add_question(domain, Type::A, Class::Internet);
-        m.add_extension(Extension {   // Optionally add a EDNS extension
-            payload_size: 4096,       // which supports a larger payload size.
+        m.add_extension(Extension {
+            // Optionally add a EDNS extension
+            payload_size: 4096, // which supports a larger payload size.
             ..Default::default()
         });
         let question = m.to_vec()?;
@@ -64,7 +62,7 @@ impl MainlineBootstrapResolver {
         // Wait for a response from the DNS server.
         let mut resp = [0; 4096];
         let len = self.socket.recv(&mut resp)?;
-    
+
         // Take the response bytes and turn it into another DNS Message.
         let answer = Message::from_slice(&resp[0..len])?;
         if answer.answers.len() == 0 {
@@ -72,20 +70,16 @@ impl MainlineBootstrapResolver {
         };
         let first = answer.answers.first().unwrap();
         match first.resource {
-            Resource::A(val) => {
-                Ok(Some(IpAddr::V4(val)))
-            },
-            Resource::AAAA(val) => {
-                Ok(Some(IpAddr::V6(val)))
-            },
-            _ => Ok(None)
+            Resource::A(val) => Ok(Some(IpAddr::V4(val))),
+            Resource::AAAA(val) => Ok(Some(IpAddr::V6(val))),
+            _ => Ok(None),
         }
     }
 
     fn lookup(&self, boostrap_node: &DomainPortAddr) -> Result<SocketAddr, anyhow::Error> {
         let res = self.lookup_domain(&boostrap_node.domain)?;
         if res.is_none() {
-            return Err(anyhow!("No ip found."))
+            return Err(anyhow!("No ip found."));
         };
         let ip = res.unwrap();
         Ok(SocketAddr::new(ip, boostrap_node.port))
@@ -97,16 +91,18 @@ impl MainlineBootstrapResolver {
             match self.lookup(&node) {
                 Ok(val) => {
                     addrs.push(val);
-                },
+                }
                 Err(err) => {
                     tracing::trace!("Failed to resolve the DHT bootstrap node domain {node}. {err}");
                 }
             }
-        };
+        }
         if addrs.len() > 0 {
             Ok(addrs)
         } else {
-            Err(anyhow!("Failed to resolve the domains of even a single DHT bootstrap node."))
+            Err(anyhow!(
+                "Failed to resolve the domains of even a single DHT bootstrap node."
+            ))
         }
     }
 
@@ -118,13 +114,9 @@ impl MainlineBootstrapResolver {
     }
 }
 
-
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[tokio::test]
     async fn query_domain() {
@@ -151,5 +143,4 @@ mod tests {
         assert_eq!(addrs.len(), 4);
         assert_eq!(addrs.first().unwrap().to_string(), "67.215.246.10:6881");
     }
-
 }
