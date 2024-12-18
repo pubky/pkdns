@@ -1,10 +1,9 @@
 use std::{fs::read_to_string, path::{Path, PathBuf}};
-
-use chrono::Duration;
+use std::io::Write;
 use clap::ArgMatches;
 use pkarr::{Keypair, SignedPacket};
 
-use crate::{pkarr_publisher::PkarrPublisher, simple_zone::SimpleZone};
+use crate::{helpers::construct_pkarr_client, simple_zone::SimpleZone};
 
 
 const SECRET_KEY_LENGTH: usize = 32;
@@ -72,10 +71,6 @@ pub async fn cli_publish(matches: &ArgMatches) {
     let zone = read_zone_file(matches, &pubkey);
     println!("{}", zone.packet);
     
-
-    let interval = Duration::minutes(60);
-    let once: bool = *matches.get_one("once").unwrap();
-
     let packet = zone.packet.parsed();
     let packet = SignedPacket::from_packet(&keypair, &packet);
     if let Err(e) = packet {
@@ -85,17 +80,15 @@ pub async fn cli_publish(matches: &ArgMatches) {
 
     let packet = packet.unwrap();
 
+    let client = construct_pkarr_client();
+    print!("Hang on...");
+    std::io::stdout().flush().unwrap();
+    let result = client.publish(&packet);
+    print!("\r");
+    match result {
+        Ok(_) => println!("{} Successfully announced.", packet.timestamp()),
+        Err(e) => println!("Error {}", e.to_string()),
+    };
 
-    let publisher = PkarrPublisher::new(packet);
-    if once {
-        println!("Announce once.");
-        publisher.run_once();
-    } else {
-        println!(
-            "Announce every {}min. Stop with Ctrl-C...",
-            interval.num_minutes()
-        );
-        publisher.run(interval);
-    }
 }
 
