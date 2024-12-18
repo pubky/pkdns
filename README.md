@@ -40,6 +40,12 @@ Make sure you have the [Rust toolchain](https://rustup.rs/) installed.
 7. [Browse](#browse-the-self-sovereign-web) the self-sovereign web.
 
 
+## FAQ
+
+- [How Censorship-Resistant is Mainline DHT?](https://medium.com/pubky/mainline-dht-censorship-explained-b62763db39cb)
+- [How Censorship-Resistant are Public Key Domains](https://medium.com/pubky/public-key-domains-censorship-resistance-explained-33d0333e6123)
+- How to publish a Public Key Domain Website? Soon
+
 ## Guides
 
 ### Change your System DNS
@@ -103,7 +109,7 @@ Options:
   -v, --verbose
           Show verbose output.
       --min-ttl <min-ttl>
-          Minimum number of seconds a value is cached for before being refreshed. [default: 300]
+          Minimum number of seconds a value is cached for before being refreshed. [default: 60]
       --max-ttl <max-ttl>
           Maximum number of seconds before a cached value gets auto-refreshed. [default: 86400]
       --cache-mb <cache-mb>
@@ -165,11 +171,6 @@ bind9 is a fully fledged name server and should be able to handle recursion and 
 ### Record Types
 
 Currently, pkdns only supports `A`, `AAAA`, `TXT`, `CNAME`, and `MX` records. For any other types, use bind9.
-
-## Future Developments Ideas
-
-- Regular ICANN DNS <> pkdns bridge. `{publicKey}.example.com`?
-- TLS/HTTPS
 
 
 ---
