@@ -6,8 +6,7 @@ use pkarr::PublicKey;
 
 use crate::{helpers::construct_pkarr_client, pkarr_packet::PkarrPacket};
 
-
-fn resolve_pkarr(uri: &str) -> (PkarrPacket, DateTime<Utc>)  {
+fn resolve_pkarr(uri: &str) -> (PkarrPacket, DateTime<Utc>) {
     let client = construct_pkarr_client();
     let pubkey: PublicKey = uri.try_into().expect("Should be valid pkarr public key.");
     let _ = client.resolve(&pubkey);
@@ -22,7 +21,8 @@ fn resolve_pkarr(uri: &str) -> (PkarrPacket, DateTime<Utc>)  {
         return (PkarrPacket::empty(), DateTime::<Utc>::MIN_UTC);
     };
     let signed_packet = res.unwrap();
-    let timestamp = chrono::DateTime::from_timestamp((signed_packet.timestamp()/1000000).try_into().unwrap(), 0).unwrap();
+    let timestamp =
+        chrono::DateTime::from_timestamp((signed_packet.timestamp() / 1000000).try_into().unwrap(), 0).unwrap();
     let packet = signed_packet.packet();
     let data = packet.build_bytes_vec_compressed().unwrap();
 
@@ -35,7 +35,6 @@ fn get_arg_pubkey(matches: &ArgMatches) -> Option<PublicKey> {
     trying.ok()
 }
 
-
 pub async fn cli_resolve(matches: &ArgMatches) {
     let pubkey_opt = get_arg_pubkey(matches);
 
@@ -45,7 +44,6 @@ pub async fn cli_resolve(matches: &ArgMatches) {
     };
     let pubkey = pubkey_opt.unwrap();
     let uri = pubkey.to_uri_string();
-
 
     println!("Resolve dns records of {}", uri);
     let (packet, timestamp) = resolve_pkarr(&uri);

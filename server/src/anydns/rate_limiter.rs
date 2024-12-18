@@ -1,7 +1,8 @@
 use std::{
     hash::{Hash, Hasher},
     net::{IpAddr, Ipv4Addr, Ipv6Addr},
-    num::NonZeroU32, sync::Arc,
+    num::NonZeroU32,
+    sync::Arc,
 };
 
 use governor::{DefaultKeyedRateLimiter, Quota, RateLimiter as GovenerRateLimiter};
@@ -53,7 +54,6 @@ impl Hash for RateLimitingKey {
             RateLimitingKey::Ipv4(ipv4_addr) => {
                 (0 as u8).hash(state); // IPv4 indicator to prevent overlap with the Ipv6 space.
                 ipv4_addr.hash(state);
-
             }
             RateLimitingKey::IpV6 { significant_bits } => {
                 (1 as u8).hash(state); // IPv6 indicator to prevent overlap with the Ipv4 space.
@@ -63,11 +63,10 @@ impl Hash for RateLimitingKey {
     }
 }
 
-
 pub struct RateLimiterBuilder {
     max_per_second: Option<NonZeroU32>,
     max_per_minute: Option<NonZeroU32>,
-    burst_size: Option<NonZeroU32>
+    burst_size: Option<NonZeroU32>,
 }
 
 impl RateLimiterBuilder {
@@ -75,10 +74,10 @@ impl RateLimiterBuilder {
         Self {
             max_per_second: None,
             max_per_minute: None,
-            burst_size: None
+            burst_size: None,
         }
     }
-    
+
     /// Maximum number of request per second. Think of a bucket that gets filled with drops.
     /// This is the rate at which the bucket is emptied.
     /// Either seconds or minutes is allowed. Setting both is invalid.
@@ -113,20 +112,17 @@ impl RateLimiterBuilder {
         } else if let Some(limit) = self.max_per_second {
             quota = Quota::per_second(limit);
         } else {
-            return RateLimiter {
-                limiter: None
-            }
+            return RateLimiter { limiter: None };
         }
         if let Some(size) = self.burst_size {
             quota = quota.allow_burst(size);
         }
 
         RateLimiter {
-            limiter: Some(GovenerRateLimiter::keyed(quota))
+            limiter: Some(GovenerRateLimiter::keyed(quota)),
         }
     }
 }
-
 
 #[derive(Debug)]
 pub struct RateLimiter {
@@ -142,6 +138,6 @@ impl RateLimiter {
             let is_rate_limited = limiter.check_key(&ip.into()).is_err();
             return is_rate_limited;
         };
-        return false
+        return false;
     }
 }

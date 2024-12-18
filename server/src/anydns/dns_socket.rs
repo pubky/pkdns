@@ -53,12 +53,12 @@ impl DnsSocket {
         icann_fallback: SocketAddr,
         handler: HandlerHolder,
         max_queries_per_ip_per_second: Option<NonZeroU32>,
-        burst_size: Option<NonZeroU32>
+        burst_size: Option<NonZeroU32>,
     ) -> tokio::io::Result<Self> {
         let socket = UdpSocket::bind(listening).await?;
         let limiter = RateLimiterBuilder::new()
-        .max_per_second(max_queries_per_ip_per_second)
-        .burst_size(burst_size);
+            .max_per_second(max_queries_per_ip_per_second)
+            .burst_size(burst_size);
 
         Ok(Self {
             socket: Arc::new(socket),
@@ -104,7 +104,10 @@ impl DnsSocket {
 
         let is_reply = packet.questions.len() == 0;
         if is_reply {
-            tracing::debug!("Received reply without an associated query {:?}. forward_id={packet_id} Ignore.", packet);
+            tracing::debug!(
+                "Received reply without an associated query {:?}. forward_id={packet_id} Ignore.",
+                packet
+            );
             return Ok(());
         };
 
@@ -123,16 +126,28 @@ impl DnsSocket {
 
             let question = query_packet.questions.first();
             if question.is_none() {
-                tracing::debug!("Query with no associated a question {:?}. Ignore. query_id={}", query_packet, query_packet.id());
+                tracing::debug!(
+                    "Query with no associated a question {:?}. Ignore. query_id={}",
+                    query_packet,
+                    query_packet.id()
+                );
                 return;
             };
             let question = question.unwrap();
             let labels = question.qname.get_labels();
             if labels.len() == 0 {
-                tracing::debug!("DNS packet question with no domain. Ignore. query_id={}", query_packet.id());
+                tracing::debug!(
+                    "DNS packet question with no domain. Ignore. query_id={}",
+                    query_packet.id()
+                );
                 return;
             };
-            tracing::trace!("Received new query {} {:?}. query_id={}", question.qname, question.qtype, query_packet.id());
+            tracing::trace!(
+                "Received new query {} {:?}. query_id={}",
+                question.qname,
+                question.qtype,
+                query_packet.id()
+            );
             let query_result = socket.on_query(&data, &from).await;
             match query_result {
                 Ok(_) => {
@@ -175,8 +190,11 @@ impl DnsSocket {
             // All good. Handler handled the query
             return result.unwrap();
         }
-        let request = Packet::parse(query).expect("Should be valid query. Prevalidated already.");;
-        let question = request.questions.first().expect("Should be valid query. Prevalidated already.");;
+        let request = Packet::parse(query).expect("Should be valid query. Prevalidated already.");
+        let question = request
+            .questions
+            .first()
+            .expect("Should be valid query. Prevalidated already.");
         let query_id = request.id();
 
         let query_name = format!("{} {:?} query_id={query_id}", question.qname, question.qtype);
@@ -190,19 +208,18 @@ impl DnsSocket {
                     Err(e) => {
                         tracing::warn!("Forwarding dns query failed. {e} {query_name}");
                         Self::create_server_fail_reply(query_id)
-                    },
+                    }
                 }
             }
             CustomHandlerError::Failed(err) => {
                 tracing::error!("Internal error {query_name}: {}", err);
                 Self::create_server_fail_reply(query_id)
-            },
+            }
             CustomHandlerError::RateLimited(ip) => {
                 tracing::error!("IP is rate limited {query_name}: {}", ip);
                 Self::create_refused_reply(query_id)
-            },
+            }
         }
-
     }
 
     /// Replaces the id of the dns packet.
@@ -251,7 +268,7 @@ impl DnsSocket {
 
     // Extracts the id of the query
     fn extract_query_id(&self, query: &Vec<u8>) -> Result<u16, SimpleDnsError> {
-         Packet::parse(query).map(|packet| packet.id())
+        Packet::parse(query).map(|packet| packet.id())
     }
 
     /// Create a REFUSED reply
@@ -283,7 +300,9 @@ mod tests {
         let listening: SocketAddr = "0.0.0.0:34254".parse().unwrap();
         let icann_fallback: SocketAddr = "8.8.8.8:53".parse().unwrap();
         let handler = HandlerHolder::new(EmptyHandler::new());
-        let mut socket = DnsSocket::new(listening, icann_fallback, handler, None, None).await.unwrap();
+        let mut socket = DnsSocket::new(listening, icann_fallback, handler, None, None)
+            .await
+            .unwrap();
 
         let mut run_socket = socket.clone();
         tokio::spawn(async move {

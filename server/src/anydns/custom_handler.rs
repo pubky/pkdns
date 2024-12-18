@@ -20,7 +20,7 @@ pub enum CustomHandlerError {
 
     /// Handler rate limited the IP. Will return RCODE::Refused.
     #[error("Source ip address {0} is rate limited.")]
-    RateLimited(IpAddr)
+    RateLimited(IpAddr),
 }
 
 /**
@@ -33,7 +33,7 @@ pub trait CustomHandler: DynClone + Send + Sync {
         &mut self,
         query: &Vec<u8>,
         socket: DnsSocket,
-        from: Option<IpAddr>
+        from: Option<IpAddr>,
     ) -> Result<Vec<u8>, CustomHandlerError>;
 }
 
@@ -54,9 +54,7 @@ impl Clone for HandlerHolder {
 
 impl Debug for HandlerHolder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("HandlerHolder")
-            .field("func", &"HandlerHolder")
-            .finish()
+        f.debug_struct("HandlerHolder").field("func", &"HandlerHolder").finish()
     }
 }
 
@@ -72,7 +70,7 @@ impl HandlerHolder {
         &mut self,
         query: &Vec<u8>,
         socket: DnsSocket,
-        from: Option<IpAddr>
+        from: Option<IpAddr>,
     ) -> Result<Vec<u8>, CustomHandlerError> {
         self.func.lookup(query, socket, from).await
     }
@@ -93,7 +91,7 @@ impl CustomHandler for EmptyHandler {
         &mut self,
         _query: &Vec<u8>,
         _socket: DnsSocket,
-        from: Option<IpAddr>
+        from: Option<IpAddr>,
     ) -> Result<Vec<u8>, CustomHandlerError> {
         Err(CustomHandlerError::Unhandled)
     }
@@ -139,7 +137,7 @@ mod tests {
             &mut self,
             _query: &Vec<u8>,
             _socket: DnsSocket,
-            from: Option<IpAddr>
+            from: Option<IpAddr>,
         ) -> Result<Vec<u8>, CustomHandlerError> {
             println!("value {}", self.value.value);
             Err(CustomHandlerError::Unhandled)
@@ -158,7 +156,7 @@ mod tests {
             icann_fallback,
             holder1.clone(),
             None,
-            None
+            None,
         )
         .await
         .unwrap();

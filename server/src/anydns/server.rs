@@ -12,7 +12,7 @@ pub struct Builder {
     listen: SocketAddr,
     handler: HandlerHolder,
     max_queries_per_ip_per_second: Option<NonZeroU32>,
-    burst_size: Option<NonZeroU32>
+    burst_size: Option<NonZeroU32>,
 }
 
 impl Builder {
@@ -63,7 +63,7 @@ impl Builder {
             self.icann_resolver,
             self.handler,
             self.max_queries_per_ip_per_second,
-            self.burst_size
+            self.burst_size,
         )
         .await
     }
@@ -80,9 +80,16 @@ impl AnyDNS {
         icann_fallback: SocketAddr,
         handler: HandlerHolder,
         max_queries_per_ip_per_second: Option<NonZeroU32>,
-        burst_size: Option<NonZeroU32>
+        burst_size: Option<NonZeroU32>,
     ) -> tokio::io::Result<Self> {
-        let mut socket = DnsSocket::new(listener, icann_fallback, handler, max_queries_per_ip_per_second, burst_size).await?;
+        let mut socket = DnsSocket::new(
+            listener,
+            icann_fallback,
+            handler,
+            max_queries_per_ip_per_second,
+            burst_size,
+        )
+        .await?;
         let join_handle = tokio::spawn(async move {
             socket.receive_loop().await;
         });

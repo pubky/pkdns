@@ -46,11 +46,7 @@ impl PendingRequestStore {
         locked.insert(key, request);
     }
 
-    pub fn remove_by_forward_id(
-        &mut self,
-        forward_query_id: &u16,
-        from: &SocketAddr,
-    ) -> Option<PendingRequest> {
+    pub fn remove_by_forward_id(&mut self, forward_query_id: &u16, from: &SocketAddr) -> Option<PendingRequest> {
         let mut locked = self.pending.lock().expect("Lock success");
         let key = PendingRequestKey {
             forward_query_id: forward_query_id.clone(),
