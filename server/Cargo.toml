@@ -8,8 +8,7 @@ edition = "2021"
 [dependencies]
 ctrlc = "3.4.2"
 simple-dns = "0.6.0"
-# pkarr = { version = "2.2.0", features = ["dht", "async", "rand"]}
-pkarr = { git = "https://github.com/pubky/pkarr.git", branch = "fix/no-more-recent-than-cached", features = ["dht", "async", "rand"] }
+pkarr = { version = "2.2.1", features = ["dht", "async", "rand"]}
 zbase32 = "0.1.2"
 clap = "4.4.18"
 chrono = "0.4.33"
