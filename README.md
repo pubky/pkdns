@@ -6,6 +6,10 @@
 
 A DNS server providing self-sovereign and censorship-resistant domain names. It resolves records hosted on the [Mainline DHT](https://en.wikipedia.org/wiki/Mainline_DHT), the biggest DHT on the planet with ~15M nodes that services torrents since 15 years.
 
+- [How Censorship-Resistant is Mainline DHT?](https://medium.com/pubky/mainline-dht-censorship-explained-b62763db39cb)
+- [How Censorship-Resistant are Public Key Domains](https://medium.com/pubky/public-key-domains-censorship-resistance-explained-33d0333e6123)
+- [How to publish a Public Key Domain Website?](https://medium.com/pubky/how-to-host-a-public-key-domain-website-v0-6-0-ubuntu-24-04-57e6f2cb6f77)
+
 
 ## Getting Started
 
@@ -38,13 +42,6 @@ Make sure you have the [Rust toolchain](https://rustup.rs/) installed.
 4. [Verify](#verify-pkdns-is-working) the server is working. Your server ip is `127.0.0.1`.
 6. [Configure](#change-your-system-dns) your system dns.
 7. [Browse](#browse-the-self-sovereign-web) the self-sovereign web.
-
-
-## FAQ
-
-- [How Censorship-Resistant is Mainline DHT?](https://medium.com/pubky/mainline-dht-censorship-explained-b62763db39cb)
-- [How Censorship-Resistant are Public Key Domains](https://medium.com/pubky/public-key-domains-censorship-resistance-explained-33d0333e6123)
-- How to publish a Public Key Domain Website? Soon
 
 ## Guides
 
