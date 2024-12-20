@@ -1,9 +1,14 @@
 #!/bin/bash
 
 echo pkdns $VERSION
+echo Build OSX arm64
+cargo build --release --package=pkdns --target=aarch64-apple-darwin
+cp target/aarch64-apple-darwin/release/pkdns target/github-release/$OSX_ARM64_DIR_NAME
+echo
+
 echo Build OSX amd64
-cargo build --release --package=pkdns
-cp target/release/pkdns target/github-release/$OSX64_DIR_NAME
+cargo build --release --package=pkdns --target=x86_64-apple-darwin
+cp target/x86_64-apple-darwin/release/pkdns target/github-release/$OSX64_DIR_NAME
 echo
 
 echo Build Linux amd64
