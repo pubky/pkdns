@@ -179,8 +179,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tracing::info!("Listening on {socket}. Waiting for Ctrl-C...");
 
-    // let http_addr = "0.0.0.0:3000".parse().unwrap();
-    // run_doh_server(http_addr).await;
+    let http_addr = "127.0.0.1:3000".parse().unwrap();
+    run_doh_server(http_addr, dns_socket).await;
 
     wait_on_ctrl_c().await;
     println!();
