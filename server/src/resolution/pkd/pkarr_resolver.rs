@@ -1,8 +1,8 @@
-use crate::{
-    anydns::{CustomHandlerError, DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder},
+use super::{
     pubkey_parser::parse_pkarr_uri,
     query_matcher::create_domain_not_found_reply,
 };
+use crate::resolution::{DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder};
 use std::{
     collections::HashMap,
     net::{IpAddr, SocketAddr},
@@ -11,12 +11,29 @@ use std::{
 };
 use tokio::sync::Mutex;
 
-use crate::{
+use super::{
     bootstrap_nodes::MainlineBootstrapResolver,
     pkarr_cache::{CacheItem, PkarrPacketLruCache},
     query_matcher::resolve_query,
 };
 use pkarr::{dns::Packet, mainline::dht::DhtSettings, Error as PkarrError, PkarrClient, PkarrClientAsync, PublicKey};
+
+/// Errors that a CustomHandler can return.
+#[derive(thiserror::Error, Debug)]
+pub enum CustomHandlerError {
+    /// Lookup failed. Error will be logged. SRVFAIL will be returned to the user.
+    #[error(transparent)]
+    Failed(#[from] Box<dyn std::error::Error + Send + Sync>),
+
+    /// Handler does not consider itself responsible for this query.
+    /// Will fallback to ICANN.
+    #[error("Query is not processed by handler. Fallback to ICANN.")]
+    Unhandled,
+
+    /// Handler rate limited the IP. Will return RCODE::Refused.
+    #[error("Source ip address {0} is rate limited.")]
+    RateLimited(IpAddr),
+}
 
 #[derive(Clone, Debug)]
 pub struct ResolverSettings {
@@ -30,6 +47,7 @@ pub struct ResolverSettings {
     cache_mb: u64,
 
     /// IP:port combination of the dns server regular ICANN queries should be forwarded to.
+    /// Used to resolve the bootstrap servers
     forward_dns_server: SocketAddr,
 
     /// Maximum number of DHT queries one IP address can make per second.
@@ -55,7 +73,7 @@ impl ResolverSettings {
 }
 
 #[derive(thiserror::Error, Debug)]
-enum PkarrResolverError {
+pub enum PkarrResolverError {
     #[error("Failed to query the DHT with pkarr: {0}")]
     Dht(#[from] PkarrError),
 
@@ -114,7 +132,7 @@ impl PkarrResolverBuilder {
 /**
  * Pkarr resolver with cache.
  */
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct PkarrResolver {
     client: PkarrClientAsync,
     cache: PkarrPacketLruCache,
@@ -248,7 +266,6 @@ impl PkarrResolver {
     pub async fn resolve(
         &mut self,
         query: &Vec<u8>,
-        socket: &mut DnsSocket,
         from: Option<IpAddr>,
     ) -> std::prelude::v1::Result<Vec<u8>, CustomHandlerError> {
         // anydns validated the query before.
@@ -273,11 +290,11 @@ impl PkarrResolver {
         let parsed_option = parse_pkarr_uri(&tld);
         if let Err(e) = parsed_option {
             return match e {
-                crate::pubkey_parser::PubkeyParserError::InvalidKey(_) => {
+                super::pubkey_parser::PubkeyParserError::InvalidKey(_) => {
                     tracing::trace!("TLD .{tld} is not a pkarr key. Fallback to ICANN.");
                     Err(CustomHandlerError::Unhandled)
                 }
-                crate::pubkey_parser::PubkeyParserError::ValidButDifferent => {
+                super::pubkey_parser::PubkeyParserError::ValidButDifferent => {
                     tracing::trace!("TLD .{tld} is a pkarr key but its last bits are invalid.");
                     Ok(create_domain_not_found_reply(request.id()))
                 }
@@ -293,7 +310,7 @@ impl PkarrResolver {
                 } else {
                     let signed_packet = item.unwrap();
                     let packet = signed_packet.packet();
-                    let reply = resolve_query(packet, &request, socket).await;
+                    let reply = resolve_query(packet, &request).await;
                     Ok(reply)
                 }
             }
@@ -304,7 +321,6 @@ impl PkarrResolver {
 
 #[cfg(test)]
 mod tests {
-    use crate::anydns::{EmptyHandler, HandlerHolder};
     use chrono::{DateTime, Utc};
     use pkarr::{
         dns::{Name, Packet, Question, ResourceRecord},
@@ -365,19 +381,6 @@ mod tests {
         result.expect("Should have published.");
     }
 
-    async fn get_dnssocket() -> DnsSocket {
-        let handler = HandlerHolder::new(EmptyHandler::new());
-        DnsSocket::new(
-            "127.0.0.1:20384".parse().unwrap(),
-            "8.8.8.8:53".parse().unwrap(),
-            handler,
-            None,
-            None,
-        )
-        .await
-        .unwrap()
-    }
-
     #[tokio::test]
     async fn query_domain() {
         publish_record().await;
@@ -395,9 +398,8 @@ mod tests {
         query.questions.push(question);
 
         let mut resolver = PkarrResolver::default().await;
-        let mut socket = get_dnssocket().await;
         let result = resolver
-            .resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket, None)
+            .resolve(&query.build_bytes_vec_compressed().unwrap(), None)
             .await;
         assert!(result.is_ok());
         let reply_bytes = result.unwrap();
@@ -425,9 +427,8 @@ mod tests {
         );
         query.questions.push(question);
         let mut resolver = PkarrResolver::default().await;
-        let mut socket = get_dnssocket().await;
         let result = resolver
-            .resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket, None)
+            .resolve(&query.build_bytes_vec_compressed().unwrap(), None)
             .await;
         assert!(result.is_ok());
         let reply_bytes = result.unwrap();
@@ -452,9 +453,8 @@ mod tests {
         );
         query.questions.push(question);
         let mut resolver = PkarrResolver::default().await;
-        let mut socket = get_dnssocket().await;
         let result = resolver
-            .resolve(&query.build_bytes_vec_compressed().unwrap(), &mut socket, None)
+            .resolve(&query.build_bytes_vec_compressed().unwrap(), None)
             .await;
         assert!(result.is_err());
         // println!("{}", result.unwrap_err());

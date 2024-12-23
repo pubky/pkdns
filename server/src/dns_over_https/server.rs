@@ -9,7 +9,7 @@ use base64::{engine::general_purpose::URL_SAFE, Engine as _};
 use simple_dns::Packet;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
-use crate::anydns::DnsSocket;
+use crate::resolution::DnsSocket;
 
 fn validate_accept_header(headers: &HeaderMap) -> Result<(), (StatusCode, &'static str)> {
     if let None = headers.get("accept") {

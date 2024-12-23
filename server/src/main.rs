@@ -1,47 +1,17 @@
-use anydns::{Builder, CustomHandler, CustomHandlerError, DnsSocket};
-use async_trait::async_trait;
-
 use dns_over_https::run_doh_server;
-use helpers::{enable_logging, set_full_stacktrace_as_default};
-use pkarr_resolver::{PkarrResolver, ResolverSettings};
+use helpers::{enable_logging, set_full_stacktrace_as_default, wait_on_ctrl_c};
+use resolution::DnsSocketBuilder;
+
 use std::{
     error::Error,
-    net::{IpAddr, SocketAddr},
+    net::SocketAddr,
     num::NonZeroU32,
 };
 
-mod anydns;
-mod bootstrap_nodes;
+mod resolution;
 mod helpers;
-mod pkarr_cache;
-mod pkarr_resolver;
-mod pubkey_parser;
-mod query_matcher;
 mod dns_over_https;
 
-#[derive(Clone)]
-struct MyHandler {
-    pub pkarr: PkarrResolver,
-}
-
-impl MyHandler {
-    pub async fn new(settings: ResolverSettings) -> Self {
-        Self {
-            pkarr: PkarrResolver::new(settings).await,
-        }
-    }
-}
-#[async_trait]
-impl CustomHandler for MyHandler {
-    async fn lookup(
-        &mut self,
-        query: &Vec<u8>,
-        mut socket: DnsSocket,
-        from: Option<IpAddr>,
-    ) -> Result<Vec<u8>, CustomHandlerError> {
-        self.pkarr.resolve(query, &mut socket, from).await
-    }
-}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -185,15 +155,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         0 => None,
         val => Some(NonZeroU32::new(val).unwrap()),
     };
-    let pkarr_settings = PkarrResolver::builder()
-        .forward_server(forward)
-        .max_ttl(max_ttl)
-        .min_ttl(min_ttl)
-        .cache_mb(cache_mb)
-        .max_dht_queries_per_ip_per_second(dht_rate_limit_option)
-        .max_dht_queries_per_ip_burst(dht_rate_limit_burst_option)
-        .build_settings();
-
     let query_rate_limit_option = match query_rate_limit {
         0 => None,
         val => Some(NonZeroU32::new(val).unwrap()),
@@ -202,25 +163,29 @@ async fn main() -> Result<(), Box<dyn Error>> {
         0 => None,
         val => Some(NonZeroU32::new(val).unwrap()),
     };
-    let anydns = Builder::new()
-        .handler(MyHandler::new(pkarr_settings).await)
-        .icann_resolver(forward)
-        .listen(socket)
-        .max_queries_per_ip_per_second(query_rate_limit_option)
-        .max_queries_per_ip_burst(query_rate_limit_burst_option)
-        .build()
-        .await?;
+    let dns_socket = DnsSocketBuilder::new()
+    .listen(socket)
+    .icann_resolver(forward)
+    .cache_mb(cache_mb)
+    .min_ttl(min_ttl)
+    .max_ttl(max_ttl)
+    .max_dht_queries_per_ip_per_second(dht_rate_limit_option)
+    .max_dht_queries_per_ip_burst(dht_rate_limit_burst_option)
+    .max_queries_per_ip_per_second(query_rate_limit_option)
+    .max_queries_per_ip_burst(query_rate_limit_burst_option).build().await?;
+
+    let join_handle = dns_socket.start_receive_loop();
 
 
     tracing::info!("Listening on {socket}. Waiting for Ctrl-C...");
 
-    let http_addr = "0.0.0.0:3000".parse().unwrap();
-    run_doh_server(http_addr).await;
+    // let http_addr = "0.0.0.0:3000".parse().unwrap();
+    // run_doh_server(http_addr).await;
 
-    anydns.wait_on_ctrl_c().await;
+    wait_on_ctrl_c().await;
     println!();
     tracing::info!("Got it! Exiting...");
-    anydns.stop();
+    join_handle.abort();
 
     Ok(())
 }
