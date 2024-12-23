@@ -72,6 +72,7 @@ impl Builder {
 #[derive(Debug)]
 pub struct AnyDNS {
     join_handle: tokio::task::JoinHandle<()>,
+    socket: DnsSocket
 }
 
 impl AnyDNS {
@@ -90,11 +91,12 @@ impl AnyDNS {
             burst_size,
         )
         .await?;
+        let mut cloned_socket = socket.clone();
         let join_handle = tokio::spawn(async move {
-            socket.receive_loop().await;
+            cloned_socket.receive_loop().await;
         });
 
-        let server = Self { join_handle };
+        let server = Self { join_handle, socket };
 
         Ok(server)
     }
@@ -116,6 +118,10 @@ impl AnyDNS {
                 eprintln!("Unable to listen for shutdown signal Ctrl+C: {}", err);
             }
         }
+    }
+
+    pub fn socket(&self) -> &DnsSocket {
+        &self.socket
     }
 }
 

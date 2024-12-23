@@ -19,9 +19,16 @@ tracing = "0.1.40"
 tracing-subscriber = {version = "0.3.18", features = ["smallvec", "fmt", "ansi", "tracing-log", "std", "env-filter"]}
 rustdns = "0.4.0"
 moka = { version = "0.12.8", features = ["future"] }
-dashmap = "6.1.0"
 
 dyn-clone = "1.0.16"
 thiserror = "1.0.56"
 governor = "0.7.0"
+axum = { version = "0.7.9"}
+axum-extra = { version = "0.9.6", features = ["typed-header"] }
+serde = "1.0.216"
+base64 = "0.22.1"
+
+[dev-dependencies]
+axum-test = "16.4.1"
+
 

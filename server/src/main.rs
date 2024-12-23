@@ -1,6 +1,7 @@
 use anydns::{Builder, CustomHandler, CustomHandlerError, DnsSocket};
 use async_trait::async_trait;
 
+use dns_over_https::run_doh_server;
 use helpers::{enable_logging, set_full_stacktrace_as_default};
 use pkarr_resolver::{PkarrResolver, ResolverSettings};
 use std::{
@@ -16,6 +17,7 @@ mod pkarr_cache;
 mod pkarr_resolver;
 mod pubkey_parser;
 mod query_matcher;
+mod dns_over_https;
 
 #[derive(Clone)]
 struct MyHandler {
@@ -209,7 +211,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .build()
         .await?;
 
+
     tracing::info!("Listening on {socket}. Waiting for Ctrl-C...");
+
+    let http_addr = "0.0.0.0:3000".parse().unwrap();
+    run_doh_server(http_addr).await;
 
     anydns.wait_on_ctrl_c().await;
     println!();
