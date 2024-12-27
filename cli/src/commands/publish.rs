@@ -1,5 +1,8 @@
-use std::{fs::read_to_string, path::{Path, PathBuf}};
 use std::io::Write;
+use std::{
+    fs::read_to_string,
+    path::{Path, PathBuf},
+};
 
 use clap::ArgMatches;
 use pkarr::{Keypair, SignedPacket};
@@ -83,6 +86,4 @@ pub async fn cli_publish(matches: &ArgMatches) {
         Ok(_) => println!("{} Successfully announced.", packet.timestamp()),
         Err(e) => println!("Error {}", e.to_string()),
     };
-
-
 }

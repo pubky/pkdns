@@ -105,19 +105,19 @@ impl DnsSocketBuilder {
     /// Build the server.
     pub async fn build(self) -> tokio::io::Result<DnsSocket> {
         DnsSocket::new(
-            self.listen, 
-            self.icann_resolver, 
-            self.max_queries_per_ip_per_second, 
+            self.listen,
+            self.icann_resolver,
+            self.max_queries_per_ip_per_second,
             self.max_queries_per_ip_burst_size,
             self.max_dht_queries_per_ip_per_second,
             self.max_dht_queries_per_ip_burst,
             self.min_ttl,
             self.max_ttl,
-            self.cache_mb
-        ).await
+            self.cache_mb,
+        )
+        .await
     }
 }
-
 
 #[cfg(test)]
 mod tests {

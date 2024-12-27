@@ -1,7 +1,4 @@
-use super::{
-    pubkey_parser::parse_pkarr_uri,
-    query_matcher::create_domain_not_found_reply,
-};
+use super::{pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply};
 use crate::resolution::{DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder};
 use std::{
     collections::HashMap,

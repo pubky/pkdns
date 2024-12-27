@@ -2,7 +2,10 @@
 use crate::resolution::pkd::CustomHandlerError;
 
 use super::{
-pending_request::{PendingRequest, PendingRequestStore}, pkd::PkarrResolver, query_id_manager::QueryIdManager, rate_limiter::{RateLimiter, RateLimiterBuilder}
+    pending_request::{PendingRequest, PendingRequestStore},
+    pkd::PkarrResolver,
+    query_id_manager::QueryIdManager,
+    rate_limiter::{RateLimiter, RateLimiterBuilder},
 };
 use simple_dns::{Packet, SimpleDnsError, RCODE};
 use std::hash::{Hash, Hasher};
@@ -81,7 +84,7 @@ impl DnsSocket {
 
     /// Starts the receive loop in the background.
     /// Returns the JoinHandle to stop the loop again.
-    pub fn start_receive_loop(& self) -> JoinHandle<()> {
+    pub fn start_receive_loop(&self) -> JoinHandle<()> {
         let mut cloned = self.clone();
         let join_handle = tokio::spawn(async move {
             loop {
@@ -213,9 +216,7 @@ impl DnsSocket {
                 // Fallback to ICANN
                 tracing::trace!("Custom handler rejected the query. {query_name}");
                 match self.forward_to_icann(query, Duration::from_secs(5)).await {
-                    Ok(reply) => {
-                        reply
-                    },
+                    Ok(reply) => reply,
                     Err(e) => {
                         tracing::warn!("Forwarding dns query failed. {e} {query_name}");
                         Self::create_server_fail_reply(query_id)
@@ -319,13 +320,11 @@ impl DnsSocket {
     }
 }
 
-
-
 #[cfg(test)]
 mod tests {
+    use crate::resolution::pkd::PkarrResolver;
     use simple_dns::{Name, Packet, PacketFlag, Question, RCODE};
     use std::{net::SocketAddr, time::Duration};
-    use crate::resolution::pkd::PkarrResolver;
 
     use super::DnsSocket;
 

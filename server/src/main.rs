@@ -8,10 +8,9 @@ use std::{
     num::NonZeroU32,
 };
 
-mod resolution;
-mod helpers;
 mod dns_over_https;
-
+mod helpers;
+mod resolution;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
@@ -140,11 +139,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 Ok(s) => Some(s),
                 Err(e) => panic!("doh socket parse failed. {e} Expected ip:port combination."),
             }
-        },
+        }
         None => None,
     };
-        
-    
 
     enable_logging(verbose);
 
@@ -183,18 +180,19 @@ async fn main() -> Result<(), Box<dyn Error>> {
         val => Some(NonZeroU32::new(val).unwrap()),
     };
     let dns_socket = DnsSocketBuilder::new()
-    .listen(socket)
-    .icann_resolver(forward)
-    .cache_mb(cache_mb)
-    .min_ttl(min_ttl)
-    .max_ttl(max_ttl)
-    .max_dht_queries_per_ip_per_second(dht_rate_limit_option)
-    .max_dht_queries_per_ip_burst(dht_rate_limit_burst_option)
-    .max_queries_per_ip_per_second(query_rate_limit_option)
-    .max_queries_per_ip_burst(query_rate_limit_burst_option).build().await?;
+        .listen(socket)
+        .icann_resolver(forward)
+        .cache_mb(cache_mb)
+        .min_ttl(min_ttl)
+        .max_ttl(max_ttl)
+        .max_dht_queries_per_ip_per_second(dht_rate_limit_option)
+        .max_dht_queries_per_ip_burst(dht_rate_limit_burst_option)
+        .max_queries_per_ip_per_second(query_rate_limit_option)
+        .max_queries_per_ip_burst(query_rate_limit_burst_option)
+        .build()
+        .await?;
 
     let join_handle = dns_socket.start_receive_loop();
-
 
     tracing::info!("Listening on {socket}. Waiting for Ctrl-C...");
 
@@ -202,7 +200,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
         run_doh_server(http_socket, dns_socket).await;
         tracing::info!("[EXPERIMENTAL] DNS-over-HTTP listening on http://{http_socket}/dns-query.");
     };
-
 
     wait_on_ctrl_c().await;
     println!();

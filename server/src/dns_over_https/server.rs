@@ -1,14 +1,20 @@
-use axum::{body::Body, extract::{Query, State}, http::{header, HeaderMap, Method, Response, StatusCode}, response::IntoResponse, routing::{get, post}, Router
+use crate::resolution::DnsSocket;
+use axum::{
+    body::Body,
+    extract::{Query, State},
+    http::{header, HeaderMap, Method, Response, StatusCode},
+    response::IntoResponse,
+    routing::{get, post},
+    Router,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use simple_dns::Packet;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
-use tower_http::cors::{CorsLayer, Any};
-use crate::resolution::DnsSocket;
+use tower_http::cors::{Any, CorsLayer};
 
 /// RFC8484 Dns-over-http wireformat
 /// https://datatracker.ietf.org/doc/html/rfc8484
-/// The implementation works but could implement the standard more accurately, 
+/// The implementation works but could implement the standard more accurately,
 /// especially when it comes to cache-control.
 
 fn validate_accept_header(headers: &HeaderMap) -> Result<(), (StatusCode, String)> {
@@ -29,12 +35,18 @@ fn validate_accept_header(headers: &HeaderMap) -> Result<(), (StatusCode, String
 fn decode_dns_base64_packet(param: &String) -> Result<Vec<u8>, (StatusCode, String)> {
     let val = URL_SAFE_NO_PAD.decode(param);
     if let Err(e) = val {
-        return Err((StatusCode::BAD_REQUEST, format!("Error decoding the dns base64 query parameter. {e}")));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Error decoding the dns base64 query parameter. {e}"),
+        ));
     };
     let vec = val.unwrap();
     if let Err(e) = Packet::parse(&vec) {
         tracing::info!("{e}");
-        return Err((StatusCode::BAD_REQUEST, format!("Failed to parse the base64 as a valid dns packet. {e}")));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("Failed to parse the base64 as a valid dns packet. {e}"),
+        ));
     }
     Ok(vec)
 }
@@ -43,35 +55,38 @@ fn decode_dns_base64_packet(param: &String) -> Result<Vec<u8>, (StatusCode, Stri
 fn get_lowest_ttl(reply: &Vec<u8>) -> u32 {
     const DEFAULT_VALUE: u32 = 300;
     let parsed = Packet::parse(reply);
-    if let Err(e) = parsed {
-        return DEFAULT_VALUE
+    if let Err(_) = parsed {
+        return DEFAULT_VALUE;
     };
     let parsed = parsed.unwrap();
-    let val = parsed.answers.iter().map(|answer| answer.ttl)
-    .reduce(|a, b| std::cmp::min(a, b));
+    let val = parsed
+        .answers
+        .iter()
+        .map(|answer| answer.ttl)
+        .reduce(|a, b| std::cmp::min(a, b));
 
     val.unwrap_or(DEFAULT_VALUE)
 }
-
 
 async fn query_to_response(query: Vec<u8>, dns_socket: &mut DnsSocket) -> Response<Body> {
     let reply = dns_socket.query_me(&query, None).await;
     let lowest_ttl = get_lowest_ttl(&reply);
 
     let response = Response::builder()
-    .status(StatusCode::OK)
-    .header(header::CONTENT_TYPE, "application/dns-message")
-    .header(header::CONTENT_LENGTH, reply.len())
-    .header(header::CACHE_CONTROL, format!("max-age={lowest_ttl}"))
-    .body(Body::from(reply)).unwrap();
+        .status(StatusCode::OK)
+        .header(header::CONTENT_TYPE, "application/dns-message")
+        .header(header::CONTENT_LENGTH, reply.len())
+        .header(header::CACHE_CONTROL, format!("max-age={lowest_ttl}"))
+        .body(Body::from(reply))
+        .unwrap();
 
     response
 }
 
 async fn dns_query_get(
-    headers: HeaderMap, 
-    Query(params): Query<HashMap<String, String>>, 
-    State(state): State<Arc<AppState>>
+    headers: HeaderMap,
+    Query(params): Query<HashMap<String, String>>,
+    State(state): State<Arc<AppState>>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
     if let Err(response) = validate_accept_header(&headers) {
         return Err(response);
@@ -90,9 +105,9 @@ async fn dns_query_get(
 }
 
 async fn dns_query_post(
-    headers: HeaderMap, 
+    headers: HeaderMap,
     State(state): State<Arc<AppState>>,
-    request: axum::http::Request<axum::body::Body>
+    request: axum::http::Request<axum::body::Body>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
     if let Err(response) = validate_accept_header(&headers) {
         return Err(response);
@@ -109,21 +124,20 @@ async fn dns_query_post(
 }
 
 pub struct AppState {
-    pub socket: DnsSocket
+    pub socket: DnsSocket,
 }
 
 fn create_app(dns_socket: DnsSocket) -> Router {
-
     let cors = CorsLayer::new()
-    .allow_origin(Any)
-    .allow_methods([Method::GET, Method::POST])
-    .allow_headers(Any);
+        .allow_origin(Any)
+        .allow_methods([Method::GET, Method::POST])
+        .allow_headers(Any);
 
     let app = Router::new()
-    .route("/dns-query", get(dns_query_get))
-    .route("/dns-query", post(dns_query_post))
-    .layer(cors)
-    .with_state(Arc::new(AppState{socket: dns_socket}));
+        .route("/dns-query", get(dns_query_get))
+        .route("/dns-query", post(dns_query_post))
+        .layer(cors)
+        .with_state(Arc::new(AppState { socket: dns_socket }));
     app
 }
 
@@ -137,7 +151,10 @@ pub async fn run_doh_server(addr: SocketAddr, dns_socket: DnsSocket) {
 
 #[cfg(test)]
 mod tests {
-    use crate::{dns_over_https::{run_doh_server, server::create_app}, resolution::DnsSocket};
+    use crate::{
+        dns_over_https::{run_doh_server, server::create_app},
+        resolution::DnsSocket,
+    };
     use axum_test::TestServer;
     use simple_dns::{Name, Packet, Question};
 
@@ -156,8 +173,16 @@ mod tests {
             .await;
 
         response.assert_status_ok();
-        assert_eq!(response.maybe_header("content-type").expect("content-type available"), "application/dns-message");
-        assert_eq!(response.maybe_header("content-length").expect("content-length available"), "151");
+        assert_eq!(
+            response.maybe_header("content-type").expect("content-type available"),
+            "application/dns-message"
+        );
+        assert_eq!(
+            response
+                .maybe_header("content-length")
+                .expect("content-length available"),
+            "151"
+        );
 
         let reply_bytes = response.into_bytes();
         let packet = Packet::parse(&reply_bytes).expect("Should be valid packet");
@@ -173,8 +198,12 @@ mod tests {
         let server = TestServer::new(app).unwrap();
 
         let mut query = Packet::new_query(50);
-        let question = Question::new(Name::new_unchecked("example.com"), 
-        simple_dns::QTYPE::TYPE(simple_dns::TYPE::A), simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN), false);
+        let question = Question::new(
+            Name::new_unchecked("example.com"),
+            simple_dns::QTYPE::TYPE(simple_dns::TYPE::A),
+            simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN),
+            false,
+        );
         query.questions.push(question);
         let bytes = query.build_bytes_vec().unwrap();
         let response = server
@@ -184,8 +213,16 @@ mod tests {
             .await;
 
         response.assert_status_ok();
-        assert_eq!(response.maybe_header("content-type").expect("content-type available"), "application/dns-message");
-        assert_eq!(response.maybe_header("content-length").expect("content-length available"), "46");
+        assert_eq!(
+            response.maybe_header("content-type").expect("content-type available"),
+            "application/dns-message"
+        );
+        assert_eq!(
+            response
+                .maybe_header("content-length")
+                .expect("content-length available"),
+            "46"
+        );
 
         let reply_bytes = response.into_bytes();
         let packet = Packet::parse(&reply_bytes).expect("Should be valid packet");
@@ -215,7 +252,7 @@ mod tests {
         // let socket = DnsSocket::default().await.unwrap();
         // socket.start_receive_loop();
         // run_doh_server("127.0.0.1:3000".parse().unwrap(), socket).await;
-        
+
         let client = dnsoverhttps::Client::from_url("http://127.0.0.1:3000/dns-query").unwrap();
         let res = client.resolve_host("example.com").unwrap();
         assert_eq!(res.len(), 2);
