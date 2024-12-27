@@ -119,6 +119,8 @@ Options:
           Maximum number of queries per second one IP address can make to the DHT before it is rate limited. 0 is disabled. [default: 5]
       --dht-rate-limit-burst <dht-rate-limit-burst>
           Short term burst size of the dht-rate-limit. 0 is disabled. [default: 25]
+      --doh <doh>
+          [EXPERIMENTAL] Enables DNS over HTTP on the given socket. Example: 127.0.0.1:3000. Default: Disabled.
   -h, --help
           Print help
   -V, --version

@@ -92,7 +92,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
             clap::Arg::new("doh")
                 .long("doh")
                 .required(false)
-                .help("[EXPERIMENTAL] DNS-over-HTTP socket. Enables doh on a given socket. Example: 127.0.0.1:3000. Default: Disabled."),
+                .help("[EXPERIMENTAL] Enables DNS over HTTP on the given socket. Example: 127.0.0.1:3000. Default: Disabled."),
         );
 
     let matches = cmd.get_matches();
