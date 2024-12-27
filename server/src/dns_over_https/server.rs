@@ -7,7 +7,9 @@ use tower_http::cors::{CorsLayer, Any};
 use crate::resolution::DnsSocket;
 
 /// RFC8484 Dns-over-http wireformat
-/// https://datatracker.ietf.org/doc/html/rfc8484#section-4.1
+/// https://datatracker.ietf.org/doc/html/rfc8484
+/// The implementation works but could implement the standard more accurately, 
+/// especially when it comes to cache-control.
 
 fn validate_accept_header(headers: &HeaderMap) -> Result<(), (StatusCode, String)> {
     if let None = headers.get("accept") {
@@ -37,15 +39,30 @@ fn decode_dns_base64_packet(param: &String) -> Result<Vec<u8>, (StatusCode, Stri
     Ok(vec)
 }
 
+/// Extract lowest ttl of answer to set caching parameter
+fn get_lowest_ttl(reply: &Vec<u8>) -> u32 {
+    const DEFAULT_VALUE: u32 = 300;
+    let parsed = Packet::parse(reply);
+    if let Err(e) = parsed {
+        return DEFAULT_VALUE
+    };
+    let parsed = parsed.unwrap();
+    let val = parsed.answers.iter().map(|answer| answer.ttl)
+    .reduce(|a, b| std::cmp::min(a, b));
+
+    val.unwrap_or(DEFAULT_VALUE)
+}
+
 
 async fn query_to_response(query: Vec<u8>, dns_socket: &mut DnsSocket) -> Response<Body> {
     let reply = dns_socket.query_me(&query, None).await;
+    let lowest_ttl = get_lowest_ttl(&reply);
 
     let response = Response::builder()
     .status(StatusCode::OK)
     .header(header::CONTENT_TYPE, "application/dns-message")
     .header(header::CONTENT_LENGTH, reply.len())
-    .header(header::CACHE_CONTROL, "max-age=30")
+    .header(header::CACHE_CONTROL, format!("max-age={lowest_ttl}"))
     .body(Body::from(reply)).unwrap();
 
     response
