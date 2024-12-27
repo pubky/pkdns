@@ -55,3 +55,13 @@ pub(crate) fn enable_logging(verbose: bool) {
         tracing::info!("Verbose mode enabled.");
     }
 }
+
+/// Wait until the user hits CTRL+C
+pub(crate) async fn wait_on_ctrl_c() {
+    match tokio::signal::ctrl_c().await {
+        Ok(()) => {}
+        Err(err) => {
+            eprintln!("Unable to listen for shutdown signal Ctrl+C: {}", err);
+        }
+    }
+}

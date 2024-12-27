@@ -1,7 +1,9 @@
 #![allow(unused)]
+use crate::resolution::pkd::CustomHandlerError;
+
 use super::{
-    custom_handler::{CustomHandlerError, HandlerHolder},
     pending_request::{PendingRequest, PendingRequestStore},
+    pkd::PkarrResolver,
     query_id_manager::QueryIdManager,
     rate_limiter::{RateLimiter, RateLimiterBuilder},
 };
@@ -14,7 +16,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tokio::{net::UdpSocket, sync::oneshot};
+use tokio::{net::UdpSocket, sync::oneshot, task::JoinHandle};
 use tracing::Level;
 
 /// Any error related to receiving and sending DNS packets on the UDP socket.
@@ -40,7 +42,7 @@ pub enum DnsSocketError {
 pub struct DnsSocket {
     socket: Arc<UdpSocket>,
     pending: PendingRequestStore,
-    handler: HandlerHolder,
+    pkarr_resolver: PkarrResolver,
     icann_fallback: SocketAddr,
     id_manager: QueryIdManager,
     rate_limiter: Arc<RateLimiter>,
@@ -50,21 +52,26 @@ impl DnsSocket {
     // Create a new DNS socket
     pub async fn new(
         listening: SocketAddr,
-        icann_fallback: SocketAddr,
-        handler: HandlerHolder,
+        icann_resolver: SocketAddr,
         max_queries_per_ip_per_second: Option<NonZeroU32>,
-        burst_size: Option<NonZeroU32>,
+        max_queries_per_ip_burst: Option<NonZeroU32>,
+        max_dht_queries_per_ip_per_second: Option<NonZeroU32>,
+        max_dht_queries_per_ip_burst: Option<NonZeroU32>,
+        min_ttl: u64,
+        max_ttl: u64,
+        cache_mb: u64,
     ) -> tokio::io::Result<Self> {
         let socket = UdpSocket::bind(listening).await?;
         let limiter = RateLimiterBuilder::new()
             .max_per_second(max_queries_per_ip_per_second)
-            .burst_size(burst_size);
+            .burst_size(max_queries_per_ip_burst);
 
+        let resolver = PkarrResolver::default().await;
         Ok(Self {
             socket: Arc::new(socket),
             pending: PendingRequestStore::new(),
-            handler,
-            icann_fallback,
+            pkarr_resolver: resolver,
+            icann_fallback: icann_resolver,
             id_manager: QueryIdManager::new(),
             rate_limiter: Arc::new(limiter.build()),
         })
@@ -75,13 +82,18 @@ impl DnsSocket {
         self.socket.send_to(buffer, target).await
     }
 
-    // Run receive loop
-    pub async fn receive_loop(&mut self) {
-        loop {
-            if let Err(err) = self.receive_datagram().await {
-                tracing::error!("Error while trying to receive. {err}");
+    /// Starts the receive loop in the background.
+    /// Returns the JoinHandle to stop the loop again.
+    pub fn start_receive_loop(&self) -> JoinHandle<()> {
+        let mut cloned = self.clone();
+        let join_handle = tokio::spawn(async move {
+            loop {
+                if let Err(err) = cloned.receive_datagram().await {
+                    tracing::error!("Error while trying to receive. {err}");
+                }
             }
-        }
+        });
+        join_handle
     }
 
     async fn receive_datagram(&mut self) -> Result<(), DnsSocketError> {
@@ -183,7 +195,7 @@ impl DnsSocket {
     /// Query this DNS for data
     pub async fn query_me(&mut self, query: &Vec<u8>, from: Option<IpAddr>) -> Vec<u8> {
         tracing::trace!("Try to resolve the query with the custom handler.");
-        let result = self.handler.call(query, self.clone(), from).await;
+        let result = self.pkarr_resolver.resolve(query, from).await;
 
         if result.is_ok() {
             tracing::trace!("Custom handler resolved the query.");
@@ -223,10 +235,19 @@ impl DnsSocket {
     }
 
     /// Replaces the id of the dns packet.
-    fn replace_packet_id(&self, packet: &mut Vec<u8>, new_id: u16) {
+    fn replace_packet_id(&self, original_packet: &Vec<u8>, new_id: u16) -> Vec<u8> {
+        let mut cloned = original_packet.clone();
         let id_bytes = new_id.to_be_bytes();
-        std::mem::replace(&mut packet[0], id_bytes[0]);
-        std::mem::replace(&mut packet[1], id_bytes[1]);
+        std::mem::replace(&mut cloned[0], id_bytes[0]);
+        std::mem::replace(&mut cloned[1], id_bytes[1]);
+
+        let parsed_packet = Packet::parse(&cloned);
+        if let Err(e) = parsed_packet {
+            tracing::warn!("Failed to parse reply. {e}");
+            return cloned;
+        }
+
+        parsed_packet.unwrap().build_bytes_vec().unwrap()
     }
 
     /// Send dns request to configured forward server
@@ -249,15 +270,16 @@ impl DnsSocket {
             tx,
         };
 
-        let mut query = packet.build_bytes_vec_compressed()?;
-        self.replace_packet_id(&mut query, forward_id);
+        let query = packet.build_bytes_vec_compressed()?;
+        let query = self.replace_packet_id(&query, forward_id);
 
         self.pending.insert(request);
         self.send_to(&query, to).await?;
 
         // Wait on response
-        let mut reply = tokio::time::timeout(timeout, rx).await??;
-        self.replace_packet_id(&mut reply, original_id);
+        let reply = tokio::time::timeout(timeout, rx).await??;
+        let reply = self.replace_packet_id(&reply, original_id);
+
         Ok(reply)
     }
 
@@ -284,14 +306,25 @@ impl DnsSocket {
         *reply.rcode_mut() = RCODE::ServerFailure;
         reply.build_bytes_vec_compressed().unwrap()
     }
+
+    pub async fn default() -> Result<Self, anyhow::Error> {
+        let socket = UdpSocket::bind("0.0.0.0:53").await?;
+        Ok(Self {
+            socket: Arc::new(socket),
+            pending: PendingRequestStore::new(),
+            pkarr_resolver: PkarrResolver::default().await,
+            icann_fallback: "8.8.8.8:53".parse().unwrap(),
+            id_manager: QueryIdManager::new(),
+            rate_limiter: Arc::new(RateLimiterBuilder::new().build()),
+        })
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::resolution::pkd::PkarrResolver;
     use simple_dns::{Name, Packet, PacketFlag, Question, RCODE};
     use std::{net::SocketAddr, time::Duration};
-
-    use super::super::custom_handler::{EmptyHandler, HandlerHolder};
 
     use super::DnsSocket;
 
@@ -299,15 +332,8 @@ mod tests {
     async fn run_processor() {
         let listening: SocketAddr = "0.0.0.0:34254".parse().unwrap();
         let icann_fallback: SocketAddr = "8.8.8.8:53".parse().unwrap();
-        let handler = HandlerHolder::new(EmptyHandler::new());
-        let mut socket = DnsSocket::new(listening, icann_fallback, handler, None, None)
-            .await
-            .unwrap();
-
-        let mut run_socket = socket.clone();
-        tokio::spawn(async move {
-            run_socket.receive_loop().await;
-        });
+        let mut socket = DnsSocket::default().await.unwrap();
+        let join_handle = socket.start_receive_loop().await;
 
         let mut query = Packet::new_query(0);
         let qname = Name::new("google.ch").unwrap();

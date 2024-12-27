@@ -3,7 +3,7 @@ use std::{
     time::Duration,
 };
 
-use crate::anydns::DnsSocket;
+use crate::resolution::DnsSocket;
 use simple_dns::{
     rdata::{self, RData},
     Name, Packet, PacketFlag, Question, ResourceRecord, QTYPE, RCODE, TYPE,
@@ -18,16 +18,15 @@ use simple_dns::{
 /**
  * Uses a query to transforms a pkarr reply into an regular reply
  */
-pub async fn resolve_query<'a>(pkarr_packet: &Packet<'a>, query: &Packet<'a>, socket: &mut DnsSocket) -> Vec<u8> {
+pub async fn resolve_query<'a>(pkarr_packet: &Packet<'a>, query: &Packet<'a>) -> Vec<u8> {
     let question = query.questions.first().unwrap(); // Has at least 1 question based on previous checks.
-    let pkarr_reply = resolve_question(pkarr_packet, question, socket).await;
+    let pkarr_reply = resolve_question(pkarr_packet, question).await;
     let pkarr_reply = Packet::parse(&pkarr_reply).unwrap();
 
     let mut reply = query.clone().into_reply();
     reply.answers = pkarr_reply.answers;
     reply.additional_records = pkarr_reply.additional_records;
     reply.name_servers = pkarr_reply.name_servers;
-    tracing::debug!("Reply with {} answers.", reply.answers.len());
 
     reply.build_bytes_vec_compressed().unwrap()
 }
@@ -35,7 +34,7 @@ pub async fn resolve_query<'a>(pkarr_packet: &Packet<'a>, query: &Packet<'a>, so
 /**
  * Resolves a question by filtering the pkarr packet and creating a corresponding reply.
  */
-async fn resolve_question<'a>(pkarr_packet: &Packet<'a>, question: &Question<'a>, socket: &mut DnsSocket) -> Vec<u8> {
+async fn resolve_question<'a>(pkarr_packet: &Packet<'a>, question: &Question<'a>) -> Vec<u8> {
     let mut reply = Packet::new_reply(0);
 
     let direct_matchs = direct_matches(pkarr_packet, &question.qname, &question.qtype);
@@ -50,13 +49,14 @@ async fn resolve_question<'a>(pkarr_packet: &Packet<'a>, question: &Question<'a>
     if reply.answers.len() == 0 {
         // Not found. Maybe we have a name server?
         reply.name_servers = find_nameserver(pkarr_packet, &question.qname);
-        if reply.name_servers.len() > 0 {
-            // Resolve ns
-            let ns_reply = resolve_with_ns(question, &reply.name_servers, socket).await;
-            if let Some(ns_reply) = ns_reply {
-                return ns_reply;
-            }
-        }
+        // if reply.name_servers.len() > 0 {
+        //     // Resolve ns
+
+        //     let ns_reply = resolve_with_ns(question, &reply.name_servers).await;
+        //     if let Some(ns_reply) = ns_reply {
+        //         return ns_reply;
+        //     }
+        // }
     };
 
     reply.build_bytes_vec_compressed().unwrap()
@@ -119,77 +119,76 @@ fn find_nameserver<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>) -> Vec<Resou
 /**
  * Resolve name server ip
  */
-async fn resolve_ns_ip<'a>(ns_name: &Name<'a>, socket: &mut DnsSocket) -> Option<Vec<SocketAddr>> {
-    let ns_question = Question::new(
-        ns_name.clone(),
-        QTYPE::TYPE(TYPE::A),
-        simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN),
-        false,
-    );
-    let mut query = Packet::new_query(0);
-    query.questions.push(ns_question);
-    query.set_flags(PacketFlag::RECURSION_DESIRED);
-    let query = query.build_bytes_vec_compressed().unwrap();
+// async fn resolve_ns_ip<'a>(ns_name: &Name<'a>) -> Option<Vec<SocketAddr>> {
+//     let ns_question = Question::new(
+//         ns_name.clone(),
+//         QTYPE::TYPE(TYPE::A),
+//         simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN),
+//         false,
+//     );
+//     let mut query = Packet::new_query(0);
+//     query.questions.push(ns_question);
+//     query.set_flags(PacketFlag::RECURSION_DESIRED);
+//     let query = query.build_bytes_vec_compressed().unwrap();
 
-    let reply = socket.query_me(&query, None).await;
-    let reply = Packet::parse(&reply).ok()?;
-    if reply.answers.len() == 0 {
-        return None;
-    };
+//     let reply = socket.query_me(&query, None).await;
+//     let reply = Packet::parse(&reply).ok()?;
+//     if reply.answers.len() == 0 {
+//         return None;
+//     };
 
-    let addresses: Vec<SocketAddr> = reply
-        .answers
-        .into_iter()
-        .filter_map(|record| match record.rdata {
-            RData::A(data) => {
-                let ip = Ipv4Addr::from(data.address);
-                Some(SocketAddr::new(ip.into(), 53))
-            }
-            RData::AAAA(data) => {
-                let ip = Ipv6Addr::from(data.address);
-                Some(SocketAddr::new(ip.into(), 53))
-            }
-            _ => None,
-        })
-        .collect();
+//     let addresses: Vec<SocketAddr> = reply
+//         .answers
+//         .into_iter()
+//         .filter_map(|record| match record.rdata {
+//             RData::A(data) => {
+//                 let ip = Ipv4Addr::from(data.address);
+//                 Some(SocketAddr::new(ip.into(), 53))
+//             }
+//             RData::AAAA(data) => {
+//                 let ip = Ipv6Addr::from(data.address);
+//                 Some(SocketAddr::new(ip.into(), 53))
+//             }
+//             _ => None,
+//         })
+//         .collect();
 
-    Some(addresses)
-}
+//     Some(addresses)
+// }
 
 /**
  * Resolves the question with a single ns redirection.
  */
-async fn resolve_with_ns<'a>(
-    question: &Question<'a>,
-    name_servers: &Vec<ResourceRecord<'a>>,
-    socket: &mut DnsSocket,
-) -> Option<Vec<u8>> {
-    if name_servers.len() == 0 {
-        return None;
-    };
+// async fn resolve_with_ns<'a>(
+//     question: &Question<'a>,
+//     name_servers: &Vec<ResourceRecord<'a>>,
+// ) -> Option<Vec<u8>> {
+//     if name_servers.len() == 0 {
+//         return None;
+//     };
 
-    let ns_names: Vec<Name<'_>> = name_servers
-        .iter()
-        .filter_map(|record| {
-            if let RData::NS(data) = record.clone().rdata {
-                Some(data.0)
-            } else {
-                None
-            }
-        })
-        .collect();
+//     let ns_names: Vec<Name<'_>> = name_servers
+//         .iter()
+//         .filter_map(|record| {
+//             if let RData::NS(data) = record.clone().rdata {
+//                 Some(data.0)
+//             } else {
+//                 None
+//             }
+//         })
+//         .collect();
 
-    let ns_name = ns_names.first().unwrap();
-    let addresses = resolve_ns_ip(ns_name, socket).await?;
-    let addr = addresses.first().unwrap();
+//     let ns_name = ns_names.first().unwrap();
+//     let addresses = resolve_ns_ip(ns_name).await?;
+//     let addr = addresses.first().unwrap();
 
-    let mut query = Packet::new_query(0);
-    query.questions.push(question.clone());
-    query.set_flags(PacketFlag::RECURSION_DESIRED);
-    let query = query.build_bytes_vec_compressed().unwrap();
+//     let mut query = Packet::new_query(0);
+//     query.questions.push(question.clone());
+//     query.set_flags(PacketFlag::RECURSION_DESIRED);
+//     let query = query.build_bytes_vec_compressed().unwrap();
 
-    socket.forward(&query, addr, Duration::from_millis(1000)).await.ok()
-}
+//     socket.forward(&query, addr, Duration::from_millis(1000)).await.ok()
+// }
 
 /**
  * Constructs a reply indicating that the query got rate limited.
@@ -204,7 +203,7 @@ pub fn create_domain_not_found_reply(query_id: u16) -> Vec<u8> {
 mod tests {
     use std::net::Ipv4Addr;
 
-    use crate::anydns::{DnsSocket, EmptyHandler, HandlerHolder};
+    use crate::resolution::{pkd::PkarrResolver, DnsSocket};
     use pkarr::{
         dns::{Name, Packet, ResourceRecord},
         Keypair, PublicKey,
@@ -214,16 +213,7 @@ mod tests {
     use super::{resolve_query, resolve_question};
 
     async fn get_dnssocket() -> DnsSocket {
-        let handler = HandlerHolder::new(EmptyHandler::new());
-        DnsSocket::new(
-            "127.0.0.1:20384".parse().unwrap(),
-            "8.8.8.8:53".parse().unwrap(),
-            handler,
-            None,
-            None,
-        )
-        .await
-        .unwrap()
+        DnsSocket::default().await.unwrap()
     }
 
     fn example_pkarr_reply() -> (Vec<u8>, PublicKey) {
@@ -291,7 +281,7 @@ mod tests {
         );
 
         let mut socket = get_dnssocket().await;
-        let reply = resolve_question(&pkarr_packet, &question, &mut socket).await;
+        let reply = resolve_question(&pkarr_packet, &question).await;
         let reply = Packet::parse(&reply).unwrap();
         assert_eq!(reply.answers.len(), 1);
         assert_eq!(reply.additional_records.len(), 0);
@@ -318,7 +308,7 @@ mod tests {
         );
 
         let mut socket = get_dnssocket().await;
-        let reply = resolve_question(&pkarr_packet, &question, &mut socket).await;
+        let reply = resolve_question(&pkarr_packet, &question).await;
         let reply = Packet::parse(&reply).unwrap();
         assert_eq!(reply.answers.len(), 2);
         assert_eq!(reply.additional_records.len(), 0);
@@ -349,7 +339,7 @@ mod tests {
             false,
         );
         let mut socket = get_dnssocket().await;
-        let reply = resolve_question(&pkarr_packet, &question, &mut socket).await;
+        let reply = resolve_question(&pkarr_packet, &question).await;
         let reply = Packet::parse(&reply).unwrap();
         assert_eq!(reply.answers.len(), 0);
         assert_eq!(reply.additional_records.len(), 0);
@@ -377,7 +367,7 @@ mod tests {
         );
 
         let mut socket = get_dnssocket().await;
-        let reply = resolve_question(&pkarr_packet, &question, &mut socket).await;
+        let reply = resolve_question(&pkarr_packet, &question).await;
         let reply = Packet::parse(&reply).unwrap();
         assert_eq!(reply.answers.len(), 0);
         assert_eq!(reply.additional_records.len(), 0);
@@ -402,6 +392,6 @@ mod tests {
         )];
 
         let mut socket = get_dnssocket().await;
-        let _reply = resolve_query(&pkarr_packet, &query, &mut socket);
+        let _reply = resolve_query(&pkarr_packet, &query);
     }
 }
