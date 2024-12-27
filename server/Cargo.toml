@@ -23,7 +23,7 @@ moka = { version = "0.12.8", features = ["future"] }
 dyn-clone = "1.0.16"
 thiserror = "1.0.56"
 governor = "0.7.0"
-axum = { version = "0.7.9"}
+axum = { version = "0.7.9", features = ["tokio"]}
 axum-extra = { version = "0.9.6", features = ["typed-header"] }
 tower-http = { version = "0.6.2", features = ["cors"] }
 serde = "1.0.216"

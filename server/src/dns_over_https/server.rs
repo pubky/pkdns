@@ -1,7 +1,7 @@
 use crate::resolution::DnsSocket;
 use axum::{
     body::Body,
-    extract::{Query, State},
+    extract::{ConnectInfo, Query, State},
     http::{header, HeaderMap, Method, Response, StatusCode},
     response::IntoResponse,
     routing::{get, post},
@@ -9,7 +9,7 @@ use axum::{
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use simple_dns::Packet;
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, net::{IpAddr, SocketAddr}, sync::Arc};
 use tower_http::cors::{Any, CorsLayer};
 
 /// RFC8484 Dns-over-http wireformat
@@ -68,8 +68,28 @@ fn get_lowest_ttl(reply: &Vec<u8>) -> u32 {
     val.unwrap_or(DEFAULT_VALUE)
 }
 
-async fn query_to_response(query: Vec<u8>, dns_socket: &mut DnsSocket) -> Response<Body> {
-    let reply = dns_socket.query_me(&query, None).await;
+/// Extracts the client IP for rate limiting.
+/// Uses the "x-forwarded-for" header to support proxies.
+/// If not available, uses the client IP directly.
+fn extract_client_ip(request_addr: &SocketAddr, headers: &HeaderMap) -> IpAddr {
+    let proxy_x_forwarded_ip = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok());
+    if let None = proxy_x_forwarded_ip {
+        return request_addr.ip();
+    };
+
+    let proxy_x_forwarded_ip = proxy_x_forwarded_ip.unwrap();
+    let ip_parsed: Result<IpAddr, _> = proxy_x_forwarded_ip.parse();
+    match ip_parsed {
+        Ok(ip) => ip,
+        Err(e) => {
+            tracing::debug!("Failed to parse the 'x-forwarded-for' header ip address. {e}");
+            request_addr.ip()
+        },
+    }
+}
+
+async fn query_to_response(query: Vec<u8>, dns_socket: &mut DnsSocket, client_ip: IpAddr) -> Response<Body> {
+    let reply = dns_socket.query_me(&query, Some(client_ip)).await;
     let lowest_ttl = get_lowest_ttl(&reply);
 
     let response = Response::builder()
@@ -87,7 +107,9 @@ async fn dns_query_get(
     headers: HeaderMap,
     Query(params): Query<HashMap<String, String>>,
     State(state): State<Arc<AppState>>,
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
+    let client_ip = extract_client_ip(&client_addr, &headers);
     if let Err(response) = validate_accept_header(&headers) {
         return Err(response);
     }
@@ -101,14 +123,16 @@ async fn dns_query_get(
     }
     let packet_bytes = result.unwrap();
     let mut socket = state.socket.clone();
-    Ok(query_to_response(packet_bytes, &mut socket).await)
+    Ok(query_to_response(packet_bytes, &mut socket, client_ip).await)
 }
 
 async fn dns_query_post(
     headers: HeaderMap,
     State(state): State<Arc<AppState>>,
+    ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
     request: axum::http::Request<axum::body::Body>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
+    let client_ip = extract_client_ip(&client_addr, &headers);
     if let Err(response) = validate_accept_header(&headers) {
         return Err(response);
     }
@@ -120,7 +144,7 @@ async fn dns_query_post(
 
     let packet_bytes: Vec<u8> = body_result.unwrap().into();
     let mut socket = state.socket.clone();
-    Ok(query_to_response(packet_bytes, &mut socket).await)
+    Ok(query_to_response(packet_bytes, &mut socket, client_ip).await)
 }
 
 pub struct AppState {
@@ -145,14 +169,14 @@ pub async fn run_doh_server(addr: SocketAddr, dns_socket: DnsSocket) {
     let app = create_app(dns_socket);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
+        axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
     });
 }
 
 #[cfg(test)]
 mod tests {
     use crate::{
-        dns_over_https::{run_doh_server, server::create_app},
+        dns_over_https::server::create_app,
         resolution::DnsSocket,
     };
     use axum_test::TestServer;

@@ -18,6 +18,7 @@ pkdns supports [RFC8484](https://datatracker.ietf.org/doc/html/rfc8484) with the
 
 ```
 	location / {
+        proxy_set_header X-Forwarded-For $remote_addr;
 		proxy_pass http://127.0.0.1:3000;
 	}
 ```
