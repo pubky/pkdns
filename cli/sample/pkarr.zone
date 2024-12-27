@@ -5,6 +5,9 @@ $TTL 300
 @    IN	  MX	20	mail2.example.com.   
 
 @    IN    A      127.0.0.1
+; The variable {external_ipv4} is replaced with your external IPv4 address.
 subv4  IN    A      {external_ipv4}
+; The variable {external_ipv6} is replaced with your external IPv6 address.
+subv4  IN    AAAA      {external_ipv6}
 
 text  IN   TXT    hero=satoshi

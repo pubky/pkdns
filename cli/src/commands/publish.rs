@@ -27,15 +27,14 @@ async fn fill_dyndns_variables(zone: &mut String) -> Result<(), anyhow::Error> {
         *zone = zone.replace("{external_ipv4}", &external_ipv4.to_string());
     };
 
-    // TODO: IPv6 not supported by the Zone loader yet.
-    // if zone.contains("{external_ipv6}") {
-    //     let ip_result = resolve_ipv6().await;
-    //     if let Err(e) = ip_result {
-    //         return Err(anyhow!(e));
-    //     }
-    //     let (external_ipv6, provider_name) = ip_result.unwrap();
-    //     *zone = zone.replace("{external_ipv6}", &external_ipv6.to_string());
-    // };
+    if zone.contains("{external_ipv6}") {
+        let ip_result = resolve_ipv6().await;
+        if let Err(e) = ip_result {
+            return Err(anyhow!(e));
+        }
+        let (external_ipv6, _) = ip_result.unwrap();
+        *zone = zone.replace("{external_ipv6}", &external_ipv6.to_string());
+    };
 
     Ok(())
 }
