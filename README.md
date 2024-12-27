@@ -163,10 +163,7 @@ Use the `pkdns-cli` to inspect and announce your pkarr records on the Mainline D
 
 pkdns does only partially support recursive lookups. Recursion only works
 - For a `CNAME` pointing directly to another record in the same pkarr packet.
-- For a `NS` delegating the whole pkarr zone to a name server.
 
-For anything more fancy than simple `A` and `TXT` records, it is recommended to use a [bind9](https://ubuntu.com/server/docs/service-domain-name-service-dns) name server and point your zone to there `@   NS   {BIND9IP}`.
-bind9 is a fully fledged name server and should be able to handle recursion and all record types.
 
 ### Record Types
 
