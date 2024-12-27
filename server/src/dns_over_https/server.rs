@@ -1,4 +1,4 @@
-use axum::{body::Body, extract::{Query, State}, http::{header, HeaderMap, Response, StatusCode}, response::IntoResponse, routing::get, Router
+use axum::{body::Body, extract::{Query, State}, http::{header, HeaderMap, Response, StatusCode}, response::IntoResponse, routing::{get, post}, Router
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use simple_dns::Packet;
@@ -15,7 +15,7 @@ fn validate_accept_header(headers: &HeaderMap) -> Result<(), (StatusCode, String
     };
     let value = headers.get("accept").unwrap();
     if let Err(e) = value.to_str() {
-        return Err((StatusCode::BAD_REQUEST, format!("valid accept header required")));
+        return Err((StatusCode::BAD_REQUEST, format!("valid accept header required. {e}")));
     }
     let value = value.to_str().unwrap();
     if value != "application/dns-message" {
@@ -38,7 +38,7 @@ fn decode_dns_base64_packet(param: &String) -> Result<Vec<u8>, (StatusCode, Stri
 }
 
 
-async fn dns_query(
+async fn dns_query_get(
     headers: HeaderMap, 
     Query(params): Query<HashMap<String, String>>, 
     State(state): State<Arc<AppState>>
@@ -46,6 +46,7 @@ async fn dns_query(
     if let Err(response) = validate_accept_header(&headers) {
         return Err(response);
     }
+
     if let None = params.get("dns") {
         return Err((StatusCode::BAD_REQUEST, format!("valid dns query param required")));
     }
@@ -63,7 +64,32 @@ async fn dns_query(
     .body(Body::from(reply)).unwrap();
 
     Ok(response)
-    // Ok(StatusCode::OK)
+}
+
+async fn dns_query_post(
+    headers: HeaderMap, 
+    State(state): State<Arc<AppState>>,
+    request: axum::http::Request<axum::body::Body>
+) -> Result<impl IntoResponse, impl IntoResponse> {
+    if let Err(response) = validate_accept_header(&headers) {
+        return Err(response);
+    }
+
+    let body_result = axum::body::to_bytes(request.into_body(), 1024usize).await;
+    if let Err(e) = body_result {
+        return Err((StatusCode::BAD_REQUEST, e.to_string()));
+    }
+
+    let packet_bytes: Vec<u8> = body_result.unwrap().into();
+    let mut socket = state.socket.clone();
+    let reply = socket.query_me(&packet_bytes, None).await;
+    let response = Response::builder()
+    .status(StatusCode::OK)
+    .header(header::CONTENT_TYPE, "application/dns-message")
+    .header(header::CONTENT_LENGTH, reply.len())
+    .body(Body::from(reply)).unwrap();
+
+    Ok(response)
 }
 
 pub struct AppState {
@@ -72,7 +98,8 @@ pub struct AppState {
 
 fn create_app(dns_socket: DnsSocket) -> Router {
     let app = Router::new()
-    .route("/dns-query", get(dns_query))
+    .route("/dns-query", get(dns_query_get))
+    .route("/dns-query", post(dns_query_post))
     .with_state(Arc::new(AppState{socket: dns_socket}));
     app
 }
@@ -80,18 +107,20 @@ fn create_app(dns_socket: DnsSocket) -> Router {
 pub async fn run_doh_server(addr: SocketAddr, dns_socket: DnsSocket) {
     let app = create_app(dns_socket);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
     tracing::info!("dns-over-http listening on http://{addr}/dns-query.");
-    axum::serve(listener, app).await.unwrap();
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{dns_over_https::server::create_app, resolution::DnsSocket};
+    use crate::{dns_over_https::{run_doh_server, server::create_app}, resolution::DnsSocket};
     use axum_test::TestServer;
-    use simple_dns::Packet;
+    use simple_dns::{Name, Packet, Question};
 
     #[tokio::test]
-    async fn query_doh_wireformat() {
+    async fn query_doh_wireformat_get() {
         // RFC8484 example https://datatracker.ietf.org/doc/html/rfc8484#section-4.1
         let socket = DnsSocket::default().await.unwrap();
         socket.start_receive_loop();
@@ -114,6 +143,34 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn query_doh_wireformat_post() {
+        // RFC8484 example https://datatracker.ietf.org/doc/html/rfc8484#section-4.1
+        let socket = DnsSocket::default().await.unwrap();
+        socket.start_receive_loop();
+        let app = create_app(socket);
+        let server = TestServer::new(app).unwrap();
+
+        let mut query = Packet::new_query(50);
+        let question = Question::new(Name::new_unchecked("example.com"), 
+        simple_dns::QTYPE::TYPE(simple_dns::TYPE::A), simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN), false);
+        query.questions.push(question);
+        let bytes = query.build_bytes_vec().unwrap();
+        let response = server
+            .post("/dns-query")
+            .add_header("accept", "application/dns-message")
+            .bytes(bytes.into())
+            .await;
+
+        response.assert_status_ok();
+        assert_eq!(response.maybe_header("content-type").expect("content-type available"), "application/dns-message");
+        assert_eq!(response.maybe_header("content-length").expect("content-length available"), "46");
+
+        let reply_bytes = response.into_bytes();
+        let packet = Packet::parse(&reply_bytes).expect("Should be valid packet");
+        assert_eq!(packet.answers.len(), 1)
+    }
+
+    #[tokio::test]
     async fn wrong_content_type() {
         // RFC8484 example https://datatracker.ietf.org/doc/html/rfc8484#section-4.1
         let socket = DnsSocket::default().await.unwrap();
@@ -128,5 +185,18 @@ mod tests {
             .await;
 
         response.assert_status_bad_request();
+    }
+
+    #[tokio::test]
+    async fn e2e_test() {
+        // RFC8484 example https://datatracker.ietf.org/doc/html/rfc8484#section-4.1
+        // let socket = DnsSocket::default().await.unwrap();
+        // socket.start_receive_loop();
+        // run_doh_server("127.0.0.1:3000".parse().unwrap(), socket).await;
+        
+        let client = dnsoverhttps::Client::from_url("http://127.0.0.1:3000/dns-query").unwrap();
+        let res = client.resolve_host("example.com").unwrap();
+        assert_eq!(res.len(), 2);
+        println!("Result IPs: {res:?}");
     }
 }
