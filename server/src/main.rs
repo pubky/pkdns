@@ -4,7 +4,7 @@ use resolution::DnsSocketBuilder;
 
 use std::{
     error::Error,
-    net::SocketAddr,
+    net::{AddrParseError, SocketAddr},
     num::NonZeroU32,
 };
 
@@ -89,6 +89,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 .required(false)
                 .default_value("25")
                 .help("Short term burst size of the dht-rate-limit. 0 is disabled."),
+        ).arg(
+            clap::Arg::new("doh")
+                .long("doh")
+                .required(false)
+                .help("[EXPERIMENTAL] DNS-over-HTTP socket. Enables doh on a given socket. Example: 127.0.0.1:3000. Default: Disabled."),
         );
 
     let matches = cmd.get_matches();
@@ -127,6 +132,20 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .parse()
         .expect("dht-rate-limit-burst must be a >=0.");
 
+    let doh: Option<SocketAddr> = match matches.get_one("doh") {
+        Some(value) => {
+            let val: &String = value;
+            let socket: Result<SocketAddr, AddrParseError> = val.parse();
+            match socket {
+                Ok(s) => Some(s),
+                Err(e) => panic!("doh socket parse failed. {e} Expected ip:port combination."),
+            }
+        },
+        None => None,
+    };
+        
+    
+
     enable_logging(verbose);
 
     if cache_mb <= 0 {
@@ -134,7 +153,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     }
 
     tracing::info!("Starting pkdns v{VERSION}");
-    tracing::debug!("min_ttl={min_ttl} max_ttl={max_ttl} cache_mb={cache_mb} verbose={verbose} forward={forward} query_rate_limit={query_rate_limit} query_rate_limit_burst={query_rate_limit_burst} dht_rate_limit={dht_rate_limit} dht_rate_limit_burst={dht_rate_limit_burst}");
+    tracing::debug!("min_ttl={min_ttl} max_ttl={max_ttl} cache_mb={cache_mb} verbose={verbose} forward={forward} query_rate_limit={query_rate_limit} query_rate_limit_burst={query_rate_limit_burst} dht_rate_limit={dht_rate_limit} dht_rate_limit_burst={dht_rate_limit_burst} doh={doh:?}");
 
     tracing::info!("Forward ICANN queries to {}", forward);
 
@@ -179,8 +198,11 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     tracing::info!("Listening on {socket}. Waiting for Ctrl-C...");
 
-    let http_addr = "127.0.0.1:3000".parse().unwrap();
-    run_doh_server(http_addr, dns_socket).await;
+    if let Some(http_socket) = doh {
+        run_doh_server(http_socket, dns_socket).await;
+        tracing::info!("[EXPERIMENTAL] DNS-over-HTTP listening on http://{http_socket}/dns-query.");
+    };
+
 
     wait_on_ctrl_c().await;
     println!();

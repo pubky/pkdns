@@ -38,6 +38,19 @@ fn decode_dns_base64_packet(param: &String) -> Result<Vec<u8>, (StatusCode, Stri
 }
 
 
+async fn query_to_response(query: Vec<u8>, dns_socket: &mut DnsSocket) -> Response<Body> {
+    let reply = dns_socket.query_me(&query, None).await;
+
+    let response = Response::builder()
+    .status(StatusCode::OK)
+    .header(header::CONTENT_TYPE, "application/dns-message")
+    .header(header::CONTENT_LENGTH, reply.len())
+    .header(header::CACHE_CONTROL, "max-age=30")
+    .body(Body::from(reply)).unwrap();
+
+    response
+}
+
 async fn dns_query_get(
     headers: HeaderMap, 
     Query(params): Query<HashMap<String, String>>, 
@@ -56,16 +69,7 @@ async fn dns_query_get(
     }
     let packet_bytes = result.unwrap();
     let mut socket = state.socket.clone();
-    let reply = socket.query_me(&packet_bytes, None).await;
-
-    let response = Response::builder()
-    .status(StatusCode::OK)
-    .header(header::CONTENT_TYPE, "application/dns-message")
-    .header(header::CONTENT_LENGTH, reply.len())
-    .header(header::CACHE_CONTROL, "max-age=30")
-    .body(Body::from(reply)).unwrap();
-
-    Ok(response)
+    Ok(query_to_response(packet_bytes, &mut socket).await)
 }
 
 async fn dns_query_post(
@@ -84,15 +88,7 @@ async fn dns_query_post(
 
     let packet_bytes: Vec<u8> = body_result.unwrap().into();
     let mut socket = state.socket.clone();
-    let reply = socket.query_me(&packet_bytes, None).await;
-    let response = Response::builder()
-    .status(StatusCode::OK)
-    .header(header::CONTENT_TYPE, "application/dns-message")
-    .header(header::CONTENT_LENGTH, reply.len())
-    .header(header::CACHE_CONTROL, "max-age=30")
-    .body(Body::from(reply)).unwrap();
-
-    Ok(response)
+    Ok(query_to_response(packet_bytes, &mut socket).await)
 }
 
 pub struct AppState {
@@ -120,7 +116,6 @@ pub async fn run_doh_server(addr: SocketAddr, dns_socket: DnsSocket) {
     tokio::spawn(async move {
         axum::serve(listener, app).await.unwrap();
     });
-    tracing::info!("dns-over-http listening on http://{addr}/dns-query.");
 }
 
 #[cfg(test)]
