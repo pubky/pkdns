@@ -213,7 +213,9 @@ impl DnsSocket {
                 // Fallback to ICANN
                 tracing::trace!("Custom handler rejected the query. {query_name}");
                 match self.forward_to_icann(query, Duration::from_secs(5)).await {
-                    Ok(reply) => reply,
+                    Ok(reply) => {
+                        reply
+                    },
                     Err(e) => {
                         tracing::warn!("Forwarding dns query failed. {e} {query_name}");
                         Self::create_server_fail_reply(query_id)
@@ -232,10 +234,19 @@ impl DnsSocket {
     }
 
     /// Replaces the id of the dns packet.
-    fn replace_packet_id(&self, packet: &mut Vec<u8>, new_id: u16) {
+    fn replace_packet_id(&self, original_packet: &Vec<u8>, new_id: u16) -> Vec<u8> {
+        let mut cloned = original_packet.clone();
         let id_bytes = new_id.to_be_bytes();
-        std::mem::replace(&mut packet[0], id_bytes[0]);
-        std::mem::replace(&mut packet[1], id_bytes[1]);
+        std::mem::replace(&mut cloned[0], id_bytes[0]);
+        std::mem::replace(&mut cloned[1], id_bytes[1]);
+
+        let parsed_packet = Packet::parse(&cloned);
+        if let Err(e) = parsed_packet {
+            tracing::warn!("Failed to parse reply. {e}");
+            return cloned;
+        }
+
+        parsed_packet.unwrap().build_bytes_vec().unwrap()
     }
 
     /// Send dns request to configured forward server
@@ -258,15 +269,16 @@ impl DnsSocket {
             tx,
         };
 
-        let mut query = packet.build_bytes_vec_compressed()?;
-        self.replace_packet_id(&mut query, forward_id);
+        let query = packet.build_bytes_vec_compressed()?;
+        let query = self.replace_packet_id(&query, forward_id);
 
         self.pending.insert(request);
         self.send_to(&query, to).await?;
 
         // Wait on response
-        let mut reply = tokio::time::timeout(timeout, rx).await??;
-        self.replace_packet_id(&mut reply, original_id);
+        let reply = tokio::time::timeout(timeout, rx).await??;
+        let reply = self.replace_packet_id(&reply, original_id);
+
         Ok(reply)
     }
 

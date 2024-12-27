@@ -27,7 +27,6 @@ pub async fn resolve_query<'a>(pkarr_packet: &Packet<'a>, query: &Packet<'a>) ->
     reply.answers = pkarr_reply.answers;
     reply.additional_records = pkarr_reply.additional_records;
     reply.name_servers = pkarr_reply.name_servers;
-    tracing::debug!("Reply with {} answers.", reply.answers.len());
 
     reply.build_bytes_vec_compressed().unwrap()
 }

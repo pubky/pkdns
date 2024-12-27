@@ -25,6 +25,7 @@ thiserror = "1.0.56"
 governor = "0.7.0"
 axum = { version = "0.7.9"}
 axum-extra = { version = "0.9.6", features = ["typed-header"] }
+tower-http = { version = "0.6.2", features = ["cors"] }
 serde = "1.0.216"
 base64 = "0.22.1"
 

@@ -1,9 +1,9 @@
-use axum::{body::Body, extract::{Query, State}, http::{header, HeaderMap, Response, StatusCode}, response::IntoResponse, routing::{get, post}, Router
+use axum::{body::Body, extract::{Query, State}, http::{header, HeaderMap, Method, Response, StatusCode}, response::IntoResponse, routing::{get, post}, Router
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use simple_dns::Packet;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc};
-
+use tower_http::cors::{CorsLayer, Any};
 use crate::resolution::DnsSocket;
 
 /// RFC8484 Dns-over-http wireformat
@@ -57,10 +57,12 @@ async fn dns_query_get(
     let packet_bytes = result.unwrap();
     let mut socket = state.socket.clone();
     let reply = socket.query_me(&packet_bytes, None).await;
+
     let response = Response::builder()
     .status(StatusCode::OK)
     .header(header::CONTENT_TYPE, "application/dns-message")
     .header(header::CONTENT_LENGTH, reply.len())
+    .header(header::CACHE_CONTROL, "max-age=30")
     .body(Body::from(reply)).unwrap();
 
     Ok(response)
@@ -75,7 +77,7 @@ async fn dns_query_post(
         return Err(response);
     }
 
-    let body_result = axum::body::to_bytes(request.into_body(), 1024usize).await;
+    let body_result = axum::body::to_bytes(request.into_body(), 65535usize).await;
     if let Err(e) = body_result {
         return Err((StatusCode::BAD_REQUEST, e.to_string()));
     }
@@ -87,6 +89,7 @@ async fn dns_query_post(
     .status(StatusCode::OK)
     .header(header::CONTENT_TYPE, "application/dns-message")
     .header(header::CONTENT_LENGTH, reply.len())
+    .header(header::CACHE_CONTROL, "max-age=30")
     .body(Body::from(reply)).unwrap();
 
     Ok(response)
@@ -97,9 +100,16 @@ pub struct AppState {
 }
 
 fn create_app(dns_socket: DnsSocket) -> Router {
+
+    let cors = CorsLayer::new()
+    .allow_origin(Any)
+    .allow_methods([Method::GET, Method::POST])
+    .allow_headers(Any);
+
     let app = Router::new()
     .route("/dns-query", get(dns_query_get))
     .route("/dns-query", post(dns_query_post))
+    .layer(cors)
     .with_state(Arc::new(AppState{socket: dns_socket}));
     app
 }
