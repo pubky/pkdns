@@ -5,6 +5,6 @@ $TTL 300
 @    IN	  MX	20	mail2.example.com.   
 
 @    IN    A      127.0.0.1
-sub  IN    A      127.0.0.1
+subv4  IN    A      {external_ipv4}
 
 text  IN   TXT    hero=satoshi

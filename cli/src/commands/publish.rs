@@ -4,14 +4,43 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use anyhow::anyhow;
 use clap::ArgMatches;
 use pkarr::{Keypair, SignedPacket};
 
+use crate::external_ip::{resolve_ipv4, resolve_ipv6};
 use crate::{helpers::construct_pkarr_client, simple_zone::SimpleZone};
 
 const SECRET_KEY_LENGTH: usize = 32;
 
-fn read_zone_file(matches: &ArgMatches, pubkey: &str) -> SimpleZone {
+
+/// Replaces {externl_ipv4} and {external_ipv6} variables in the zone file
+/// with the according ips.
+/// Errors if ips can't be resolved.
+async fn fill_dyndns_variables(zone: &mut String) -> Result<(), anyhow::Error> {
+    if zone.contains("{external_ipv4}") {
+        let ip_result = resolve_ipv4().await;
+        if let Err(e) = ip_result {
+            return Err(anyhow!(e));
+        }
+        let (external_ipv4, _) = ip_result.unwrap();
+        *zone = zone.replace("{external_ipv4}", &external_ipv4.to_string());
+    };
+
+    // TODO: IPv6 not supported by the Zone loader yet.
+    // if zone.contains("{external_ipv6}") {
+    //     let ip_result = resolve_ipv6().await;
+    //     if let Err(e) = ip_result {
+    //         return Err(anyhow!(e));
+    //     }
+    //     let (external_ipv6, provider_name) = ip_result.unwrap();
+    //     *zone = zone.replace("{external_ipv6}", &external_ipv6.to_string());
+    // };
+
+    Ok(())
+}
+
+async fn read_zone_file(matches: &ArgMatches, pubkey: &str) -> SimpleZone {
     let unexpanded_path: &String = matches.get_one("zonefile").unwrap();
     let csv_path_str: String = shellexpand::full(unexpanded_path).expect("Valid shell path.").into();
     let path = Path::new(&csv_path_str);
@@ -22,7 +51,10 @@ fn read_zone_file(matches: &ArgMatches, pubkey: &str) -> SimpleZone {
         eprintln!("Failed to read zone at {csv_path_str}. {e}");
         std::process::exit(1);
     };
-    let zone = zone.unwrap();
+    let mut zone = zone.unwrap();
+    if let Err(e) = fill_dyndns_variables(&mut zone).await {
+        panic!("Failed to fetch external ips. {e}");
+    };
 
     let zone = SimpleZone::read(zone, pubkey);
     if let Err(e) = zone {
@@ -66,7 +98,7 @@ pub async fn cli_publish(matches: &ArgMatches) {
     let keypair = read_seed_file(matches);
     let pubkey = keypair.to_z32();
 
-    let zone = read_zone_file(matches, &pubkey);
+    let zone = read_zone_file(matches, &pubkey).await ;
     println!("{}", zone.packet);
     let packet = zone.packet.parsed();
     let packet = SignedPacket::from_packet(&keypair, &packet);
