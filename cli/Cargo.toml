@@ -13,9 +13,11 @@ thiserror = "1.0.49"
 serde = { version = "1.0.199", features = ["derive"] }
 clap = { version = "4.5.1", features = ["derive"] }
 pkarr = { version = "2.2.1", features = ["dht", "async", "rand"]}
-domain = {version = "0.10.1", features = ["zonefile", "bytes"]}
+domain = {version = "0.10.3", features = ["zonefile", "bytes"]}
 bytes = "1.7.1"
 chrono = "0.4.38"
 shellexpand = "3.1.0"
 zbase32 = "0.1.2"
 ctrlc = "3.4.4"
+reqwest = { version="0.12.10", features = ["json"]}
+rand = {version = "0.8"}

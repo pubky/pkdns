@@ -26,3 +26,6 @@ pkdns supports [RFC8484](https://datatracker.ietf.org/doc/html/rfc8484) with the
 5. Test if everything is working with [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./).
 
 
+## Enable DoH in Your Browser
+
+Most popular browser support DoH. See [here on how to enable your browser](https://support.privadovpn.com/kb/article/848-how-to-enable-doh-on-your-browser/).
