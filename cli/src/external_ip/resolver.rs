@@ -1,12 +1,14 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
+use std::time::Duration;
 
 use rand::thread_rng;
 use rand::seq::SliceRandom;
+use tokio::sync::{mpsc, Mutex};
 
 use super::providers::ProviderResolver;
 use super::providers::{icanhazip, identme, ipifyorg, ipinfoio, myip};
-
-
 
 
 /// Resolves the external IPv4 address randomly from a list of 5 service providers.
