@@ -1,0 +1,5 @@
+services:
+  pkdns:
+    image: "sebu/pkdns:latest"
+    ports: 
+      - "53:53"
