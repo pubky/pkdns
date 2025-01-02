@@ -1,0 +1,39 @@
+# PKDNS configuration file
+# More information on https://github.com/pubky/pkdns/server/sample-config.toml
+
+[general]
+# DNS UDP socket that pkdns is listening on.
+# socket = "0.0.0.0:53"
+
+# DNS server that pkdns is falling back to for regular ICANN queries.
+# forward = "8.8.8.8:53"
+
+# Verbose logging. See https://github.com/pubky/pkdns/blob/master/docs/logging.md
+# verbose = false
+
+# [EXPERIMENTAL] Enables DNS over HTTP on the given socket. Default: Disabled.
+# More info https://github.com/pubky/pkdns/blob/master/docs/dns-over-https.md
+# dns_over_http_socket = 127.0.0.1:3000
+
+[dns]
+# Minimum number of seconds a value is cached for before being refreshed.
+# min_ttl = 60
+
+# Maximum number of seconds before a cached value gets auto-refreshed. Set to 0 to prevent caching.
+# max_ttl = 86400
+
+# Maximum number of queries per second one IP address can make before it is rate limited. 0 is disabled.
+# query_rate_limit = 100
+
+# Short term burst size of the query-rate-limit. 0 is disabled.
+# query_rate_limit_burst = 200
+
+[dht]
+# Maximum size of the pkarr packet cache in megabytes.
+# cache_mb = 100
+
+# Maximum number of queries per second one IP address can make to the DHT before it is rate limited. 0 is disabled.
+# dht_query_rate_limit = 5
+
+# Short term burst size of the dht-rate-limit. 0 is disabled.
+# dht_query_rate_limit_burst = 25
