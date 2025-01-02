@@ -27,20 +27,21 @@ for BUILD in "${builds[@]}"; do
     for ARTIFACT in "${artifcats[@]}"; do
         echo - $ARTIFACT
         cross build --release --package=$ARTIFACT --target=$TARGET
-        if [[ $my_var == *"windows"* ]]; then
+        if [[ $TARGET == *"windows"* ]]; then
             cp target/$TARGET/release/$ARTIFACT.exe $DICT
         else
             cp target/$TARGET/release/$ARTIFACT $DICT
         fi
 
-    done
+    done;
 
     cd target/github-release
     tar -czf $FOLDER.tar.gz $FOLDER
     rm -rf $FOLDER
     cd .. && cd ..
-done
+    echo
+done;
 
-echo
+
 tree target/github-release
 pwd
