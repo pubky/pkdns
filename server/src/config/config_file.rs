@@ -33,10 +33,10 @@ pub struct General {
     pub socket: SocketAddr,
     #[serde(default = "default_forward")]
     pub forward: SocketAddr,
-    #[serde(default = "default_false")]
-    pub verbose: bool,
     #[serde(default = "default_none")]
     pub dns_over_http_socket: Option<SocketAddr>,
+    #[serde(default = "default_false")]
+    pub verbose: bool,
 }
 
 impl Default for General {

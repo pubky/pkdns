@@ -8,12 +8,11 @@
 # DNS server that pkdns is falling back to for regular ICANN queries.
 # forward = "8.8.8.8:53"
 
+# [EXPERIMENTAL] Enables DNS over HTTP on the given socket. Default: Disabled. More info https://github.com/pubky/pkdns/blob/master/docs/dns-over-https.md
+# dns_over_http_socket = 127.0.0.1:3000
+
 # Verbose logging. See https://github.com/pubky/pkdns/blob/master/docs/logging.md
 # verbose = false
-
-# [EXPERIMENTAL] Enables DNS over HTTP on the given socket. Default: Disabled.
-# More info https://github.com/pubky/pkdns/blob/master/docs/dns-over-https.md
-# dns_over_http_socket = 127.0.0.1:3000
 
 [dns]
 # Minimum number of seconds a value is cached for before being refreshed.
