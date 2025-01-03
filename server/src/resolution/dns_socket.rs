@@ -8,7 +8,7 @@ use super::{
     rate_limiter::{RateLimiter, RateLimiterBuilder},
 };
 use simple_dns::{Packet, SimpleDnsError, RCODE};
-use std::hash::{Hash, Hasher};
+use std::{hash::{Hash, Hasher}, num::NonZeroU64};
 use std::num;
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
@@ -53,13 +53,13 @@ impl DnsSocket {
     pub async fn new(
         listening: SocketAddr,
         icann_resolver: SocketAddr,
-        max_queries_per_ip_per_second: Option<NonZeroU32>,
-        max_queries_per_ip_burst: Option<NonZeroU32>,
-        max_dht_queries_per_ip_per_second: Option<NonZeroU32>,
-        max_dht_queries_per_ip_burst: Option<NonZeroU32>,
+        max_queries_per_ip_per_second: u32,
+        max_queries_per_ip_burst: u32,
+        max_dht_queries_per_ip_per_second: u32,
+        max_dht_queries_per_ip_burst: u32,
         min_ttl: u64,
         max_ttl: u64,
-        cache_mb: u64,
+        cache_mb: NonZeroU64,
     ) -> tokio::io::Result<Self> {
         let socket = UdpSocket::bind(listening).await?;
         let limiter = RateLimiterBuilder::new()

@@ -10,7 +10,7 @@ ctrlc = "3.4.2"
 simple-dns = "0.6.0"
 pkarr = { version = "2.2.1", features = ["dht", "async", "rand"]}
 zbase32 = "0.1.2"
-clap = "4.4.18"
+clap = { version = "4.4.18", features = ["derive"] }
 chrono = "0.4.33"
 tokio = { version = "1.36.0", features = ["full"] }
 async-trait = "0.1.77"
@@ -26,11 +26,12 @@ governor = "0.7.0"
 axum = { version = "0.7.9", features = ["tokio"]}
 axum-extra = { version = "0.9.6", features = ["typed-header"] }
 tower-http = { version = "0.6.2", features = ["cors"] }
-serde = "1.0.216"
+serde = {version = "1.0.216", features = ["derive"]}
 base64 = "0.22.1"
+toml = "0.8.19"
+dirs = "5.0.1"
+
 
 [dev-dependencies]
 axum-test = "16.4.1"
 dnsoverhttps = "0.6.0"
-
-
