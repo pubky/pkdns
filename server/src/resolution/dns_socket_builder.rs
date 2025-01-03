@@ -1,6 +1,10 @@
 #![allow(unused)]
 
-use std::{net::SocketAddr, num::{NonZeroI64, NonZeroU32, NonZeroU64}, sync::mpsc::channel};
+use std::{
+    net::SocketAddr,
+    num::{NonZeroI64, NonZeroU32, NonZeroU64},
+    sync::mpsc::channel,
+};
 
 use super::dns_socket::DnsSocket;
 
@@ -24,7 +28,10 @@ pub struct DnsSocketBuilder {
     min_ttl: u64,
 
     /// Maximum size of the pkarr packet cache in megabytes.
-    cache_mb: NonZeroU64,
+    pkarr_cache_mb: NonZeroU64,
+
+    /// Maximum size of the icann response cache in megabytes.
+    icann_cache_mb: NonZeroU64,
 
     /// Maximum number of DHT queries one IP address can make per second. 0 = disabled.
     max_dht_queries_per_ip_per_second: u32,
@@ -42,9 +49,10 @@ impl DnsSocketBuilder {
             max_queries_per_ip_burst_size: 0,
             max_ttl: 60 * 60 * 24, // 1 day
             min_ttl: 60 * 1,
-            cache_mb: NonZeroU64::new(100).unwrap(),
+            pkarr_cache_mb: NonZeroU64::new(100).unwrap(),
             max_dht_queries_per_ip_per_second: 0,
             max_dht_queries_per_ip_burst: 0,
+            icann_cache_mb: NonZeroU64::new(100).unwrap(),
         }
     }
 
@@ -85,8 +93,14 @@ impl DnsSocketBuilder {
     }
 
     /// pkarr cache size
-    pub fn cache_mb(mut self, megabytes: NonZeroU64) -> Self {
-        self.cache_mb = megabytes;
+    pub fn pkarr_cache_mb(mut self, megabytes: NonZeroU64) -> Self {
+        self.pkarr_cache_mb = megabytes;
+        self
+    }
+
+    /// icann cache size
+    pub fn icann_cache_mb(mut self, megabytes: NonZeroU64) -> Self {
+        self.icann_cache_mb = megabytes;
         self
     }
 
@@ -113,7 +127,8 @@ impl DnsSocketBuilder {
             self.max_dht_queries_per_ip_burst,
             self.min_ttl,
             self.max_ttl,
-            self.cache_mb,
+            self.pkarr_cache_mb,
+            self.icann_cache_mb,
         )
         .await
     }

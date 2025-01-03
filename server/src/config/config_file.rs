@@ -74,14 +74,21 @@ fn default_none() -> Option<SocketAddr> {
 pub struct Dns {
     #[serde(default = "default_min_ttl")]
     pub min_ttl: u64,
+
     #[serde(default = "default_max_ttl")]
     pub max_ttl: u64,
+
     #[serde(default = "default_query_rate_limit")]
     pub query_rate_limit: u32,
+
     #[serde(default = "default_query_rate_limit_burst")]
     pub query_rate_limit_burst: u32,
+
     #[serde(default = "default_false")]
     pub disable_any_queries: bool,
+
+    #[serde(default = "default_icann_cache_mb")]
+    pub icann_cache_mb: NonZeroU64,
 }
 
 impl Default for Dns {
@@ -91,7 +98,8 @@ impl Default for Dns {
             max_ttl: default_max_ttl(),
             query_rate_limit: default_query_rate_limit(),
             query_rate_limit_burst: default_query_rate_limit_burst(),
-            disable_any_queries: default_false()
+            disable_any_queries: default_false(),
+            icann_cache_mb: default_icann_cache_mb()
         }
     }
 }
@@ -112,10 +120,14 @@ fn default_query_rate_limit_burst() -> u32 {
     200
 }
 
+fn default_icann_cache_mb() -> NonZeroU64 {
+    NonZeroU64::new(100).unwrap()
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Dht {
     #[serde(default = "default_cache_mb")]
-    pub cache_mb: NonZeroU64,
+    pub dht_cache_mb: NonZeroU64,
     #[serde(default = "default_dht_rate_limit")]
     pub dht_query_rate_limit: u32,
     #[serde(default = "default_dht_rate_limit_burst")]
@@ -137,7 +149,7 @@ fn default_dht_rate_limit_burst() -> u32 {
 impl Default for Dht {
     fn default() -> Self {
         Self {
-            cache_mb: default_cache_mb(),
+            dht_cache_mb: default_cache_mb(),
             dht_query_rate_limit: default_dht_rate_limit(),
             dht_query_rate_limit_burst: default_dht_rate_limit_burst(),
         }
@@ -217,14 +229,3 @@ pub fn expand_tilde(path: &PathBuf) -> PathBuf {
     PathBuf::from(path)
 }
 
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-
-    #[tokio::test]
-    async fn generate_sample_config() {
-        // println!("{}", PkdnsConfig::commented_toml());
-    }
-}

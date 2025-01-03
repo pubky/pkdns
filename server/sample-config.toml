@@ -30,9 +30,12 @@
 # Disables ANY queries by silently dropping them. This is used to protect against DNS amplification attacks.
 # disable_any_queries = false
 
+# ICANN response cache size in megabytes.
+# icann_cache_mb = 100
+
 [dht]
 # Maximum size of the pkarr packet cache in megabytes.
-# cache_mb = 100
+# dht_cache_mb = 100
 
 # Maximum number of queries per second one IP address can make to the DHT before it is rate limited. 0 is disabled.
 # dht_query_rate_limit = 5

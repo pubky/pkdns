@@ -75,7 +75,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let dns_socket = DnsSocketBuilder::new()
         .listen(config.general.socket)
         .icann_resolver(config.general.forward)
-        .cache_mb(config.dht.cache_mb)
+        .pkarr_cache_mb(config.dht.dht_cache_mb)
         .min_ttl(config.dns.min_ttl)
         .max_ttl(config.dns.max_ttl)
         .max_dht_queries_per_ip_per_second(config.dht.dht_query_rate_limit)
