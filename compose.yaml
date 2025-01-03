@@ -1,5 +1,12 @@
 services:
   pkdns:
-    image: "sebu/pkdns:latest"
+    image: "synonymsoft/pkdns:latest"
+    container_name: pkdns
     ports: 
-      - "53:53"
+      - "53:53/udp"
+    restart: unless-stopped
+    command: ["pkdns"]
+    # Uncomment the volumes to persist the pkdns cache and config file on your disk permanently.
+    # Change `/my/pkdns/folder/location` to a path on your machine where you want the data saved in.
+    # volumes:
+    #  - /my/pkdns/folder/location:/root/.pkdns

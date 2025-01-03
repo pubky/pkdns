@@ -6,4 +6,6 @@ COPY ./target/aarch64-unknown-linux-musl/release/pkdns-cli /usr/local/bin
 # Expose regular UDP DNS and DNS-over-HTTP port
 EXPOSE 53 3000
 
-ENTRYPOINT ["pkdns"]
+RUN ls -al ~
+
+CMD ["pkdns"]
