@@ -31,10 +31,13 @@ impl Default for PkdnsConfig {
 pub struct General {
     #[serde(default = "default_socket")]
     pub socket: SocketAddr,
+
     #[serde(default = "default_forward")]
     pub forward: SocketAddr,
+
     #[serde(default = "default_none")]
     pub dns_over_http_socket: Option<SocketAddr>,
+
     #[serde(default = "default_false")]
     pub verbose: bool,
 }
@@ -173,7 +176,12 @@ pub fn read_or_create_config(path: &PathBuf) -> Result<PkdnsConfig, anyhow::Erro
     };
 
     let err = config.unwrap_err();
-    tracing::debug!("Failed to read pkdns config file at {}. {err}", path.display());
+
+    if path.exists() && path.is_file() {
+        tracing::error!("Unable to read configuration file at {}. {err}", path.display());
+        return Err(anyhow!("Failed to read {}. {err}", path.display()))
+    }
+
     tracing::info!("Create a new config file from scratch {}.", path.display());
 
     let config = PkdnsConfig::default();
