@@ -2,6 +2,7 @@
 
 [![GitHub Release](https://img.shields.io/github/v/release/pubky/pkdns)](https://github.com/pubky/pkdns/releases/latest/)
 [![Demo](https://img.shields.io/badge/Demo-7fmjpc-green)](http://pkdns-demo.pubky.app/)
+[![Docker](https://img.shields.io/badge/Image-Docker-red)]([https://t.me/pubkycore](https://hub.docker.com/r/synonymsoft/pkdns))
 [![Telegram Chat Group](https://img.shields.io/badge/Chat-Telegram-violet)](https://t.me/pubkycore)
 
 A DNS server providing self-sovereign and censorship-resistant domain names. It resolves records hosted on the [Mainline DHT](https://en.wikipedia.org/wiki/Mainline_DHT), the biggest DHT on the planet with ~15M nodes that services torrents since 15 years.
