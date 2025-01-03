@@ -1,5 +1,5 @@
 use clap::Parser;
-use config::{read_or_create_config, read_or_create_from_dir};
+use config::{read_or_create_config, read_or_create_from_dir, update_global_config};
 use dns_over_https::run_doh_server;
 use helpers::{enable_logging, set_full_stacktrace_as_default, wait_on_ctrl_c};
 use resolution::DnsSocketBuilder;
@@ -52,6 +52,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if let Some(value) = cli.verbose {
         config.general.verbose = value;
     };
+
+    update_global_config(config.clone());
+
 
     enable_logging(config.general.verbose);
     const VERSION: &str = env!("CARGO_PKG_VERSION");

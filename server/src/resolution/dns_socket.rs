@@ -1,5 +1,5 @@
 #![allow(unused)]
-use crate::resolution::pkd::CustomHandlerError;
+use crate::{config::get_global_config, resolution::pkd::CustomHandlerError};
 
 use super::{
     pending_request::{PendingRequest, PendingRequestStore},
@@ -7,7 +7,7 @@ use super::{
     query_id_manager::QueryIdManager,
     rate_limiter::{RateLimiter, RateLimiterBuilder},
 };
-use simple_dns::{Packet, SimpleDnsError, RCODE};
+use simple_dns::{Packet, SimpleDnsError, QTYPE, RCODE};
 use std::{hash::{Hash, Hasher}, num::NonZeroU64};
 use std::num;
 use std::{
@@ -46,6 +46,7 @@ pub struct DnsSocket {
     icann_fallback: SocketAddr,
     id_manager: QueryIdManager,
     rate_limiter: Arc<RateLimiter>,
+    disable_any_queries: bool
 }
 
 impl DnsSocket {
@@ -66,6 +67,8 @@ impl DnsSocket {
             .max_per_second(max_queries_per_ip_per_second)
             .burst_size(max_queries_per_ip_burst);
 
+        let config = get_global_config();
+        
         let resolver = PkarrResolver::default().await;
         Ok(Self {
             socket: Arc::new(socket),
@@ -74,6 +77,7 @@ impl DnsSocket {
             icann_fallback: icann_resolver,
             id_manager: QueryIdManager::new(),
             rate_limiter: Arc::new(limiter.build()),
+            disable_any_queries: config.dns.disable_any_queries
         })
     }
 
@@ -124,6 +128,18 @@ impl DnsSocket {
         };
 
         // New query
+        if self.disable_any_queries {
+            let includes_any_type_question = packet.questions.iter().map(|q| q.qtype == QTYPE::ANY).reduce(|a,b| a || b);
+            if let Some(includes_any_type_question) = includes_any_type_question {
+                if includes_any_type_question {
+                    tracing::debug!(
+                        "Received ANY type question from {from}. id={packet_id}. Drop."
+                    );
+                    return Ok(());
+                }
+            }
+        }
+
         if self.rate_limiter.check_is_limited_and_increase(from.ip()) {
             tracing::trace!("Rate limited {}. query_id={packet_id}", from.ip());
             let reply = Self::create_refused_reply(packet_id);
@@ -309,6 +325,7 @@ impl DnsSocket {
 
     pub async fn default() -> Result<Self, anyhow::Error> {
         let socket = UdpSocket::bind("0.0.0.0:53").await?;
+        let config = get_global_config();
         Ok(Self {
             socket: Arc::new(socket),
             pending: PendingRequestStore::new(),
@@ -316,6 +333,7 @@ impl DnsSocket {
             icann_fallback: "8.8.8.8:53".parse().unwrap(),
             id_manager: QueryIdManager::new(),
             rate_limiter: Arc::new(RateLimiterBuilder::new().build()),
+            disable_any_queries: config.dns.disable_any_queries
         })
     }
 }
