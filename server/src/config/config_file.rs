@@ -184,7 +184,9 @@ pub fn read_or_create_config(path: &PathBuf) -> Result<PkdnsConfig, anyhow::Erro
 
     tracing::info!("Create a new config file from scratch {}.", path.display());
 
-    let config = PkdnsConfig::default();
+    let mut config = PkdnsConfig::default();
+    // Add default values for Options. They don't appear otherwise in the commented out config.
+    config.general.dns_over_http_socket = Some("127.0.0.1:3000".parse().unwrap());
     let full_config = toml::to_string(&config).expect("Valid toml config.");
     let commented_out: Vec<String> = full_config.split("\n").map(|line| {
         if line.contains("[") {
