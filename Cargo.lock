@@ -2552,7 +2552,7 @@ dependencies = [
 
 [[package]]
 name = "pkdns"
-version = "0.6.0"
+version = "0.7.0-rc.1"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -2583,7 +2583,7 @@ dependencies = [
 
 [[package]]
 name = "pkdns-cli"
-version = "0.6.0"
+version = "0.7.0-rc.1"
 dependencies = [
  "anyhow",
  "bytes 1.9.0",
@@ -4090,7 +4090,7 @@ version = "0.22.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4ae48d6208a266e853d946088ed816055e556cc6028c5e8e2b84d9fa5dd7c7f5"
 dependencies = [
- "indexmap 2.6.0",
+ "indexmap 2.7.0",
  "serde",
  "serde_spanned",
  "toml_datetime",
