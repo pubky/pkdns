@@ -10,7 +10,7 @@ use std::{
 };
 
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PkdnsConfig {
     pub general: General,
     pub dns: Dns,
@@ -27,7 +27,7 @@ impl Default for PkdnsConfig {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct General {
     #[serde(default = "default_socket")]
     pub socket: SocketAddr,
@@ -70,7 +70,7 @@ fn default_none() -> Option<SocketAddr> {
 //     false
 // }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Dns {
     #[serde(default = "default_min_ttl")]
     pub min_ttl: u64,
@@ -80,6 +80,8 @@ pub struct Dns {
     pub query_rate_limit: u32,
     #[serde(default = "default_query_rate_limit_burst")]
     pub query_rate_limit_burst: u32,
+    #[serde(default = "default_false")]
+    pub disable_any_queries: bool,
 }
 
 impl Default for Dns {
@@ -89,6 +91,7 @@ impl Default for Dns {
             max_ttl: default_max_ttl(),
             query_rate_limit: default_query_rate_limit(),
             query_rate_limit_burst: default_query_rate_limit_burst(),
+            disable_any_queries: default_false()
         }
     }
 }
@@ -109,7 +112,7 @@ fn default_query_rate_limit_burst() -> u32 {
     200
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Dht {
     #[serde(default = "default_cache_mb")]
     pub cache_mb: NonZeroU64,
