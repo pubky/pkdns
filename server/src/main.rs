@@ -1,75 +1,60 @@
+use clap::Parser;
 use config::{read_or_create_config, read_or_create_from_dir};
 use dns_over_https::run_doh_server;
 use helpers::{enable_logging, set_full_stacktrace_as_default, wait_on_ctrl_c};
 use resolution::DnsSocketBuilder;
 
-use std::error::Error;
+use std::{error::Error, net::SocketAddr, path::PathBuf};
 
+mod config;
 mod dns_over_https;
 mod helpers;
 mod resolution;
-mod config;
 
+#[derive(Parser, Debug)]
+#[command(
+    version,
+    about = "pkdns - A DNS server for Public Key Domains (PDK) hosted on the Mainline DHT."
+)]
+struct Cli {
+    /// ICANN fallback DNS server. Format: IP:Port. [default: 8.8.8.8:53]
+    #[arg(short, long)]
+    forward: Option<SocketAddr>,
 
+    /// Show verbose output. [default: false]
+    #[arg(short, long, action = clap::ArgAction::SetTrue)]
+    verbose: Option<bool>,
+
+    /// The path to pkdns configuration file. This will override the pkdns-dir config path.
+    #[arg(short, long)]
+    config: Option<PathBuf>,
+
+    /// The base directory that contains pkdns's data, configuration file, etc.
+    #[arg(short, long, default_value = "~/.pkdns")]
+    pkdns_dir: PathBuf,
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn Error>> {
     set_full_stacktrace_as_default();
-    const VERSION: &str = env!("CARGO_PKG_VERSION");
+    let cli = Cli::parse();
 
-    let cmd = clap::Command::new("pkdns")
-        .about("A DNS server for Public Key Domains (PDK).")
-        .version(VERSION)
-        .arg(
-            clap::Arg::new("forward")
-                .short('f')
-                .long("forward")
-                .required(false)
-                .default_value("8.8.8.8:53")
-                .help("ICANN fallback DNS server. IP:Port"),
-        )
-        .arg(
-            clap::Arg::new("verbose")
-                .short('v')
-                .long("verbose")
-                .required(false)
-                .num_args(0)
-                .help("Show verbose output."),
-        ).arg(
-            clap::Arg::new("pkdns-dir")
-                .short('d')
-                .long("pkdnsdir")
-                .required(false)
-                .default_value("~/.pkdns")
-                .help("The base directory that contains pkdns's data, configuration file, etc."),
-        ).arg(
-            clap::Arg::new("config")
-                .short('c')
-                .long("config")
-                .required(false)
-                .help("The path to pkdns configuration file. This will override the pkdnsdir config path."),
-        );
-
-    let matches = cmd.get_matches();
-
-    let pkdns_dir: &String = matches.get_one("pkdns-dir").unwrap();
-    let config_path: Option<&String> = matches.get_one("config");
-    let mut config = match config_path {
-        Some(config_path) => {
-            read_or_create_config(config_path).expect("Failed to read valid config file")
-        },
-        None => {
-            read_or_create_from_dir(&pkdns_dir.as_str()).expect("Failed to read valid config file")
-        },
+    // Read config file
+    let mut config = match cli.config {
+        Some(config_path) => read_or_create_config(&config_path).expect("Failed to read valid config file"),
+        None => read_or_create_from_dir(&cli.pkdns_dir).expect("Failed to read valid config file"),
     };
 
-    config.general.verbose = *matches.get_one("verbose").unwrap();
-    let forward: &String = matches.get_one("forward").unwrap();
-    config.general.forward = forward.parse().expect("forward should be valid IP:Port combination.");
-
+    // Override config args if given by CLI
+    if let Some(value) = cli.forward {
+        config.general.forward = value;
+    };
+    if let Some(value) = cli.verbose {
+        config.general.verbose = value;
+    };
 
     enable_logging(config.general.verbose);
-
+    const VERSION: &str = env!("CARGO_PKG_VERSION");
 
     tracing::info!("Starting pkdns v{VERSION}");
     tracing::debug!("Configuration:\n{}", toml::to_string(&config).unwrap());

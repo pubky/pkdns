@@ -150,7 +150,7 @@ pub fn read_config(path: &Path) -> Result<PkdnsConfig, anyhow::Error> {
 }
 
 /// Read or create a config file at a given path.
-pub fn read_or_create_config(path: &str) -> Result<PkdnsConfig, anyhow::Error> {
+pub fn read_or_create_config(path: &PathBuf) -> Result<PkdnsConfig, anyhow::Error> {
     let path = expand_tilde(path);
     let config = read_config(path.as_path());
     if config.is_ok() {
@@ -184,7 +184,7 @@ pub fn read_or_create_config(path: &str) -> Result<PkdnsConfig, anyhow::Error> {
 }
 
 /// Reads the config from the directory or if it doesn't exist, creates a new config in the directory.
-pub fn read_or_create_from_dir(dir_path: &str) -> Result<PkdnsConfig, anyhow::Error> {
+pub fn read_or_create_from_dir(dir_path: &PathBuf) -> Result<PkdnsConfig, anyhow::Error> {
     let mut path = expand_tilde(dir_path);
     if !path.exists() {
         if let Err(e) = fs::create_dir(path.clone()) {
@@ -199,14 +199,15 @@ pub fn read_or_create_from_dir(dir_path: &str) -> Result<PkdnsConfig, anyhow::Er
     };
     path.push("pkdns.toml");
 
-    read_or_create_config(path.to_str().expect("Valid path string"))
+    read_or_create_config(&path)
 }
 
 /// Expands the ~ to the users home directory
-pub fn expand_tilde(path: &str) -> PathBuf {
-    if path.starts_with("~") {
+pub fn expand_tilde(path: &PathBuf) -> PathBuf {
+    if path.starts_with("~/") {
         if let Some(home) = home_dir() {
-            let joined = home.join(&path[2..]);
+            let without_home = path.strip_prefix("~/").expect("Invalid ~ prefix");
+            let joined = home.join(without_home);
             return joined;
         }
     }
