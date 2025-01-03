@@ -6,10 +6,6 @@
 
 A DNS server providing self-sovereign and censorship-resistant domain names. It resolves records hosted on the [Mainline DHT](https://en.wikipedia.org/wiki/Mainline_DHT), the biggest DHT on the planet with ~15M nodes that services torrents since 15 years.
 
-- [How Censorship-Resistant is Mainline DHT?](https://medium.com/pubky/mainline-dht-censorship-explained-b62763db39cb)
-- [How Censorship-Resistant are Public Key Domains](https://medium.com/pubky/public-key-domains-censorship-resistance-explained-33d0333e6123)
-- [How to publish a Public Key Domain Website?](https://medium.com/pubky/how-to-host-a-public-key-domain-website-v0-6-0-ubuntu-24-04-57e6f2cb6f77)
-
 
 ## Getting Started
 
@@ -38,7 +34,7 @@ Make sure you have the [Rust toolchain](https://rustup.rs/) installed.
 
 1. Clone repository `git clone https://github.com/pubky/pkdns.git`.
 2. Switch directory `cd pkdns`.
-3. Run `cargo run --package=pkdns -- -f 8.8.8.8`.
+3. Run `cargo run --package=pkdns`.
 4. [Verify](#verify-pkdns-is-working) the server is working. Your server ip is `127.0.0.1`.
 6. [Configure](#change-your-system-dns) your system dns.
 7. [Browse](#browse-the-self-sovereign-web) the self-sovereign web.
@@ -93,40 +89,27 @@ Hint: Always add a `./` to the end of a pkarr domain. Otherwise browsers will se
 
 Other services might occupy the port 53 already. For example, [Docker Desktop](https://github.com/docker/for-mac/issues/7008) uses the port 53 on MacOS. [systemd-resolved](https://www.linuxuprising.com/2020/07/ubuntu-how-to-free-up-port-53-used-by.html) is using it on Ubuntu. Make sure to free those.
 
-## Options
+## Configuration
+
+### Options
 
 ```
 Usage: pkdns [OPTIONS]
 
 Options:
-  -f, --forward <forward>
-          ICANN fallback DNS server. IP:Port [default: 8.8.8.8:53]
-  -s, --socket <socket>
-          Socket the server should listen on. IP:Port [default: 0.0.0.0:53]
-  -v, --verbose
-          Show verbose output.
-      --min-ttl <min-ttl>
-          Minimum number of seconds a value is cached for before being refreshed. [default: 60]
-      --max-ttl <max-ttl>
-          Maximum number of seconds before a cached value gets auto-refreshed. [default: 86400]
-      --cache-mb <cache-mb>
-          Maximum size of the pkarr packet cache in megabytes. [default: 100]
-      --query-rate-limit <query-rate-limit>
-          Maximum number of queries per second one IP address can make before it is rate limited. 0 is disabled. [default: 0]
-      --query-rate-limit-burst <query-rate-limit-burst>
-          Short term burst size of the query-rate-limit. 0 is disabled. [default: 0]
-      --dht-rate-limit <dht-rate-limit>
-          Maximum number of queries per second one IP address can make to the DHT before it is rate limited. 0 is disabled. [default: 5]
-      --dht-rate-limit-burst <dht-rate-limit-burst>
-          Short term burst size of the dht-rate-limit. 0 is disabled. [default: 25]
-      --doh <doh>
-          [EXPERIMENTAL] Enables DNS over HTTP on the given socket. Example: 127.0.0.1:3000. Default: Disabled.
-  -h, --help
-          Print help
-  -V, --version
+  -f, --forward <FORWARD>      ICANN fallback DNS server. Format: IP:Port. [default: 8.8.8.8:53]
+  -v, --verbose                Show verbose output. [default: false]
+  -c, --config <CONFIG>        The path to pkdns configuration file. This will override the pkdns-dir config path
+  -p, --pkdns-dir <PKDNS_DIR>  The base directory that contains pkdns's data, configuration file, etc [default: ~/.pkdns]
+  -h, --help                   Print help
+  -V, --version                Print version
 ```
 
 For extended logs, see [here](./docs/logging.md).
+
+### Config File
+
+`~/.pkdns/pkdns.toml` is used for all extended configurations. An example can be found [here](./server/sample-config.toml).
 
 ## Announce Your Own Records
 
@@ -154,7 +137,14 @@ Use the `pkdns-cli` to inspect and announce your pkarr records on the Mainline D
 ```
 
 
-> ⚠️ pkdns caches DHT packets for at least 5 minutes to improve latency. Run your own instance with `pkdns --max-ttl 0` to disable caching.
+> ⚠️ pkdns caches DHT packets for at least 5 minutes to improve latency. Run your own instance with `max-ttl = 0` to disable caching.
+
+## FAQs
+
+
+- [How Censorship-Resistant is Mainline DHT?](https://medium.com/pubky/mainline-dht-censorship-explained-b62763db39cb)
+- [How Censorship-Resistant are Public Key Domains](https://medium.com/pubky/public-key-domains-censorship-resistance-explained-33d0333e6123)
+- [How to publish a Public Key Domain Website?](https://medium.com/pubky/how-to-host-a-public-key-domain-website-v0-6-0-ubuntu-24-04-57e6f2cb6f77)
 
 ## Limitations
 

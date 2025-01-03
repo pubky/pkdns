@@ -47,11 +47,11 @@ pub struct ResolverSettings {
     /// Used to resolve the bootstrap servers
     forward_dns_server: SocketAddr,
 
-    /// Maximum number of DHT queries one IP address can make per second.
-    max_dht_queries_per_ip_per_second: Option<NonZeroU32>,
+    /// Maximum number of DHT queries one IP address can make per second. 0 = disabled.
+    max_dht_queries_per_ip_per_second: u32,
 
-    /// Burst size of the rate limit.
-    max_dht_queries_per_ip_burst: Option<NonZeroU32>,
+    /// Burst size of the rate limit. 0 = disabled
+    max_dht_queries_per_ip_burst: u32,
 }
 
 impl ResolverSettings {
@@ -63,8 +63,8 @@ impl ResolverSettings {
             forward_dns_server: "8.8.8.8:53"
                 .parse()
                 .expect("forward should be valid IP:Port combination."),
-            max_dht_queries_per_ip_per_second: None,
-            max_dht_queries_per_ip_burst: None,
+            max_dht_queries_per_ip_per_second: 0,
+            max_dht_queries_per_ip_burst: 0,
         }
     }
 }
@@ -109,14 +109,14 @@ impl PkarrResolverBuilder {
         self
     }
 
-    /// Rate the number of DHT queries by ip addresses.
-    pub fn max_dht_queries_per_ip_per_second(mut self, limit: Option<NonZeroU32>) -> Self {
+    /// Rate the number of DHT queries by ip addresses. 0 = disabled.
+    pub fn max_dht_queries_per_ip_per_second(mut self, limit: u32) -> Self {
         self.settings.max_dht_queries_per_ip_per_second = limit;
         self
     }
 
-    /// Burst size of the rate limit.
-    pub fn max_dht_queries_per_ip_burst(mut self, burst: Option<NonZeroU32>) -> Self {
+    /// Burst size of the rate limit. 0 = disabled.
+    pub fn max_dht_queries_per_ip_burst(mut self, burst: u32) -> Self {
         self.settings.max_dht_queries_per_ip_burst = burst;
         self
     }

@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use std::{net::SocketAddr, num::NonZeroU32, sync::mpsc::channel};
+use std::{net::SocketAddr, num::{NonZeroI64, NonZeroU32, NonZeroU64}, sync::mpsc::channel};
 
 use super::dns_socket::DnsSocket;
 
@@ -11,11 +11,11 @@ pub struct DnsSocketBuilder {
     /// Listening address and port
     listen: SocketAddr,
 
-    /// Maximum number of dns queries one IP address can make per second.
-    max_queries_per_ip_per_second: Option<NonZeroU32>,
+    /// Maximum number of dns queries one IP address can make per second. 0 = disabled.
+    max_queries_per_ip_per_second: u32,
 
-    /// Burst size
-    max_queries_per_ip_burst_size: Option<NonZeroU32>,
+    /// Burst size. 0 = disabled.
+    max_queries_per_ip_burst_size: u32,
 
     /// Maximum number of seconds before a cached value gets auto-refreshed.
     max_ttl: u64,
@@ -24,13 +24,13 @@ pub struct DnsSocketBuilder {
     min_ttl: u64,
 
     /// Maximum size of the pkarr packet cache in megabytes.
-    cache_mb: u64,
+    cache_mb: NonZeroU64,
 
-    /// Maximum number of DHT queries one IP address can make per second.
-    max_dht_queries_per_ip_per_second: Option<NonZeroU32>,
+    /// Maximum number of DHT queries one IP address can make per second. 0 = disabled.
+    max_dht_queries_per_ip_per_second: u32,
 
-    /// Burst size of the rate limit.
-    max_dht_queries_per_ip_burst: Option<NonZeroU32>,
+    /// Burst size of the rate limit. 0 = disabled.
+    max_dht_queries_per_ip_burst: u32,
 }
 
 impl DnsSocketBuilder {
@@ -38,24 +38,24 @@ impl DnsSocketBuilder {
         Self {
             icann_resolver: SocketAddr::from(([8, 8, 8, 8], 53)),
             listen: SocketAddr::from(([0, 0, 0, 0], 53)),
-            max_queries_per_ip_per_second: None,
-            max_queries_per_ip_burst_size: None,
+            max_queries_per_ip_per_second: 0,
+            max_queries_per_ip_burst_size: 0,
             max_ttl: 60 * 60 * 24, // 1 day
             min_ttl: 60 * 1,
-            cache_mb: 100,
-            max_dht_queries_per_ip_per_second: None,
-            max_dht_queries_per_ip_burst: None,
+            cache_mb: NonZeroU64::new(100).unwrap(),
+            max_dht_queries_per_ip_per_second: 0,
+            max_dht_queries_per_ip_burst: 0,
         }
     }
 
     /// Rate limit the number of queries coming from a single IP address.
-    pub fn max_queries_per_ip_per_second(mut self, limit: Option<NonZeroU32>) -> Self {
+    pub fn max_queries_per_ip_per_second(mut self, limit: u32) -> Self {
         self.max_queries_per_ip_per_second = limit;
         self
     }
 
     /// Rate limit burst size
-    pub fn max_queries_per_ip_burst(mut self, burst_size: Option<NonZeroU32>) -> Self {
+    pub fn max_queries_per_ip_burst(mut self, burst_size: u32) -> Self {
         self.max_queries_per_ip_burst_size = burst_size;
         self
     }
@@ -85,19 +85,19 @@ impl DnsSocketBuilder {
     }
 
     /// pkarr cache size
-    pub fn cache_mb(mut self, megabytes: u64) -> Self {
+    pub fn cache_mb(mut self, megabytes: NonZeroU64) -> Self {
         self.cache_mb = megabytes;
         self
     }
 
     /// Rate the number of DHT queries by ip addresses.
-    pub fn max_dht_queries_per_ip_per_second(mut self, limit: Option<NonZeroU32>) -> Self {
+    pub fn max_dht_queries_per_ip_per_second(mut self, limit: u32) -> Self {
         self.max_dht_queries_per_ip_per_second = limit;
         self
     }
 
     /// Burst size of the rate limit.
-    pub fn max_dht_queries_per_ip_burst(mut self, burst: Option<NonZeroU32>) -> Self {
+    pub fn max_dht_queries_per_ip_burst(mut self, burst: u32) -> Self {
         self.max_dht_queries_per_ip_burst = burst;
         self
     }
