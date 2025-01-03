@@ -5,9 +5,9 @@ use std::{
 };
 
 use anyhow::anyhow;
-use chrono::Utc;
+
 use clap::ArgMatches;
-use pkarr::{Keypair, PkarrClient, PublicKey, SignedPacket};
+use pkarr::{Keypair, SignedPacket};
 
 use crate::external_ip::{resolve_ipv4, resolve_ipv6};
 use crate::{helpers::construct_pkarr_client, simple_zone::SimpleZone};

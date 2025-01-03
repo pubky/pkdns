@@ -39,6 +39,11 @@ Make sure you have the [Rust toolchain](https://rustup.rs/) installed.
 6. [Configure](#change-your-system-dns) your system dns.
 7. [Browse](#browse-the-self-sovereign-web) the self-sovereign web.
 
+
+### Use Docker Compose
+
+See [compose.yaml](./compose.yaml).
+
 ## Guides
 
 ### Change your System DNS
@@ -105,39 +110,10 @@ Options:
   -V, --version                Print version
 ```
 
-For extended logs, see [here](./docs/logging.md).
-
 ### Config File
 
 `~/.pkdns/pkdns.toml` is used for all extended configurations. An example can be found [here](./server/sample-config.toml).
 
-## Announce Your Own Records
-
-Use the `pkdns-cli` to inspect and announce your pkarr records on the Mainline DHT. Download the [latest release](https://github.com/pubky/pkdns/releases/latest/) for your plattform.
-
-> The cli currently only supports `A`, `AAAA`, `TXT`, `CNAME`, `NS`, and `MX` records.
-
-
-**Inspect records by public key** List all records published by a public key.
-
-```bash
-./pkdns-cli resolve 7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy
-```
-
-**Generate seed** Generate a zbase32 seed to publish your own records.
-
-```bash
-./pkdns-cli generate > seed.txt
-```
-
-**Publish your own records** Create a dns zone file and publish its content. See [example](./cli/sample/) for more details.
-
-```bash
-./pkdns-cli publish seed.txt pkarr.zone
-```
-
-
-> ⚠️ pkdns caches DHT packets for at least 5 minutes to improve latency. Run your own instance with `max-ttl = 0` to disable caching.
 
 ## FAQs
 

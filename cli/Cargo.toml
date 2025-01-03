@@ -1,6 +1,6 @@
 [package]
 name = "pkdns-cli"
-version = "0.6.0"
+version = "0.7.0-rc.1"
 authors = ["SeverinAlexB <severin@synonym.to>"]
 edition = "2021"
 
@@ -21,3 +21,7 @@ zbase32 = "0.1.2"
 ctrlc = "3.4.4"
 reqwest = { version="0.12.10", features = ["json"]}
 rand = {version = "0.8"}
+openssl = { version = "0.10", features = ["vendored"] }
+
+[dev-dependencies]
+
