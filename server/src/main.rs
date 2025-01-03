@@ -50,7 +50,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
         config.general.forward = value;
     };
     if let Some(value) = cli.verbose {
-        config.general.verbose = value;
+        if value {
+            config.general.verbose = true
+        }
     };
 
     update_global_config(config.clone());
