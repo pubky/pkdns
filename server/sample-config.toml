@@ -27,6 +27,9 @@
 # Short term burst size of the query-rate-limit. 0 is disabled.
 # query_rate_limit_burst = 200
 
+# Disables ANY queries by silently dropping them. This is used to protect against DNS amplification attacks.
+# disable_any_queries = false
+
 [dht]
 # Maximum size of the pkarr packet cache in megabytes.
 # cache_mb = 100

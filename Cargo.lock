@@ -2568,6 +2568,7 @@ dependencies = [
  "dyn-clone",
  "governor",
  "moka",
+ "once_cell",
  "pkarr",
  "rustdns",
  "serde",
