@@ -1,11 +1,11 @@
 #![allow(unused)]
-use crate::{config::get_global_config, resolution::pkd::CustomHandlerError};
+use crate::{config::get_global_config, resolution::{helpers::replace_packet_id, pkd::CustomHandlerError}};
 
 use super::{
     pending_request::{PendingRequest, PendingRequestStore},
     pkd::PkarrResolver,
     query_id_manager::QueryIdManager,
-    rate_limiter::{RateLimiter, RateLimiterBuilder},
+    rate_limiter::{RateLimiter, RateLimiterBuilder}, response_cache::IcannLruCache,
 };
 use simple_dns::{Packet, SimpleDnsError, QTYPE, RCODE};
 use std::{hash::{Hash, Hasher}, num::NonZeroU64};
@@ -16,7 +16,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use tokio::{net::UdpSocket, sync::oneshot, task::JoinHandle};
+use tokio::{net::UdpSocket, sync::{oneshot, RwLock}, task::JoinHandle};
 use tracing::Level;
 
 /// Any error related to receiving and sending DNS packets on the UDP socket.
@@ -46,7 +46,8 @@ pub struct DnsSocket {
     icann_fallback: SocketAddr,
     id_manager: QueryIdManager,
     rate_limiter: Arc<RateLimiter>,
-    disable_any_queries: bool
+    disable_any_queries: bool,
+    icann_cache: IcannLruCache,
 }
 
 impl DnsSocket {
@@ -60,7 +61,8 @@ impl DnsSocket {
         max_dht_queries_per_ip_burst: u32,
         min_ttl: u64,
         max_ttl: u64,
-        cache_mb: NonZeroU64,
+        pkarr_cache_mb: NonZeroU64,
+        icann_cache_mb: NonZeroU64
     ) -> tokio::io::Result<Self> {
         let socket = UdpSocket::bind(listening).await?;
         let limiter = RateLimiterBuilder::new()
@@ -77,7 +79,8 @@ impl DnsSocket {
             icann_fallback: icann_resolver,
             id_manager: QueryIdManager::new(),
             rate_limiter: Arc::new(limiter.build()),
-            disable_any_queries: config.dns.disable_any_queries
+            disable_any_queries: config.dns.disable_any_queries,
+            icann_cache: IcannLruCache::new(Some(icann_cache_mb.into()), min_ttl, max_ttl)
         })
     }
 
@@ -250,22 +253,6 @@ impl DnsSocket {
         }
     }
 
-    /// Replaces the id of the dns packet.
-    fn replace_packet_id(&self, original_packet: &Vec<u8>, new_id: u16) -> Vec<u8> {
-        let mut cloned = original_packet.clone();
-        let id_bytes = new_id.to_be_bytes();
-        std::mem::replace(&mut cloned[0], id_bytes[0]);
-        std::mem::replace(&mut cloned[1], id_bytes[1]);
-
-        let parsed_packet = Packet::parse(&cloned);
-        if let Err(e) = parsed_packet {
-            tracing::warn!("Failed to parse reply. {e}");
-            return cloned;
-        }
-
-        parsed_packet.unwrap().build_bytes_vec().unwrap()
-    }
-
     /// Send dns request to configured forward server
     pub async fn forward(
         &mut self,
@@ -287,21 +274,36 @@ impl DnsSocket {
         };
 
         let query = packet.build_bytes_vec_compressed()?;
-        let query = self.replace_packet_id(&query, forward_id);
+        let query = replace_packet_id(&query, forward_id)?;
 
         self.pending.insert(request);
         self.send_to(&query, to).await?;
 
         // Wait on response
         let reply = tokio::time::timeout(timeout, rx).await??;
-        let reply = self.replace_packet_id(&reply, original_id);
+        let reply = replace_packet_id(&reply, original_id)?;
 
         Ok(reply)
     }
 
     /// Forward query to icann
     pub async fn forward_to_icann(&mut self, query: &Vec<u8>, timeout: Duration) -> Result<Vec<u8>, DnsSocketError> {
-        self.forward(query, &self.icann_fallback.clone(), timeout).await
+        // Check cache first before forwarding
+        if let Ok(opt_item) = self.icann_cache.get(query).await {
+            if let Some(item) = opt_item {
+                let query_packet = Packet::parse(query)?;
+                let new_response = replace_packet_id(&item.response, query_packet.id())?;
+                return Ok(new_response);
+            };
+        };
+
+        let reply = self.forward(query, &self.icann_fallback.clone(), timeout).await?;
+        // Store response in cache
+        if let Err(e) = self.icann_cache.add(query.clone(), reply.clone()).await {
+            tracing::warn!("Failed to add icann forward reply to cache. {e}");
+        };
+
+        Ok(reply)
     }
 
     // Extracts the id of the query
@@ -333,7 +335,8 @@ impl DnsSocket {
             icann_fallback: "8.8.8.8:53".parse().unwrap(),
             id_manager: QueryIdManager::new(),
             rate_limiter: Arc::new(RateLimiterBuilder::new().build()),
-            disable_any_queries: config.dns.disable_any_queries
+            disable_any_queries: config.dns.disable_any_queries,
+            icann_cache: IcannLruCache::new(None, config.dns.min_ttl, config.dns.max_ttl)
         })
     }
 }
