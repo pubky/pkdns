@@ -135,6 +135,8 @@ pub struct Dht {
     pub dht_query_rate_limit: u32,
     #[serde(default = "default_dht_rate_limit_burst")]
     pub dht_query_rate_limit_burst: u32,
+    #[serde(default = "default_top_level_domain")]
+    pub top_level_domain: Option<String>,
 }
 
 fn default_cache_mb() -> NonZeroU64 {
@@ -149,12 +151,17 @@ fn default_dht_rate_limit_burst() -> u32 {
     25
 }
 
+fn default_top_level_domain() -> Option<String> {
+    Some("pkd".to_string())
+}
+
 impl Default for Dht {
     fn default() -> Self {
         Self {
             dht_cache_mb: default_cache_mb(),
             dht_query_rate_limit: default_dht_rate_limit(),
             dht_query_rate_limit_burst: default_dht_rate_limit_burst(),
+            top_level_domain: default_top_level_domain()
         }
     }
 }

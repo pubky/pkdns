@@ -1,22 +1,33 @@
 #![allow(unused)]
-use crate::{config::get_global_config, resolution::{helpers::replace_packet_id, pkd::CustomHandlerError}};
+use crate::{
+    config::get_global_config,
+    resolution::{helpers::replace_packet_id, pkd::CustomHandlerError},
+};
 
 use super::{
     pending_request::{PendingRequest, PendingRequestStore},
     pkd::PkarrResolver,
     query_id_manager::QueryIdManager,
-    rate_limiter::{RateLimiter, RateLimiterBuilder}, response_cache::IcannLruCache,
+    rate_limiter::{RateLimiter, RateLimiterBuilder},
+    response_cache::IcannLruCache,
 };
 use simple_dns::{Packet, SimpleDnsError, QTYPE, RCODE};
-use std::{hash::{Hash, Hasher}, num::NonZeroU64};
 use std::num;
+use std::{
+    hash::{Hash, Hasher},
+    num::NonZeroU64,
+};
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     num::NonZeroU32,
     sync::Arc,
     time::{Duration, Instant},
 };
-use tokio::{net::UdpSocket, sync::{oneshot, RwLock}, task::JoinHandle};
+use tokio::{
+    net::UdpSocket,
+    sync::{oneshot, RwLock},
+    task::JoinHandle,
+};
 use tracing::Level;
 
 /// Any error related to receiving and sending DNS packets on the UDP socket.
@@ -62,7 +73,7 @@ impl DnsSocket {
         min_ttl: u64,
         max_ttl: u64,
         pkarr_cache_mb: NonZeroU64,
-        icann_cache_mb: NonZeroU64
+        icann_cache_mb: NonZeroU64,
     ) -> tokio::io::Result<Self> {
         let socket = UdpSocket::bind(listening).await?;
         let limiter = RateLimiterBuilder::new()
@@ -70,7 +81,7 @@ impl DnsSocket {
             .burst_size(max_queries_per_ip_burst);
 
         let config = get_global_config();
-        
+
         let resolver = PkarrResolver::default().await;
         Ok(Self {
             socket: Arc::new(socket),
@@ -80,7 +91,7 @@ impl DnsSocket {
             id_manager: QueryIdManager::new(),
             rate_limiter: Arc::new(limiter.build()),
             disable_any_queries: config.dns.disable_any_queries,
-            icann_cache: IcannLruCache::new(Some(icann_cache_mb.into()), min_ttl, max_ttl)
+            icann_cache: IcannLruCache::new(Some(icann_cache_mb.into()), min_ttl, max_ttl),
         })
     }
 
@@ -132,12 +143,14 @@ impl DnsSocket {
 
         // New query
         if self.disable_any_queries {
-            let includes_any_type_question = packet.questions.iter().map(|q| q.qtype == QTYPE::ANY).reduce(|a,b| a || b);
+            let includes_any_type_question = packet
+                .questions
+                .iter()
+                .map(|q| q.qtype == QTYPE::ANY)
+                .reduce(|a, b| a || b);
             if let Some(includes_any_type_question) = includes_any_type_question {
                 if includes_any_type_question {
-                    tracing::debug!(
-                        "Received ANY type question from {from}. id={packet_id}. Drop."
-                    );
+                    tracing::debug!("Received ANY type question from {from}. id={packet_id}. Drop.");
                     return Ok(());
                 }
             }
@@ -213,6 +226,20 @@ impl DnsSocket {
 
     /// Query this DNS for data
     pub async fn query_me(&mut self, query: &Vec<u8>, from: Option<IpAddr>) -> Vec<u8> {
+        let request = Packet::parse(query).expect("Should be valid query. Prevalidated already.");
+        let question = request
+            .questions
+            .first()
+            .expect("No question in query in pkarr_resolver.")
+            .clone();
+
+        tracing::debug!(
+            "New query: {} {:?} id={}",
+            question.qname.to_string(),
+            question.qtype,
+            request.id()
+        );
+
         tracing::trace!("Try to resolve the query with the custom handler.");
         let result = self.pkarr_resolver.resolve(query, from).await;
 
@@ -221,7 +248,7 @@ impl DnsSocket {
             // All good. Handler handled the query
             return result.unwrap();
         }
-        let request = Packet::parse(query).expect("Should be valid query. Prevalidated already.");
+
         let question = request
             .questions
             .first()
@@ -336,7 +363,7 @@ impl DnsSocket {
             id_manager: QueryIdManager::new(),
             rate_limiter: Arc::new(RateLimiterBuilder::new().build()),
             disable_any_queries: config.dns.disable_any_queries,
-            icann_cache: IcannLruCache::new(None, config.dns.min_ttl, config.dns.max_ttl)
+            icann_cache: IcannLruCache::new(None, config.dns.min_ttl, config.dns.max_ttl),
         })
     }
 }
