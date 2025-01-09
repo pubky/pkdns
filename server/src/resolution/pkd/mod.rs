@@ -6,5 +6,9 @@ mod query_matcher;
 mod top_level_domain;
 
 pub use pkarr_resolver::{
-    CustomHandlerError, PkarrResolver, PkarrResolverBuilder, PkarrResolverError, ResolverSettings,
+    CustomHandlerError, PkarrResolver, 
+    // PkarrResolverBuilder, 
+    PkarrResolverError, ResolverSettings,
 };
+
+pub use top_level_domain::TopLevelDomain;

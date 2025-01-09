@@ -6,7 +6,9 @@ use crate::{
 
 use super::{
     pending_request::{PendingRequest, PendingRequestStore},
-    pkd::PkarrResolver,
+    pkd::{PkarrResolver, 
+        // PkarrResolverBuilder
+    },
     query_id_manager::QueryIdManager,
     rate_limiter::{RateLimiter, RateLimiterBuilder},
     response_cache::IcannLruCache,
@@ -82,6 +84,8 @@ impl DnsSocket {
 
         let config = get_global_config();
 
+        // TODO: Respect all the user config
+        // PkarrResolverBuilder::new().cache_mb(pkarr_cache_mb.into()).;
         let resolver = PkarrResolver::default().await;
         Ok(Self {
             socket: Arc::new(socket),

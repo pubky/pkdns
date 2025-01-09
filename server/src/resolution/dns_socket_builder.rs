@@ -6,7 +6,7 @@ use std::{
     sync::mpsc::channel,
 };
 
-use super::dns_socket::DnsSocket;
+use super::{dns_socket::DnsSocket, pkd::TopLevelDomain};
 
 pub struct DnsSocketBuilder {
     /// Forward DNS resolver
@@ -38,6 +38,8 @@ pub struct DnsSocketBuilder {
 
     /// Burst size of the rate limit. 0 = disabled.
     max_dht_queries_per_ip_burst: u32,
+
+    top_level_domain: Option<TopLevelDomain>,
 }
 
 impl DnsSocketBuilder {
@@ -53,6 +55,7 @@ impl DnsSocketBuilder {
             max_dht_queries_per_ip_per_second: 0,
             max_dht_queries_per_ip_burst: 0,
             icann_cache_mb: NonZeroU64::new(100).unwrap(),
+            top_level_domain: None,
         }
     }
 
@@ -113,6 +116,12 @@ impl DnsSocketBuilder {
     /// Burst size of the rate limit.
     pub fn max_dht_queries_per_ip_burst(mut self, burst: u32) -> Self {
         self.max_dht_queries_per_ip_burst = burst;
+        self
+    }
+
+    /// Burst size of the rate limit.
+    pub fn top_level_domain(mut self, label: String) -> Self {
+        self.top_level_domain = Some(TopLevelDomain(label));
         self
     }
 

@@ -67,7 +67,7 @@ impl CacheItem {
         }
     }
 
-    pub fn is_not_found(&self) -> bool {
+    pub fn not_found(&self) -> bool {
         !self.is_found()
     }
 
