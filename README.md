@@ -15,7 +15,7 @@ A DNS server providing self-sovereign and censorship-resistant domain names. It 
 Use one of the [hosted DNS servers](./servers.txt) to try out pkdns quickly.
 
 - [Verify](#verify-pkdns-is-working) the server is working.
-- [Configure](#change-your-system-dns) your system dns.
+- Configure your [browser](#use-dns-over-https-in-your-browser) or [system dns](#change-your-system-dns).
 - [Browse](#browse-the-self-sovereign-web) the self-sovereign web.
 
 
@@ -23,7 +23,7 @@ Use one of the [hosted DNS servers](./servers.txt) to try out pkdns quickly.
 
 1. Download the [latest release](https://github.com/pubky/pkdns/releases/latest/) for your plattform.
 2. Extract the tar file. Should be something like `tar -xvf tarfile.tar.gz`.
-3. Run `pkdns -f 8.8.8.8`.
+3. Run `pkdns --verbose`.
 4. [Verify](#verify-pkdns-is-working) the server is working. Your dns server ip is `127.0.0.1`.
 5. [Configure](#change-your-system-dns) your system dns.
 6. [Browse](#browse-the-self-sovereign-web) the self-sovereign web.
@@ -46,6 +46,14 @@ Make sure you have the [Rust toolchain](https://rustup.rs/) installed.
 See [compose.yaml](./compose.yaml).
 
 ## Guides
+
+### Use DNS-over-HTTPS in your Browser
+
+1. Pick a DNS-over-HTTPS URL from our public [servers.txt](../servers.txt) list.
+2. Configure your browser. See [this guide](https://support.privadovpn.com/kb/article/848-how-to-enable-doh-on-your-browser/).
+
+
+Verify your server with this domain [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./).
 
 ### Change your System DNS
 
@@ -113,15 +121,16 @@ Options:
 
 ### Config File
 
-`~/.pkdns/pkdns.toml` is used for all extended configurations. An example can be found [here](./server/sample-config.toml).
+`~/.pkdns/pkdns.toml` is used for all extended configurations. An example can be found in [sample-config.toml](./server/sample-config.toml).
 
 
 ## FAQs
 
-
 - [How Censorship-Resistant is Mainline DHT?](https://medium.com/pubky/mainline-dht-censorship-explained-b62763db39cb)
 - [How Censorship-Resistant are Public Key Domains](https://medium.com/pubky/public-key-domains-censorship-resistance-explained-33d0333e6123)
 - [How to publish a Public Key Domain Website?](https://medium.com/pubky/how-to-host-a-public-key-domain-website-v0-6-0-ubuntu-24-04-57e6f2cb6f77)
+- [How can I run my own DNS over HTTPS endpoint?](./docs/dns-over-https.md)
+- [How to configure DynDNS?](./docs/dyn-dns.md)
 
 ## Limitations
 
