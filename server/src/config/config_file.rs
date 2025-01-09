@@ -1,7 +1,8 @@
 use anyhow::anyhow;
 use dirs::home_dir;
-
+use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
+use simple_dns::Name;
 use std::{
     fs,
     net::SocketAddr,
@@ -171,6 +172,17 @@ where
         },
         None => None,
     };
+
+    if let Some(label) = &value {
+        let parsed_name = Name::new(&label);
+        if let Err(e) = parsed_name {
+            return Err(e).map_err(D::Error::custom)
+        }
+        let name = parsed_name.unwrap();
+        if name.get_labels().len() != 1 {
+            return Err(anyhow!("TLD can only be one label")).map_err(D::Error::custom)
+        };
+    }
 
     Ok(value)
 }
