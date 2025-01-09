@@ -1,4 +1,8 @@
 # A list of free to use pkdns servers.
 
-37.27.13.182
+34.65.109.99
 66.78.40.76
+
+
+# DNS-over-HTTPS
+https://pkdns.pubky.org/dns-query
