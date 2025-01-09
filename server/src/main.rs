@@ -57,7 +57,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     update_global_config(config.clone());
 
-
     enable_logging(config.general.verbose);
     const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -77,6 +76,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     let dns_socket = DnsSocketBuilder::new()
         .listen(config.general.socket)
         .icann_resolver(config.general.forward)
+        .icann_cache_mb(config.dns.icann_cache_mb)
         .pkarr_cache_mb(config.dht.dht_cache_mb)
         .min_ttl(config.dns.min_ttl)
         .max_ttl(config.dns.max_ttl)
@@ -84,6 +84,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .max_dht_queries_per_ip_burst(config.dht.dht_query_rate_limit_burst)
         .max_queries_per_ip_per_second(config.dns.query_rate_limit)
         .max_queries_per_ip_burst(config.dns.query_rate_limit_burst)
+        .top_level_domain(config.dht.top_level_domain)
         .build()
         .await?;
 

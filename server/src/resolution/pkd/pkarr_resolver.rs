@@ -1,5 +1,8 @@
-use super::{pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply};
+use super::{
+    pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply, top_level_domain::TopLevelDomain,
+};
 use crate::resolution::{DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder};
+use simple_dns::{Name, Question, ResourceRecord};
 use std::{
     collections::HashMap,
     net::{IpAddr, SocketAddr},
@@ -35,23 +38,26 @@ pub enum CustomHandlerError {
 #[derive(Clone, Debug)]
 pub struct ResolverSettings {
     /// Maximum number of seconds before a cached value gets auto-refreshed.
-    max_ttl: u64,
+    pub max_ttl: u64,
 
     /// Minimum number of seconds a value is cached for before being refreshed.
-    min_ttl: u64,
+    pub min_ttl: u64,
 
     /// Maximum size of the pkarr packet cache in megabytes.
-    cache_mb: u64,
+    pub cache_mb: u64,
 
     /// IP:port combination of the dns server regular ICANN queries should be forwarded to.
     /// Used to resolve the bootstrap servers
-    forward_dns_server: SocketAddr,
+    pub forward_dns_server: SocketAddr,
 
     /// Maximum number of DHT queries one IP address can make per second. 0 = disabled.
-    max_dht_queries_per_ip_per_second: u32,
+    pub max_dht_queries_per_ip_per_second: u32,
 
     /// Burst size of the rate limit. 0 = disabled
-    max_dht_queries_per_ip_burst: u32,
+    pub max_dht_queries_per_ip_burst: u32,
+
+    /// Top level domain like `.pkd`.
+    pub top_level_domain: Option<TopLevelDomain>,
 }
 
 impl ResolverSettings {
@@ -65,6 +71,7 @@ impl ResolverSettings {
                 .expect("forward should be valid IP:Port combination."),
             max_dht_queries_per_ip_per_second: 0,
             max_dht_queries_per_ip_burst: 0,
+            top_level_domain: Some(TopLevelDomain("pkd".to_string())),
         }
     }
 }
@@ -76,54 +83,6 @@ pub enum PkarrResolverError {
 
     #[error("Failed to query the DHT with pkarr: {0}")]
     DnsSocket(#[from] DnsSocketError),
-}
-
-pub struct PkarrResolverBuilder {
-    settings: ResolverSettings,
-}
-
-impl PkarrResolverBuilder {
-    pub fn new() -> Self {
-        Self {
-            settings: ResolverSettings::default(),
-        }
-    }
-
-    pub fn forward_server(mut self, socket: SocketAddr) -> Self {
-        self.settings.forward_dns_server = socket;
-        self
-    }
-
-    pub fn max_ttl(mut self, rate_s: u64) -> Self {
-        self.settings.max_ttl = rate_s;
-        self
-    }
-
-    pub fn min_ttl(mut self, rate_s: u64) -> Self {
-        self.settings.min_ttl = rate_s;
-        self
-    }
-
-    pub fn cache_mb(mut self, megabytes: u64) -> Self {
-        self.settings.cache_mb = megabytes;
-        self
-    }
-
-    /// Rate the number of DHT queries by ip addresses. 0 = disabled.
-    pub fn max_dht_queries_per_ip_per_second(mut self, limit: u32) -> Self {
-        self.settings.max_dht_queries_per_ip_per_second = limit;
-        self
-    }
-
-    /// Burst size of the rate limit. 0 = disabled.
-    pub fn max_dht_queries_per_ip_burst(mut self, burst: u32) -> Self {
-        self.settings.max_dht_queries_per_ip_burst = burst;
-        self
-    }
-
-    pub fn build_settings(self) -> ResolverSettings {
-        self.settings
-    }
 }
 
 /**
@@ -164,10 +123,6 @@ impl PkarrResolver {
     #[allow(dead_code)]
     pub async fn default() -> Self {
         Self::new(ResolverSettings::default()).await
-    }
-
-    pub fn builder() -> PkarrResolverBuilder {
-        PkarrResolverBuilder::new()
     }
 
     pub async fn new(settings: ResolverSettings) -> Self {
@@ -257,6 +212,24 @@ impl PkarrResolver {
         Ok(self.cache.add_packet(new_packet).await)
     }
 
+    fn remove_tld_if_necessary(&self, mut query: &mut Packet<'_>) -> bool {
+        if let Some(tld) = &self.settings.top_level_domain {
+            if tld.question_ends_with_pubkey_tld(&query) {
+                tld.remove(query);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    fn add_tld_if_necessary(&self, mut reply: &mut Packet<'_>) -> bool {
+        if let Some(tld) = &self.settings.top_level_domain {
+            tld.add(reply);
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Resolves a domain with pkarr.
      */
@@ -266,33 +239,32 @@ impl PkarrResolver {
         from: Option<IpAddr>,
     ) -> std::prelude::v1::Result<Vec<u8>, CustomHandlerError> {
         // anydns validated the query before.
-        let request = Packet::parse(query).expect("Unparsable query in pkarr_resolver.");
+        let mut request = Packet::parse(&query).expect("Unparsable query in pkarr_resolver.");
+        let mut removed_tld = self.remove_tld_if_necessary(&mut request);
+        if removed_tld {
+            tracing::trace!("Removed tld from question: {:?}", request.questions.first().unwrap());
+        }
+
         let question = request
             .questions
             .first()
-            .expect("No question in query in pkarr_resolver.");
+            .expect("No question in query in pkarr_resolver.")
+            .clone();
         let labels = question.qname.get_labels();
-
-        tracing::debug!(
-            "New query: {} {:?} id={}",
-            question.qname.to_string(),
-            question.qtype,
-            request.id()
-        );
-
-        let tld = labels
+        let mut public_key = labels
             .last()
             .expect("Question labels with no domain in pkarr_resolver")
             .to_string();
-        let parsed_option = parse_pkarr_uri(&tld);
+
+        let parsed_option = parse_pkarr_uri(&public_key);
         if let Err(e) = parsed_option {
             return match e {
                 super::pubkey_parser::PubkeyParserError::InvalidKey(_) => {
-                    tracing::trace!("TLD .{tld} is not a pkarr key. Fallback to ICANN.");
+                    tracing::trace!("TLD .{public_key} is not a pkarr key. Fallback to ICANN.");
                     Err(CustomHandlerError::Unhandled)
                 }
                 super::pubkey_parser::PubkeyParserError::ValidButDifferent => {
-                    tracing::trace!("TLD .{tld} is a pkarr key but its last bits are invalid.");
+                    tracing::trace!("TLD .{public_key} is a pkarr key but its last bits are invalid.");
                     Ok(create_domain_not_found_reply(request.id()))
                 }
             };
@@ -302,14 +274,22 @@ impl PkarrResolver {
 
         match self.resolve_pubkey_respect_cache(&pubkey, from).await {
             Ok(item) => {
-                if item.is_not_found() {
-                    Ok(create_domain_not_found_reply(request.id()))
+                if item.not_found() {
+                    return Ok(create_domain_not_found_reply(request.id()));
+                };
+
+                let signed_packet = item.unwrap();
+                let packet = signed_packet.packet();
+                let reply = resolve_query(packet, &request).await;
+
+                let reply = if removed_tld {
+                    let mut packet = Packet::parse(&reply).unwrap();
+                    self.add_tld_if_necessary(&mut packet);
+                    packet.build_bytes_vec().unwrap()
                 } else {
-                    let signed_packet = item.unwrap();
-                    let packet = signed_packet.packet();
-                    let reply = resolve_query(packet, &request).await;
-                    Ok(reply)
-                }
+                    reply
+                };
+                Ok(reply)
             }
             Err(err) => Err(err),
         }

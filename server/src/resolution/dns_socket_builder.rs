@@ -6,7 +6,7 @@ use std::{
     sync::mpsc::channel,
 };
 
-use super::dns_socket::DnsSocket;
+use super::{dns_socket::DnsSocket, pkd::TopLevelDomain};
 
 pub struct DnsSocketBuilder {
     /// Forward DNS resolver
@@ -31,13 +31,15 @@ pub struct DnsSocketBuilder {
     pkarr_cache_mb: NonZeroU64,
 
     /// Maximum size of the icann response cache in megabytes.
-    icann_cache_mb: NonZeroU64,
+    icann_cache_mb: u64,
 
     /// Maximum number of DHT queries one IP address can make per second. 0 = disabled.
     max_dht_queries_per_ip_per_second: u32,
 
     /// Burst size of the rate limit. 0 = disabled.
     max_dht_queries_per_ip_burst: u32,
+
+    top_level_domain: Option<TopLevelDomain>,
 }
 
 impl DnsSocketBuilder {
@@ -52,7 +54,8 @@ impl DnsSocketBuilder {
             pkarr_cache_mb: NonZeroU64::new(100).unwrap(),
             max_dht_queries_per_ip_per_second: 0,
             max_dht_queries_per_ip_burst: 0,
-            icann_cache_mb: NonZeroU64::new(100).unwrap(),
+            icann_cache_mb: 100,
+            top_level_domain: None,
         }
     }
 
@@ -99,7 +102,7 @@ impl DnsSocketBuilder {
     }
 
     /// icann cache size
-    pub fn icann_cache_mb(mut self, megabytes: NonZeroU64) -> Self {
+    pub fn icann_cache_mb(mut self, megabytes: u64) -> Self {
         self.icann_cache_mb = megabytes;
         self
     }
@@ -116,6 +119,15 @@ impl DnsSocketBuilder {
         self
     }
 
+    /// Burst size of the rate limit.
+    pub fn top_level_domain(mut self, label: Option<String>) -> Self {
+        match label {
+            Some(val) => self.top_level_domain = Some(TopLevelDomain(val)),
+            None => self.top_level_domain = None,
+        };
+        self
+    }
+
     /// Build the server.
     pub async fn build(self) -> tokio::io::Result<DnsSocket> {
         DnsSocket::new(
@@ -129,6 +141,7 @@ impl DnsSocketBuilder {
             self.max_ttl,
             self.pkarr_cache_mb,
             self.icann_cache_mb,
+            self.top_level_domain,
         )
         .await
     }

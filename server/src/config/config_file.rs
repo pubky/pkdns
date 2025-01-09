@@ -1,14 +1,14 @@
 use anyhow::anyhow;
 use dirs::home_dir;
-
-use serde::{Deserialize, Serialize};
+use serde::de::Error;
+use serde::{Deserialize, Deserializer, Serialize};
+use simple_dns::Name;
 use std::{
     fs,
     net::SocketAddr,
     num::NonZeroU64,
     path::{Path, PathBuf},
 };
-
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct PkdnsConfig {
@@ -91,7 +91,7 @@ pub struct Dns {
     pub disable_any_queries: bool,
 
     #[serde(default = "default_icann_cache_mb")]
-    pub icann_cache_mb: NonZeroU64,
+    pub icann_cache_mb: u64,
 }
 
 impl Default for Dns {
@@ -102,7 +102,7 @@ impl Default for Dns {
             query_rate_limit: default_query_rate_limit(),
             query_rate_limit_burst: default_query_rate_limit_burst(),
             disable_any_queries: default_false(),
-            icann_cache_mb: default_icann_cache_mb()
+            icann_cache_mb: default_icann_cache_mb(),
         }
     }
 }
@@ -123,8 +123,8 @@ fn default_query_rate_limit_burst() -> u32 {
     200
 }
 
-fn default_icann_cache_mb() -> NonZeroU64 {
-    NonZeroU64::new(100).unwrap()
+fn default_icann_cache_mb() -> u64 {
+    100
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -135,6 +135,11 @@ pub struct Dht {
     pub dht_query_rate_limit: u32,
     #[serde(default = "default_dht_rate_limit_burst")]
     pub dht_query_rate_limit_burst: u32,
+    #[serde(
+        default = "default_top_level_domain",
+        deserialize_with = "deserialize_top_level_domain"
+    )]
+    pub top_level_domain: Option<String>,
 }
 
 fn default_cache_mb() -> NonZeroU64 {
@@ -149,12 +154,48 @@ fn default_dht_rate_limit_burst() -> u32 {
     25
 }
 
+fn default_top_level_domain() -> Option<String> {
+    Some("pkd".to_string())
+}
+
+/// Consider an empty value "" as None
+fn deserialize_top_level_domain<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // Deserialize the input as an Option<String>
+    let value = match Option::<String>::deserialize(deserializer)? {
+        Some(val) => {
+            if val == "" {
+                None
+            } else {
+                Some(val)
+            }
+        }
+        None => None,
+    };
+
+    if let Some(label) = &value {
+        let parsed_name = Name::new(&label);
+        if let Err(e) = parsed_name {
+            return Err(e).map_err(D::Error::custom);
+        }
+        let name = parsed_name.unwrap();
+        if name.get_labels().len() != 1 {
+            return Err(anyhow!("TLD can only be one label")).map_err(D::Error::custom);
+        };
+    }
+
+    Ok(value)
+}
+
 impl Default for Dht {
     fn default() -> Self {
         Self {
             dht_cache_mb: default_cache_mb(),
             dht_query_rate_limit: default_dht_rate_limit(),
             dht_query_rate_limit_burst: default_dht_rate_limit_burst(),
+            top_level_domain: default_top_level_domain(),
         }
     }
 }
@@ -179,7 +220,7 @@ pub fn read_or_create_config(path: &PathBuf) -> Result<PkdnsConfig, anyhow::Erro
 
     if path.exists() && path.is_file() {
         tracing::error!("Unable to read configuration file at {}. {err}", path.display());
-        return Err(anyhow!("Failed to read {}. {err}", path.display()))
+        return Err(anyhow!("Failed to read {}. {err}", path.display()));
     }
 
     tracing::info!("Create a new config file from scratch {}.", path.display());
@@ -188,18 +229,21 @@ pub fn read_or_create_config(path: &PathBuf) -> Result<PkdnsConfig, anyhow::Erro
     // Add default values for Options. They don't appear otherwise in the commented out config.
     config.general.dns_over_http_socket = Some("127.0.0.1:3000".parse().unwrap());
     let full_config = toml::to_string(&config).expect("Valid toml config.");
-    let commented_out: Vec<String> = full_config.split("\n").map(|line| {
-        if line.contains("[") {
-            // Don't comment out sections.
-            line.to_string()
-        } else if line.is_empty() {
-            // Don't comment out empty lines.
-            line.to_string()
-        } else {
-            // Comment out regular lines
-            format!("# {line}")
-        }
-    }).collect();
+    let commented_out: Vec<String> = full_config
+        .split("\n")
+        .map(|line| {
+            if line.contains("[") {
+                // Don't comment out sections.
+                line.to_string()
+            } else if line.is_empty() {
+                // Don't comment out empty lines.
+                line.to_string()
+            } else {
+                // Comment out regular lines
+                format!("# {line}")
+            }
+        })
+        .collect();
     let commented_out = commented_out.join("\n");
 
     let content =
@@ -213,10 +257,7 @@ pub fn read_or_create_from_dir(dir_path: &PathBuf) -> Result<PkdnsConfig, anyhow
     let mut path = expand_tilde(dir_path);
     if !path.exists() {
         if let Err(e) = fs::create_dir(path.clone()) {
-            return Err(anyhow!(
-                "Failed to create pkdns_dir path {}. {e}",
-                path.display()
-            ));
+            return Err(anyhow!("Failed to create pkdns_dir path {}. {e}", path.display()));
         };
     };
     if !path.is_dir() {
@@ -238,4 +279,3 @@ pub fn expand_tilde(path: &PathBuf) -> PathBuf {
     }
     PathBuf::from(path)
 }
-
