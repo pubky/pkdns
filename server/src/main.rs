@@ -57,7 +57,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     update_global_config(config.clone());
 
-
     enable_logging(config.general.verbose);
     const VERSION: &str = env!("CARGO_PKG_VERSION");
 

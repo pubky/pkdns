@@ -41,7 +41,10 @@ impl TopLevelDomain {
             .to_string();
 
         if question_tld != self.0 {
-            panic!("Question tld {question_tld} does not match the given tld .{}", self.label());
+            panic!(
+                "Question tld {question_tld} does not match the given tld .{}",
+                self.label()
+            );
         }
 
         let second_label = labels.get(labels.len() - 2).expect("Question should have 2 labels");
@@ -259,10 +262,7 @@ mod tests {
             "7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy.pkd"
         );
         let answer2_domain = packet.answers.get(1).unwrap().name.to_string();
-        assert_eq!(
-            answer2_domain,
-            "example.com"
-        );
+        assert_eq!(answer2_domain, "example.com");
     }
 
     #[tokio::test]
@@ -287,9 +287,6 @@ mod tests {
             "test.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy.pkd"
         );
         let answer2_domain = packet.answers.get(1).unwrap().name.to_string();
-        assert_eq!(
-            answer2_domain,
-            "example.com"
-        );
+        assert_eq!(answer2_domain, "example.com");
     }
 }

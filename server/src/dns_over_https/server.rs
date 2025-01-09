@@ -9,7 +9,11 @@ use axum::{
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
 use simple_dns::Packet;
-use std::{collections::HashMap, net::{IpAddr, SocketAddr}, sync::Arc};
+use std::{
+    collections::HashMap,
+    net::{IpAddr, SocketAddr},
+    sync::Arc,
+};
 use tower_http::cors::{Any, CorsLayer};
 
 /// RFC8484 Dns-over-http wireformat
@@ -84,7 +88,7 @@ fn extract_client_ip(request_addr: &SocketAddr, headers: &HeaderMap) -> IpAddr {
         Err(e) => {
             tracing::debug!("Failed to parse the 'x-forwarded-for' header ip address. {e}");
             request_addr.ip()
-        },
+        }
     }
 }
 
@@ -169,16 +173,15 @@ pub async fn run_doh_server(addr: SocketAddr, dns_socket: DnsSocket) {
     let app = create_app(dns_socket);
     let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
     tokio::spawn(async move {
-        axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>()).await.unwrap();
+        axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
+            .await
+            .unwrap();
     });
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::{
-        dns_over_https::server::create_app,
-        resolution::DnsSocket,
-    };
+    use crate::{dns_over_https::server::create_app, resolution::DnsSocket};
     use axum_test::TestServer;
     use simple_dns::{Name, Packet, Question};
 

@@ -6,9 +6,7 @@ use crate::{
 
 use super::{
     pending_request::{PendingRequest, PendingRequestStore},
-    pkd::{PkarrResolver, ResolverSettings, TopLevelDomain, 
-        // PkarrResolverBuilder
-    },
+    pkd::{PkarrResolver, ResolverSettings, TopLevelDomain},
     query_id_manager::QueryIdManager,
     rate_limiter::{RateLimiter, RateLimiterBuilder},
     response_cache::IcannLruCache,
@@ -76,7 +74,7 @@ impl DnsSocket {
         max_ttl: u64,
         pkarr_cache_mb: NonZeroU64,
         icann_cache_mb: u64,
-        top_level_domain: Option<TopLevelDomain>
+        top_level_domain: Option<TopLevelDomain>,
     ) -> tokio::io::Result<Self> {
         let socket = UdpSocket::bind(listening).await?;
         let limiter = RateLimiterBuilder::new()

@@ -141,7 +141,7 @@ impl DnsSocketBuilder {
             self.max_ttl,
             self.pkarr_cache_mb,
             self.icann_cache_mb,
-            self.top_level_domain
+            self.top_level_domain,
         )
         .await
     }

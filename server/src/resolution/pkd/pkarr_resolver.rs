@@ -1,4 +1,6 @@
-use super::{pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply, top_level_domain::TopLevelDomain};
+use super::{
+    pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply, top_level_domain::TopLevelDomain,
+};
 use crate::resolution::{DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder};
 use simple_dns::{Name, Question, ResourceRecord};
 use std::{
@@ -83,54 +85,6 @@ pub enum PkarrResolverError {
     DnsSocket(#[from] DnsSocketError),
 }
 
-// pub struct PkarrResolverBuilder {
-//     settings: ResolverSettings,
-// }
-
-// impl PkarrResolverBuilder {
-//     pub fn new() -> Self {
-//         Self {
-//             settings: ResolverSettings::default(),
-//         }
-//     }
-
-//     pub fn forward_server(mut self, socket: SocketAddr) -> Self {
-//         self.settings.forward_dns_server = socket;
-//         self
-//     }
-
-//     pub fn max_ttl(mut self, rate_s: u64) -> Self {
-//         self.settings.max_ttl = rate_s;
-//         self
-//     }
-
-//     pub fn min_ttl(mut self, rate_s: u64) -> Self {
-//         self.settings.min_ttl = rate_s;
-//         self
-//     }
-
-//     pub fn cache_mb(mut self, megabytes: u64) -> Self {
-//         self.settings.cache_mb = megabytes;
-//         self
-//     }
-
-//     /// Rate the number of DHT queries by ip addresses. 0 = disabled.
-//     pub fn max_dht_queries_per_ip_per_second(mut self, limit: u32) -> Self {
-//         self.settings.max_dht_queries_per_ip_per_second = limit;
-//         self
-//     }
-
-//     /// Burst size of the rate limit. 0 = disabled.
-//     pub fn max_dht_queries_per_ip_burst(mut self, burst: u32) -> Self {
-//         self.settings.max_dht_queries_per_ip_burst = burst;
-//         self
-//     }
-
-//     pub fn build_settings(self) -> ResolverSettings {
-//         self.settings
-//     }
-// }
-
 /**
  * Pkarr resolver with cache.
  */
@@ -170,10 +124,6 @@ impl PkarrResolver {
     pub async fn default() -> Self {
         Self::new(ResolverSettings::default()).await
     }
-
-    // pub fn builder() -> PkarrResolverBuilder {
-    //     PkarrResolverBuilder::new()
-    // }
 
     pub async fn new(settings: ResolverSettings) -> Self {
         let addrs = Self::resolve_bootstrap_nodes(&settings.forward_dns_server);
@@ -262,7 +212,6 @@ impl PkarrResolver {
         Ok(self.cache.add_packet(new_packet).await)
     }
 
-
     fn remove_tld_if_necessary(&self, mut query: &mut Packet<'_>) -> bool {
         if let Some(tld) = &self.settings.top_level_domain {
             if tld.question_ends_with_pubkey_tld(&query) {
@@ -270,7 +219,7 @@ impl PkarrResolver {
                 return true;
             }
         }
-        return false
+        return false;
     }
 
     fn add_tld_if_necessary(&self, mut reply: &mut Packet<'_>) -> bool {
@@ -278,7 +227,7 @@ impl PkarrResolver {
             tld.add(reply);
             return true;
         }
-        return false
+        return false;
     }
 
     /**
@@ -299,7 +248,8 @@ impl PkarrResolver {
         let question = request
             .questions
             .first()
-            .expect("No question in query in pkarr_resolver.").clone();
+            .expect("No question in query in pkarr_resolver.")
+            .clone();
         let labels = question.qname.get_labels();
         let mut public_key = labels
             .last()
@@ -344,7 +294,6 @@ impl PkarrResolver {
             Err(err) => Err(err),
         }
     }
-
 }
 
 #[cfg(test)]
