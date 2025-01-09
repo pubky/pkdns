@@ -49,7 +49,7 @@ See [compose.yaml](./compose.yaml).
 
 ### Use DNS-over-HTTPS in your Browser
 
-1. Pick a DNS-over-HTTPS URL from our public [servers.txt](../servers.txt) list.
+1. Pick a DNS-over-HTTPS URL from our public [servers.txt](./servers.txt) list.
 2. Configure your browser. See [this guide](https://support.privadovpn.com/kb/article/848-how-to-enable-doh-on-your-browser/).
 
 
