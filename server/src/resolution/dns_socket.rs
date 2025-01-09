@@ -6,7 +6,7 @@ use crate::{
 
 use super::{
     pending_request::{PendingRequest, PendingRequestStore},
-    pkd::{PkarrResolver, 
+    pkd::{PkarrResolver, ResolverSettings, TopLevelDomain, 
         // PkarrResolverBuilder
     },
     query_id_manager::QueryIdManager,
@@ -76,6 +76,7 @@ impl DnsSocket {
         max_ttl: u64,
         pkarr_cache_mb: NonZeroU64,
         icann_cache_mb: NonZeroU64,
+        top_level_domain: Option<TopLevelDomain>
     ) -> tokio::io::Result<Self> {
         let socket = UdpSocket::bind(listening).await?;
         let limiter = RateLimiterBuilder::new()
@@ -84,13 +85,20 @@ impl DnsSocket {
 
         let config = get_global_config();
 
-        // TODO: Respect all the user config
-        // PkarrResolverBuilder::new().cache_mb(pkarr_cache_mb.into()).;
-        let resolver = PkarrResolver::default().await;
+        let resolver_settings = ResolverSettings {
+            max_ttl,
+            min_ttl,
+            cache_mb: pkarr_cache_mb.into(),
+            forward_dns_server: icann_resolver.clone(),
+            max_dht_queries_per_ip_per_second,
+            max_dht_queries_per_ip_burst,
+            top_level_domain: top_level_domain,
+        };
+        let pkarr_resolver = PkarrResolver::new(resolver_settings).await;
         Ok(Self {
             socket: Arc::new(socket),
             pending: PendingRequestStore::new(),
-            pkarr_resolver: resolver,
+            pkarr_resolver: pkarr_resolver,
             icann_fallback: icann_resolver,
             id_manager: QueryIdManager::new(),
             rate_limiter: Arc::new(limiter.build()),
