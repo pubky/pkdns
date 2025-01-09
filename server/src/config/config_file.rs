@@ -1,7 +1,7 @@
 use anyhow::anyhow;
 use dirs::home_dir;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use std::{
     fs,
     net::SocketAddr,
@@ -135,7 +135,7 @@ pub struct Dht {
     pub dht_query_rate_limit: u32,
     #[serde(default = "default_dht_rate_limit_burst")]
     pub dht_query_rate_limit_burst: u32,
-    #[serde(default = "default_top_level_domain")]
+    #[serde(default = "default_top_level_domain", deserialize_with = "deserialize_top_level_domain")]
     pub top_level_domain: Option<String>,
 }
 
@@ -153,6 +153,26 @@ fn default_dht_rate_limit_burst() -> u32 {
 
 fn default_top_level_domain() -> Option<String> {
     Some("pkd".to_string())
+}
+
+/// Consider an empty value "" as None
+fn deserialize_top_level_domain<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    // Deserialize the input as an Option<String>
+    let value = match  Option::<String>::deserialize(deserializer)? {
+        Some(val) => {
+            if val == "" {
+                None
+            } else {
+                Some(val)
+            }
+        },
+        None => None,
+    };
+
+    Ok(value)
 }
 
 impl Default for Dht {

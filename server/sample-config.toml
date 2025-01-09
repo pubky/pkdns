@@ -43,5 +43,5 @@
 # Short term burst size of the dht-rate-limit. 0 is disabled.
 # dht_query_rate_limit_burst = 25
 
-# Optional Top Level Domain for public key domains.
+# Optional Top Level Domain for public key domains. Set to "" to disable.
 # top_level_domain = "pkd"
