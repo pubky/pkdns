@@ -31,7 +31,7 @@ pub struct DnsSocketBuilder {
     pkarr_cache_mb: NonZeroU64,
 
     /// Maximum size of the icann response cache in megabytes.
-    icann_cache_mb: NonZeroU64,
+    icann_cache_mb: u64,
 
     /// Maximum number of DHT queries one IP address can make per second. 0 = disabled.
     max_dht_queries_per_ip_per_second: u32,
@@ -54,7 +54,7 @@ impl DnsSocketBuilder {
             pkarr_cache_mb: NonZeroU64::new(100).unwrap(),
             max_dht_queries_per_ip_per_second: 0,
             max_dht_queries_per_ip_burst: 0,
-            icann_cache_mb: NonZeroU64::new(100).unwrap(),
+            icann_cache_mb: 100,
             top_level_domain: None,
         }
     }
@@ -102,7 +102,7 @@ impl DnsSocketBuilder {
     }
 
     /// icann cache size
-    pub fn icann_cache_mb(mut self, megabytes: NonZeroU64) -> Self {
+    pub fn icann_cache_mb(mut self, megabytes: u64) -> Self {
         self.icann_cache_mb = megabytes;
         self
     }

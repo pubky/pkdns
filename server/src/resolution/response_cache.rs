@@ -77,8 +77,7 @@ pub struct IcannLruCache {
 }
 
 impl IcannLruCache {
-    pub fn new(cache_size_mb: Option<u64>, min_ttl: u64, max_ttl: u64) -> Self {
-        let cache_size_mb = cache_size_mb.unwrap_or(100); // 100MB by default
+    pub fn new(cache_size_mb: u64, min_ttl: u64, max_ttl: u64) -> Self {
         IcannLruCache {
             cache: Cache::builder()
                 .weigher(|_key, value: &CacheItem| -> u32 { value.memory_size() as u32 })
@@ -145,7 +144,7 @@ mod tests {
 
     #[tokio::test]
     async fn add_and_get() {
-        let mut cache = IcannLruCache::new(None, 0, 99999);
+        let mut cache = IcannLruCache::new(1, 0, 99999);
         let (query, response ) = example_query_response(60);
         cache.add(query.clone(), response.clone()).await.unwrap();
         
@@ -156,8 +155,18 @@ mod tests {
 
     #[tokio::test]
     async fn outdated_get() {
-        let mut cache = IcannLruCache::new(None, 0, 99999);
+        let mut cache = IcannLruCache::new(1, 0, 99999);
         let (query, response ) = example_query_response(0);
+        cache.add(query.clone(), response.clone()).await.unwrap();
+        
+        let cache_option = cache.get(&query).await.expect("Previously cached item");
+        assert!(cache_option.is_none());
+    }
+
+    #[tokio::test]
+    async fn zero_cache_size() {
+        let mut cache = IcannLruCache::new(0, 0, 99999);
+        let (query, response ) = example_query_response(60);
         cache.add(query.clone(), response.clone()).await.unwrap();
         
         let cache_option = cache.get(&query).await.expect("Previously cached item");

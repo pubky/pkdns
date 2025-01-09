@@ -75,7 +75,7 @@ impl DnsSocket {
         min_ttl: u64,
         max_ttl: u64,
         pkarr_cache_mb: NonZeroU64,
-        icann_cache_mb: NonZeroU64,
+        icann_cache_mb: u64,
         top_level_domain: Option<TopLevelDomain>
     ) -> tokio::io::Result<Self> {
         let socket = UdpSocket::bind(listening).await?;
@@ -103,7 +103,7 @@ impl DnsSocket {
             id_manager: QueryIdManager::new(),
             rate_limiter: Arc::new(limiter.build()),
             disable_any_queries: config.dns.disable_any_queries,
-            icann_cache: IcannLruCache::new(Some(icann_cache_mb.into()), min_ttl, max_ttl),
+            icann_cache: IcannLruCache::new(icann_cache_mb, min_ttl, max_ttl),
         })
     }
 
@@ -375,7 +375,7 @@ impl DnsSocket {
             id_manager: QueryIdManager::new(),
             rate_limiter: Arc::new(RateLimiterBuilder::new().build()),
             disable_any_queries: config.dns.disable_any_queries,
-            icann_cache: IcannLruCache::new(None, config.dns.min_ttl, config.dns.max_ttl),
+            icann_cache: IcannLruCache::new(100, config.dns.min_ttl, config.dns.max_ttl),
         })
     }
 }

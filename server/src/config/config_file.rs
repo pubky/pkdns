@@ -91,7 +91,7 @@ pub struct Dns {
     pub disable_any_queries: bool,
 
     #[serde(default = "default_icann_cache_mb")]
-    pub icann_cache_mb: NonZeroU64,
+    pub icann_cache_mb: u64,
 }
 
 impl Default for Dns {
@@ -123,8 +123,8 @@ fn default_query_rate_limit_burst() -> u32 {
     200
 }
 
-fn default_icann_cache_mb() -> NonZeroU64 {
-    NonZeroU64::new(100).unwrap()
+fn default_icann_cache_mb() -> u64 {
+    100
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
