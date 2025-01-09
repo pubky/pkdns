@@ -17,17 +17,32 @@ use tower_http::cors::{Any, CorsLayer};
 /// The implementation works but could implement the standard more accurately,
 /// especially when it comes to cache-control.
 
+
+/// Error prefix for web browsers so users actually
+/// know what this url is about.
+const ERROR_PREFIX: &str = "
+Hello to pkdns DNS-over-HTTPS!
+https://github.com/pubky/pkdns
+
+Add this DNS url to your browsers to enable self-sovereign Public Key Domains (PKD).
+
+
+
+
+
+dev:";
+
 fn validate_accept_header(headers: &HeaderMap) -> Result<(), (StatusCode, String)> {
     if let None = headers.get("accept") {
-        return Err((StatusCode::BAD_REQUEST, format!("valid accept header required")));
+        return Err((StatusCode::BAD_REQUEST, format!("{ERROR_PREFIX} valid accept header missing")));
     };
     let value = headers.get("accept").unwrap();
     if let Err(e) = value.to_str() {
-        return Err((StatusCode::BAD_REQUEST, format!("valid accept header required. {e}")));
+        return Err((StatusCode::BAD_REQUEST, format!("{ERROR_PREFIX} valid accept header missing. {e}")));
     }
     let value = value.to_str().unwrap();
     if value != "application/dns-message" {
-        return Err((StatusCode::BAD_REQUEST, format!("valid accept header required")));
+        return Err((StatusCode::BAD_REQUEST, format!("{ERROR_PREFIX} valid accept header missing")));
     }
     Ok(())
 }
