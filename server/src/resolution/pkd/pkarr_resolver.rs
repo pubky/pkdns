@@ -235,12 +235,12 @@ impl PkarrResolver {
      */
     pub async fn resolve(
         &mut self,
-        query: &Vec<u8>,
+        query: &Packet<'_>,
         from: Option<IpAddr>,
     ) -> std::prelude::v1::Result<Vec<u8>, CustomHandlerError> {
         // anydns validated the query before.
-        let mut request = Packet::parse(&query).expect("Unparsable query in pkarr_resolver.");
-        let mut removed_tld = self.remove_tld_if_necessary(&mut request);
+        let mut request = query;
+        let mut removed_tld = self.remove_tld_if_necessary(&mut request.clone());
         if removed_tld {
             tracing::trace!("Removed tld from question: {:?}", request.questions.first().unwrap());
         }
@@ -376,7 +376,7 @@ mod tests {
 
         let mut resolver = PkarrResolver::default().await;
         let result = resolver
-            .resolve(&query.build_bytes_vec_compressed().unwrap(), None)
+            .resolve(&query, None)
             .await;
         assert!(result.is_ok());
         let reply_bytes = result.unwrap();
@@ -405,7 +405,7 @@ mod tests {
         query.questions.push(question);
         let mut resolver = PkarrResolver::default().await;
         let result = resolver
-            .resolve(&query.build_bytes_vec_compressed().unwrap(), None)
+            .resolve(&query, None)
             .await;
         assert!(result.is_ok());
         let reply_bytes = result.unwrap();
@@ -431,7 +431,7 @@ mod tests {
         query.questions.push(question);
         let mut resolver = PkarrResolver::default().await;
         let result = resolver
-            .resolve(&query.build_bytes_vec_compressed().unwrap(), None)
+            .resolve(&query, None)
             .await;
         assert!(result.is_err());
         // println!("{}", result.unwrap_err());

@@ -3,6 +3,8 @@ use crate::{
     config::get_global_config,
     resolution::{helpers::replace_packet_id, pkd::CustomHandlerError},
 };
+use rand::Rng;
+use tracing_subscriber::fmt::format;
 
 use super::{
     pending_request::{PendingRequest, PendingRequestStore},
@@ -62,6 +64,16 @@ pub struct DnsSocket {
 }
 
 impl DnsSocket {
+    /// Random local socket addr
+    /// 127.0.0.1:{49152..=65535}
+    /// Used for testing
+    pub fn random_local_socket() -> SocketAddr {
+        let mut rng = rand::thread_rng();
+        let random_port: u32 = rng.gen_range(49152..=65535);
+        let socket_str = format!("127.0.0.1:{random_port}");
+        socket_str.parse().unwrap()
+    }
+
     // Create a new DNS socket
     pub async fn new(
         listening: SocketAddr,
@@ -114,7 +126,9 @@ impl DnsSocket {
     /// Returns the JoinHandle to stop the loop again.
     pub fn start_receive_loop(&self) -> JoinHandle<()> {
         let mut cloned = self.clone();
+        let (tx, rx) = oneshot::channel::<()>();
         let join_handle = tokio::spawn(async move {
+            let mut cancel = rx;
             loop {
                 if let Err(err) = cloned.receive_datagram().await {
                     tracing::error!("Error while trying to receive. {err}");
@@ -132,6 +146,7 @@ impl DnsSocket {
         if data.len() > size {
             data.drain((size + 1)..data.len());
         }
+
         let packet = Packet::parse(&data)?;
         let packet_id = packet.id();
         let pending = self.pending.remove_by_forward_id(&packet_id, &from);
@@ -157,12 +172,11 @@ impl DnsSocket {
                 .questions
                 .iter()
                 .map(|q| q.qtype == QTYPE::ANY)
-                .reduce(|a, b| a || b);
-            if let Some(includes_any_type_question) = includes_any_type_question {
-                if includes_any_type_question {
-                    tracing::debug!("Received ANY type question from {from}. id={packet_id}. Drop.");
-                    return Ok(());
-                }
+                .reduce(|a, b| a || b)
+                .unwrap_or(false);
+            if includes_any_type_question {
+                tracing::debug!("Received ANY type question from {from}. id={packet_id}. Drop.");
+                return Ok(());
             }
         }
 
@@ -178,6 +192,7 @@ impl DnsSocket {
             let start = Instant::now();
             let query_packet = Packet::parse(&data).unwrap();
 
+            // Validate query
             let question = query_packet.questions.first();
             if question.is_none() {
                 tracing::debug!(
@@ -191,11 +206,13 @@ impl DnsSocket {
             let labels = question.qname.get_labels();
             if labels.len() == 0 {
                 tracing::debug!(
-                    "DNS packet question with no domain. Ignore. query_id={}",
+                    "DNS packet question with no qname (domain). Ignore. query_id={}",
                     query_packet.id()
                 );
                 return;
             };
+
+            // Process query
             tracing::trace!(
                 "Received new query {} {:?}. query_id={}",
                 question.qname,
@@ -230,13 +247,17 @@ impl DnsSocket {
 
     // New query received.
     async fn on_query(&mut self, query: &Vec<u8>, from: &SocketAddr) -> Result<usize, std::io::Error> {
-        let reply = self.query_me(query, Some(from.ip())).await;
+        let reply = self.query_me_once(&query, Some(from.ip())).await;
         self.send_to(&reply, from).await
     }
 
+    pub async fn query_me_recursively(&mut self, raw_query: &Vec<u8>, from: Option<IpAddr>) -> Vec<u8> {
+        vec![]
+    }
+
     /// Query this DNS for data
-    pub async fn query_me(&mut self, query: &Vec<u8>, from: Option<IpAddr>) -> Vec<u8> {
-        let request = Packet::parse(query).expect("Should be valid query. Prevalidated already.");
+    pub async fn query_me_once(&mut self, raw_query: &Vec<u8>, from: Option<IpAddr>) -> Vec<u8> {
+        let request = Packet::parse(&raw_query).unwrap();
         let question = request
             .questions
             .first()
@@ -251,7 +272,7 @@ impl DnsSocket {
         );
 
         tracing::trace!("Try to resolve the query with the custom handler.");
-        let result = self.pkarr_resolver.resolve(query, from).await;
+        let result = self.pkarr_resolver.resolve(&request, from).await;
 
         if result.is_ok() {
             tracing::trace!("Custom handler resolved the query.");
@@ -271,7 +292,7 @@ impl DnsSocket {
             CustomHandlerError::Unhandled => {
                 // Fallback to ICANN
                 tracing::trace!("Custom handler rejected the query. {query_name}");
-                match self.forward_to_icann(query, Duration::from_secs(5)).await {
+                match self.forward_to_icann(&raw_query, Duration::from_secs(5)).await {
                     Ok(reply) => reply,
                     Err(e) => {
                         tracing::warn!("Forwarding dns query failed. {e} {query_name}");
@@ -382,7 +403,7 @@ impl DnsSocket {
 mod tests {
     use crate::resolution::pkd::PkarrResolver;
     use simple_dns::{Name, Packet, PacketFlag, Question, RCODE};
-    use std::{net::SocketAddr, time::Duration};
+    use std::{net::SocketAddr, num::NonZeroU64, time::Duration};
 
     use super::DnsSocket;
 
@@ -405,5 +426,29 @@ mod tests {
         let result = socket.forward(&query, &to, Duration::from_secs(5)).await.unwrap();
         let reply = Packet::parse(&result).unwrap();
         dbg!(reply);
+    }
+
+    #[tokio::test]
+    async fn recursion_cname() {
+        let listening: SocketAddr = DnsSocket::random_local_socket();
+        let icann_resolver: SocketAddr = "8.8.8.8:53".parse().unwrap();
+
+        let mut socket = DnsSocket::new(listening, icann_resolver, 999, 999, 999, 999, 0, 0, NonZeroU64::new(1).unwrap(), 1, None).await.unwrap();
+        let join_handle = socket.start_receive_loop().await;
+
+        let mut query = Packet::new_query(0);
+        let qname = Name::new("cname.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy").unwrap();
+        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
+        let qclass = simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN);
+        let question = Question::new(qname, qtype, qclass, false);
+        query.questions = vec![question];
+
+        let raw_query = query.build_bytes_vec_compressed().unwrap();
+        let to: SocketAddr = "8.8.8.8:53".parse().unwrap();
+        let result = socket.query_me_recursively(&raw_query, None).await;
+        let reply = Packet::parse(&result).unwrap();
+        dbg!(reply);
+        let handle = join_handle.unwrap();
+
     }
 }

@@ -2545,6 +2545,7 @@ dependencies = [
  "moka",
  "once_cell",
  "pkarr",
+ "rand 0.8.5",
  "rustdns",
  "serde",
  "simple-dns",
