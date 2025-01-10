@@ -71,7 +71,7 @@ impl ResolverSettings {
                 .expect("forward should be valid IP:Port combination."),
             max_dht_queries_per_ip_per_second: 0,
             max_dht_queries_per_ip_burst: 0,
-            top_level_domain: Some(TopLevelDomain("pkd".to_string())),
+            top_level_domain: Some(TopLevelDomain("key".to_string())),
         }
     }
 }
