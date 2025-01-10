@@ -155,7 +155,7 @@ fn default_dht_rate_limit_burst() -> u32 {
 }
 
 fn default_top_level_domain() -> Option<String> {
-    Some("pkd".to_string())
+    Some("key".to_string())
 }
 
 /// Consider an empty value "" as None

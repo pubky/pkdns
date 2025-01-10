@@ -44,4 +44,4 @@
 # dht_query_rate_limit_burst = 25
 
 # Optional Top Level Domain for public key domains. Set to "" to disable.
-# top_level_domain = "pkd"
+# top_level_domain = "key"
