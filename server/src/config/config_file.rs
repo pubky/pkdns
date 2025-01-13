@@ -2,7 +2,7 @@ use anyhow::anyhow;
 use dirs::home_dir;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
-use simple_dns::Name;
+use pkarr::dns::Name;
 use std::{
     fs,
     net::SocketAddr,

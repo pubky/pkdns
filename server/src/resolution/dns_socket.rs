@@ -13,7 +13,7 @@ use super::{
     rate_limiter::{RateLimiter, RateLimiterBuilder},
     response_cache::IcannLruCache,
 };
-use simple_dns::{Packet, PacketFlag, SimpleDnsError, QTYPE, RCODE};
+use pkarr::dns::{Packet, PacketFlag, SimpleDnsError, QTYPE, RCODE};
 use std::num;
 use std::{
     hash::{Hash, Hasher},
@@ -119,6 +119,10 @@ impl DnsSocket {
             max_recursion_depth,
         })
     }
+
+    fn is_recursion_available(&self) -> bool {
+        self.max_recursion_depth >= 1
+   }
 
     // Send message to address
     pub async fn send_to(&self, buffer: &[u8], target: &SocketAddr) -> tokio::io::Result<usize> {
@@ -264,11 +268,25 @@ impl DnsSocket {
 
     pub async fn query_me_recursively(&mut self, raw_query: &Vec<u8>, from: Option<IpAddr>) -> Vec<u8> {
         // Based on https://datatracker.ietf.org/doc/html/rfc1034#section-4.3.2
-        let mut main_reply = Packet::parse(&raw_query).unwrap().into_reply();
-        if self.max_recursion_depth <= 1 {
-            main_reply.remove_flags(PacketFlag::RECURSION_AVAILABLE);
-        } else {
+        let main_query = Packet::parse(&raw_query).unwrap();
+        let question = main_query
+            .questions
+            .first()
+            .expect("No question in query in pkarr_resolver.")
+            .clone();
+
+        tracing::debug!(
+            "New query: {} {:?} id={}",
+            question.qname.to_string(),
+            question.qtype,
+            main_query.id()
+        );
+
+        let mut main_reply = main_query.clone().into_reply();
+        if self.is_recursion_available() {
             main_reply.set_flags(PacketFlag::RECURSION_AVAILABLE);
+        } else {
+            main_reply.remove_flags(PacketFlag::RECURSION_AVAILABLE);
         }
         let mut next_raw_query = raw_query.clone();
         for i in 0..self.max_recursion_depth {
@@ -276,7 +294,7 @@ impl DnsSocket {
             let mut parsed_query = Packet::parse(&current_raw_query).expect("Valid query");
             let question = parsed_query.questions.first().unwrap().clone().into_owned();
             tracing::trace!("Recursive lookup {i}/{} - {question:?}", self.max_recursion_depth);
-            let reply = self.query_me_once(&current_raw_query, from.clone()).await;
+            let reply = self.query_me_once(&parsed_query, from.clone()).await;
             let parsed_reply = Packet::parse(&reply).expect("Reply must be a valid dns packet.");
 
             if !parsed_query.has_flags(PacketFlag::RECURSION_DESIRED) {
@@ -299,7 +317,7 @@ impl DnsSocket {
                 return main_reply.build_bytes_vec().unwrap();
             }
 
-            let matching_answers_names: Vec<&simple_dns::ResourceRecord<'_>> = parsed_reply
+            let matching_answers_names: Vec<&pkarr::dns::ResourceRecord<'_>> = parsed_reply
                 .answers
                 .iter()
                 .filter(|answer| answer.name == question.qname)
@@ -307,7 +325,7 @@ impl DnsSocket {
 
             if matching_answers_names.len() == 0 {
                 // No direct answer matches
-                let ns_matches: Vec<&simple_dns::ResourceRecord<'_>> = parsed_reply
+                let ns_matches: Vec<&pkarr::dns::ResourceRecord<'_>> = parsed_reply
                     .name_servers
                     .iter()
                     .filter(|rr| question.qname.is_subdomain_of(&rr.name))
@@ -319,7 +337,7 @@ impl DnsSocket {
                     }
                     return main_reply.build_bytes_vec().unwrap();
                 }
-                // NS match
+                // NS match, Not implemented yet. Disable recursion and return
                 tracing::trace!("NS matches. To be implemented. {parsed_reply:?}");
                 main_reply.remove_flags(PacketFlag::RECURSION_AVAILABLE);
                 for ns in parsed_reply.name_servers {
@@ -332,7 +350,7 @@ impl DnsSocket {
             };
 
             // We got 1+ matching answer
-            let matching_answers_names_and_qtype: Vec<&simple_dns::ResourceRecord<'_>> = matching_answers_names
+            let matching_answers_names_and_qtype: Vec<&pkarr::dns::ResourceRecord<'_>> = matching_answers_names
                 .clone()
                 .into_iter()
                 .filter(|answer| answer.match_qtype(question.qtype))
@@ -357,12 +375,12 @@ impl DnsSocket {
             let matching_cname = matching_answers_names
                 .clone()
                 .into_iter()
-                .find(|answer| answer.match_qtype(QTYPE::TYPE(simple_dns::TYPE::CNAME)));
+                .find(|answer| answer.match_qtype(QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
 
             if let Some(rr) = matching_cname {
                 // Matching CNAME
                 tracing::trace!("Recursion: Matching CNAME {rr:?}");
-                if let simple_dns::rdata::RData::CNAME(val) = &rr.rdata {
+                if let pkarr::dns::rdata::RData::CNAME(val) = &rr.rdata {
                     // Clone CNAME answer to main reply.
                     main_reply.answers.push(rr.clone().into_owned());
                     // Replace question with the content of the cname
@@ -386,23 +404,9 @@ impl DnsSocket {
     }
 
     /// Query this DNS for data once without recursion
-    pub async fn query_me_once(&mut self, raw_query: &Vec<u8>, from: Option<IpAddr>) -> Vec<u8> {
-        let request = Packet::parse(&raw_query).unwrap();
-        let question = request
-            .questions
-            .first()
-            .expect("No question in query in pkarr_resolver.")
-            .clone();
-
-        tracing::debug!(
-            "New query: {} {:?} id={}",
-            question.qname.to_string(),
-            question.qtype,
-            request.id()
-        );
-
-        tracing::trace!("Try to resolve the query with the custom handler.");
-        let result = self.pkarr_resolver.resolve(&request, from).await;
+    pub async fn query_me_once(&mut self, query: &Packet<'_>, from: Option<IpAddr>) -> Vec<u8> {
+        tracing::trace!("Trying to resolve the query with the custom handler.");
+        let result = self.pkarr_resolver.resolve(&query, from).await;
 
         if result.is_ok() {
             tracing::trace!("Custom handler resolved the query.");
@@ -410,11 +414,11 @@ impl DnsSocket {
             return result.unwrap();
         }
 
-        let question = request
+        let question = query
             .questions
             .first()
             .expect("Should be valid query. Prevalidated already.");
-        let query_id = request.id();
+        let query_id = query.id();
 
         let query_name = format!("{} {:?} query_id={query_id}", question.qname, question.qtype);
 
@@ -422,6 +426,7 @@ impl DnsSocket {
             CustomHandlerError::Unhandled => {
                 // Fallback to ICANN
                 tracing::trace!("Custom handler rejected the query. {query_name}");
+                let raw_query = query.build_bytes_vec().unwrap();
                 match self.forward_to_icann(&raw_query, Duration::from_secs(5)).await {
                     Ok(reply) => reply,
                     Err(e) => {
@@ -534,7 +539,7 @@ impl DnsSocket {
 mod tests {
     use crate::resolution::pkd::PkarrResolver;
     use pkarr::{Keypair, PkarrClient, SignedPacket};
-    use simple_dns::{rdata::{A, CNAME}, Name, Packet, PacketFlag, Question, ResourceRecord, RCODE};
+    use pkarr::dns::{rdata::{A, CNAME}, Name, Packet, PacketFlag, Question, ResourceRecord, RCODE};
     use std::{net::{Ipv4Addr, SocketAddr}, num::NonZeroU64, time::Duration};
     use tracing_test::traced_test;
 
@@ -552,45 +557,45 @@ mod tests {
         let mut reply = Packet::new_reply(0);
         let cname_icann = ResourceRecord::new(
             Name::new("cname-icann").unwrap(),
-            simple_dns::CLASS::IN,
+            pkarr::dns::CLASS::IN,
             300,
-            simple_dns::rdata::RData::CNAME(CNAME(
+            pkarr::dns::rdata::RData::CNAME(CNAME(
                 Name::new("example.com").unwrap().into_owned()
             )),
         );
         reply.answers.push(cname_icann);
         let cname_pkd = ResourceRecord::new(
             Name::new("cname-pkd").unwrap(),
-            simple_dns::CLASS::IN,
+            pkarr::dns::CLASS::IN,
             300,
-            simple_dns::rdata::RData::CNAME(CNAME(
+            pkarr::dns::rdata::RData::CNAME(CNAME(
                 Name::new("csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap().into_owned()
             )),
         );
         reply.answers.push(cname_pkd);
         let cname_infinte = ResourceRecord::new(
             Name::new("cname-infinite").unwrap(),
-            simple_dns::CLASS::IN,
+            pkarr::dns::CLASS::IN,
             300,
-            simple_dns::rdata::RData::CNAME(CNAME(
+            pkarr::dns::rdata::RData::CNAME(CNAME(
                 Name::new("cname-infinite.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap().into_owned()
             )),
         );
         reply.answers.push(cname_infinte);
         let cname_pkd2 = ResourceRecord::new(
             Name::new("cname-pkd2").unwrap(),
-            simple_dns::CLASS::IN,
+            pkarr::dns::CLASS::IN,
             300,
-            simple_dns::rdata::RData::CNAME(CNAME(
+            pkarr::dns::rdata::RData::CNAME(CNAME(
                 Name::new("cname-pkd.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap().into_owned()
             )),
         );
         reply.answers.push(cname_pkd2);
         let a = ResourceRecord::new(
             Name::new("").unwrap(),
-            simple_dns::CLASS::IN,
+            pkarr::dns::CLASS::IN,
             300,
-            simple_dns::rdata::RData::A(A{
+            pkarr::dns::rdata::RData::A(A{
                 address: Ipv4Addr::new(127, 0, 0, 1).to_bits()
             }),
         );
@@ -609,8 +614,8 @@ mod tests {
 
         let mut query = Packet::new_query(0);
         let qname = Name::new("google.ch").unwrap();
-        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
-        let qclass = simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN);
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
         let question = Question::new(qname, qtype, qclass, false);
         query.questions = vec![question];
 
@@ -655,8 +660,8 @@ mod tests {
 
         let mut query = Packet::new_query(0);
         let qname = Name::new("cname-icann.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
-        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
-        let qclass = simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN);
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
         let question = Question::new(qname, qtype, qclass, false);
         query.questions = vec![question];
         query.set_flags(PacketFlag::RECURSION_DESIRED);
@@ -666,9 +671,9 @@ mod tests {
         let reply = Packet::parse(&raw_reply).unwrap();
         assert_eq!(reply.answers.len(), 2);
         let cname = reply.answers.get(0).unwrap();
-        assert!(cname.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::CNAME)));
+        assert!(cname.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
         let a = reply.answers.get(1).unwrap().clone().into_owned();;
-        assert!(a.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::A)));
+        assert!(a.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A)));
     }
 
     #[tokio::test]
@@ -677,8 +682,8 @@ mod tests {
         publish_cname_domain().await;
         let mut query = Packet::new_query(0);
         let qname = Name::new("cname-pkd.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
-        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
-        let qclass = simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN);
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
         let question = Question::new(qname, qtype, qclass, false);
         query.questions = vec![question];
         query.set_flags(PacketFlag::RECURSION_DESIRED);
@@ -689,9 +694,9 @@ mod tests {
         dbg!(&reply);
         assert_eq!(reply.answers.len(), 2);
         let cname = reply.answers.get(0).unwrap();
-        assert!(cname.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::CNAME)));
+        assert!(cname.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
         let a = reply.answers.get(1).unwrap().clone().into_owned();;
-        assert!(a.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::A)));
+        assert!(a.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A)));
     }
 
     #[tokio::test]
@@ -701,8 +706,8 @@ mod tests {
 
         let mut query = Packet::new_query(0);
         let qname = Name::new("cname-pkd2.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
-        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
-        let qclass = simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN);
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
         let question = Question::new(qname, qtype, qclass, false);
         query.questions = vec![question];
         query.set_flags(PacketFlag::RECURSION_DESIRED);
@@ -712,11 +717,11 @@ mod tests {
         let reply = Packet::parse(&raw_reply).unwrap();
         assert_eq!(reply.answers.len(), 3);
         let cname1 = reply.answers.get(0).unwrap();
-        assert!(cname1.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::CNAME)));
+        assert!(cname1.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
         let cname2 = reply.answers.get(1).unwrap();
-        assert!(cname2.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::CNAME)));
+        assert!(cname2.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
         let a = reply.answers.get(2).unwrap().clone().into_owned();;
-        assert!(a.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::A)));
+        assert!(a.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A)));
     }
 
     #[tokio::test]
@@ -727,8 +732,8 @@ mod tests {
 
         let mut query = Packet::new_query(0);
         let qname = Name::new("cname-infinite.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
-        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
-        let qclass = simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN);
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
         let question = Question::new(qname, qtype, qclass, false);
         query.questions = vec![question];
         query.set_flags(PacketFlag::RECURSION_DESIRED);
@@ -746,8 +751,8 @@ mod tests {
 
         let mut query = Packet::new_query(0);
         let qname = Name::new("osjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
-        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
-        let qclass = simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN);
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
         let question = Question::new(qname, qtype, qclass, false);
         query.questions = vec![question];
         query.set_flags(PacketFlag::RECURSION_DESIRED);
@@ -765,8 +770,8 @@ mod tests {
 
         let mut query = Packet::new_query(0);
         let qname = Name::new("yolo.example.com").unwrap();
-        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
-        let qclass = simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN);
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
         let question = Question::new(qname, qtype, qclass, false);
         query.questions = vec![question];
         query.set_flags(PacketFlag::RECURSION_DESIRED);

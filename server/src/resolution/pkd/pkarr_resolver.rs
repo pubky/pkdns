@@ -2,7 +2,7 @@ use super::{
     pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply, top_level_domain::TopLevelDomain,
 };
 use crate::resolution::{DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder};
-use simple_dns::{Name, Question, ResourceRecord};
+use pkarr::dns::{Name, Question, ResourceRecord};
 use std::{
     collections::HashMap,
     net::{IpAddr, SocketAddr},
@@ -304,7 +304,7 @@ mod tests {
         Keypair, Settings, SignedPacket,
     };
 
-    // use simple_dns::{Name, Question, Packet};
+    // use pkarr::dns::{Name, Question, Packet};
     use super::*;
     use std::net::Ipv4Addr;
     use zbase32;
@@ -484,9 +484,9 @@ mod tests {
         let data = Name::new(&data).unwrap();
         let answer3 = ResourceRecord::new(
             name.clone(),
-            simple_dns::CLASS::IN,
+            pkarr::dns::CLASS::IN,
             100,
-            simple_dns::rdata::RData::CNAME(simple_dns::rdata::CNAME(data)),
+            pkarr::dns::rdata::RData::CNAME(pkarr::dns::rdata::CNAME(data)),
         );
         packet.answers.push(answer3);
 

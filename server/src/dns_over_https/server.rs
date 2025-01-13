@@ -8,7 +8,7 @@ use axum::{
     Router,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use simple_dns::Packet;
+use pkarr::dns::Packet;
 use std::{
     collections::HashMap,
     net::{IpAddr, SocketAddr},
@@ -198,7 +198,7 @@ pub async fn run_doh_server(addr: SocketAddr, dns_socket: DnsSocket) {
 mod tests {
     use crate::{dns_over_https::server::create_app, resolution::DnsSocket};
     use axum_test::TestServer;
-    use simple_dns::{Name, Packet, Question};
+    use pkarr::dns::{Name, Packet, Question};
 
     #[tokio::test]
     async fn query_doh_wireformat_get() {
@@ -242,8 +242,8 @@ mod tests {
         let mut query = Packet::new_query(50);
         let question = Question::new(
             Name::new_unchecked("example.com"),
-            simple_dns::QTYPE::TYPE(simple_dns::TYPE::A),
-            simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN),
+            pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A),
+            pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN),
             false,
         );
         query.questions.push(question);

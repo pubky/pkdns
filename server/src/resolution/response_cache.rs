@@ -2,7 +2,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use anyhow::anyhow;
 use moka::{future::Cache, policy::EvictionPolicy};
-use simple_dns::Packet;
+use pkarr::dns::Packet;
 
 use crate::config::get_global_config;
 
@@ -128,14 +128,14 @@ impl IcannLruCache {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use simple_dns::{rdata::A, Name, Question, ResourceRecord};
+    use pkarr::dns::{rdata::A, Name, Question, ResourceRecord};
 
     fn example_query_response(ttl: u32) -> (Vec<u8>, Vec<u8>) {
         let mut query_packet = Packet::new_query(0);
         let question = Question::new(
             Name::new("example.com").unwrap(),
-            simple_dns::QTYPE::ANY,
-            simple_dns::QCLASS::ANY,
+            pkarr::dns::QTYPE::ANY,
+            pkarr::dns::QCLASS::ANY,
             false,
         );
 
@@ -145,9 +145,9 @@ mod tests {
         let mut response_packet = Packet::new_reply(0);
         let answer = ResourceRecord::new(
             Name::new("example.com").unwrap(),
-            simple_dns::CLASS::IN,
+            pkarr::dns::CLASS::IN,
             ttl,
-            simple_dns::rdata::RData::A(A { address: 32 }),
+            pkarr::dns::rdata::RData::A(A { address: 32 }),
         );
         response_packet.answers.push(answer);
 

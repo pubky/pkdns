@@ -1,4 +1,4 @@
-use simple_dns::{Name, Packet, Question, ResourceRecord};
+use pkarr::dns::{Name, Packet, Question, ResourceRecord};
 
 use super::pubkey_parser::parse_pkarr_uri;
 
@@ -138,7 +138,7 @@ impl TopLevelDomain {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use simple_dns::rdata::A;
+    use pkarr::dns::rdata::A;
     use std::net::Ipv4Addr;
     use zbase32;
 
@@ -161,11 +161,11 @@ mod tests {
         let query = create_query_with_domain(domain);
         let mut packet = Packet::parse(&query).unwrap().into_reply();
 
-        let rdata = simple_dns::rdata::RData::A(A { address: 0 });
-        let answer1 = ResourceRecord::new(Name::new(domain).unwrap(), simple_dns::CLASS::IN, 60, rdata.clone());
+        let rdata = pkarr::dns::rdata::RData::A(A { address: 0 });
+        let answer1 = ResourceRecord::new(Name::new(domain).unwrap(), pkarr::dns::CLASS::IN, 60, rdata.clone());
         packet.answers.push(answer1);
 
-        let answer2 = ResourceRecord::new(Name::new("example.com").unwrap(), simple_dns::CLASS::IN, 60, rdata);
+        let answer2 = ResourceRecord::new(Name::new("example.com").unwrap(), pkarr::dns::CLASS::IN, 60, rdata);
         packet.answers.push(answer2);
 
         packet.build_bytes_vec().unwrap()
