@@ -13,7 +13,7 @@ use super::{
     rate_limiter::{RateLimiter, RateLimiterBuilder},
     response_cache::IcannLruCache,
 };
-use simple_dns::{Packet, SimpleDnsError, QTYPE, RCODE};
+use simple_dns::{Packet, PacketFlag, SimpleDnsError, QTYPE, RCODE};
 use std::num;
 use std::{
     hash::{Hash, Hasher},
@@ -65,12 +65,12 @@ pub struct DnsSocket {
 
 impl DnsSocket {
     /// Random local socket addr
-    /// 127.0.0.1:{49152..=65535}
+    /// 0.0.0.0:{49152..=65535}
     /// Used for testing
     pub fn random_local_socket() -> SocketAddr {
         let mut rng = rand::thread_rng();
         let random_port: u32 = rng.gen_range(49152..=65535);
-        let socket_str = format!("127.0.0.1:{random_port}");
+        let socket_str = format!("0.0.0.0:{random_port}");
         socket_str.parse().unwrap()
     }
 
@@ -124,18 +124,26 @@ impl DnsSocket {
 
     /// Starts the receive loop in the background.
     /// Returns the JoinHandle to stop the loop again.
-    pub fn start_receive_loop(&self) -> JoinHandle<()> {
+    pub fn start_receive_loop(&self) -> oneshot::Sender<()> {
         let mut cloned = self.clone();
         let (tx, rx) = oneshot::channel::<()>();
-        let join_handle = tokio::spawn(async move {
+        tokio::spawn(async move {
             let mut cancel = rx;
             loop {
-                if let Err(err) = cloned.receive_datagram().await {
-                    tracing::error!("Error while trying to receive. {err}");
+                tokio::select! {
+                    _ = &mut cancel => {
+                        tracing::info!("Stop UDP receive loop.");
+                        break;
+                    }
+                    result = cloned.receive_datagram() => {
+                        if let Err(err) = result {
+                            tracing::error!("Error while trying to receive. {err}");
+                        }
+                    }
                 }
             }
         });
-        join_handle
+        tx
     }
 
     async fn receive_datagram(&mut self) -> Result<(), DnsSocketError> {
@@ -247,15 +255,120 @@ impl DnsSocket {
 
     // New query received.
     async fn on_query(&mut self, query: &Vec<u8>, from: &SocketAddr) -> Result<usize, std::io::Error> {
-        let reply = self.query_me_once(&query, Some(from.ip())).await;
+        let reply = self.query_me_recursively(&query, Some(from.ip())).await;
         self.send_to(&reply, from).await
     }
 
     pub async fn query_me_recursively(&mut self, raw_query: &Vec<u8>, from: Option<IpAddr>) -> Vec<u8> {
-        vec![]
+        // Based on https://datatracker.ietf.org/doc/html/rfc1034#section-4.3.2
+        let max_recursions: u8 = 5;
+        let mut main_reply = Packet::parse(&raw_query).unwrap().into_reply();
+        let mut next_raw_query = raw_query.clone();
+        for i in 1..max_recursions + 1 {
+            let current_raw_query = next_raw_query.clone();
+            let mut parsed_query = Packet::parse(&current_raw_query).expect("Valid query");
+            let question = parsed_query.questions.first().unwrap().clone().into_owned();
+            println!("---");
+            println!("Iteration {i}/{max_recursions} - {question:?}");
+            let reply = self.query_me_once(&current_raw_query, from.clone()).await;
+            let parsed_reply = Packet::parse(&reply).expect("Reply must be a valid dns packet.");
+            println!("Reply {i} - {:?}", parsed_reply);
+
+            if !parsed_query.has_flags(PacketFlag::RECURSION_DESIRED) {
+                println!("Recursion not desired. Return reply directly");
+                return reply;
+            }
+
+            if parsed_reply.answers.len() == 0 && parsed_reply.name_servers.len() == 0 {
+                // No answers and NS received. Copy additional and ns entries and return.
+                println!("No answers and NS. Return what we got. Break");
+                for additional in parsed_reply.additional_records {
+                    main_reply.additional_records.push(additional.into_owned());
+                }
+                return main_reply.build_bytes_vec().unwrap();
+            }
+
+            let matching_answers_names: Vec<&simple_dns::ResourceRecord<'_>> = parsed_reply
+                .answers
+                .iter()
+                .filter(|answer| answer.name == question.qname)
+                .collect();
+
+            if matching_answers_names.len() == 0 {
+                // No direct answer matches
+                let ns_matches: Vec<&simple_dns::ResourceRecord<'_>> = parsed_reply
+                    .name_servers
+                    .iter()
+                    .filter(|rr| question.qname.is_subdomain_of(&rr.name))
+                    .collect();
+                if ns_matches.len() == 0 {
+                    // No NS matches either; Copy additional and return main reply.
+                    println!("Neither direct nor NS matches.");
+                    for additional in parsed_reply.additional_records {
+                        main_reply.additional_records.push(additional.into_owned());
+                    }
+                    return main_reply.build_bytes_vec().unwrap();
+                }
+                // NS match
+                println!("NS matches. TODO. {ns_matches:?}");
+                return main_reply.build_bytes_vec().unwrap();
+            };
+
+            // We got 1+ matching answer
+            let matching_answers_names_and_qtype: Vec<&simple_dns::ResourceRecord<'_>> = matching_answers_names
+                .clone()
+                .into_iter()
+                .filter(|answer| answer.match_qtype(question.qtype))
+                .collect();
+
+            if matching_answers_names_and_qtype.len() > 0 {
+                // We found answers matching the name and the type.
+                // Copy everything over and return.
+                println!("Final answer found.");
+                for answer in parsed_reply.answers {
+                    main_reply.answers.push(answer.into_owned());
+                }
+                for additional in parsed_reply.additional_records {
+                    main_reply.additional_records.push(additional.into_owned());
+                }
+                for ns in parsed_reply.name_servers {
+                    main_reply.name_servers.push(ns.into_owned());
+                }
+                return main_reply.build_bytes_vec().unwrap();
+            }
+
+            let matching_cname = matching_answers_names
+                .clone()
+                .into_iter()
+                .find(|answer| answer.match_qtype(QTYPE::TYPE(simple_dns::TYPE::CNAME)));
+
+            if let Some(rr) = matching_cname {
+                // Matching CNAME
+                println!("Matching CNAME {rr:?}");
+                if let simple_dns::rdata::RData::CNAME(val) = &rr.rdata {
+                    // Clone CNAME answer to main reply.
+                    main_reply.answers.push(rr.clone().into_owned());
+                    // Replace question with the content of the cname
+                    let mut question = question.clone().into_owned();
+                    question.qname = val.0.clone();
+                    parsed_query.questions = vec![question];
+                    next_raw_query = parsed_query.build_bytes_vec().unwrap();
+                    continue;
+                } else {
+                    panic!("CNAME match failure. Shouldnt happen.")
+                };
+            };
+
+            // QNAME match but no QTYPE match nor a CNAME nor a NS
+            // So we don't have a match
+            return main_reply.build_bytes_vec().unwrap();
+        }
+
+        // Max recursion exceeded
+        Self::create_server_fail_reply(main_reply.id())
     }
 
-    /// Query this DNS for data
+    /// Query this DNS for data once without recursion
     pub async fn query_me_once(&mut self, raw_query: &Vec<u8>, from: Option<IpAddr>) -> Vec<u8> {
         let request = Packet::parse(&raw_query).unwrap();
         let question = request
@@ -402,17 +515,70 @@ impl DnsSocket {
 #[cfg(test)]
 mod tests {
     use crate::resolution::pkd::PkarrResolver;
-    use simple_dns::{Name, Packet, PacketFlag, Question, RCODE};
-    use std::{net::SocketAddr, num::NonZeroU64, time::Duration};
+    use pkarr::{Keypair, PkarrClient, SignedPacket};
+    use simple_dns::{rdata::{A, CNAME}, Name, Packet, PacketFlag, Question, ResourceRecord, RCODE};
+    use std::{net::{Ipv4Addr, SocketAddr}, num::NonZeroU64, time::Duration};
+    use tracing_test::traced_test;
 
     use super::DnsSocket;
+
+    async fn publish_cname_domain() {
+        // Public key csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto
+        let seed = "a3kco17a6mqawd9jewgwijrd64gb1rmrer1zptxgire7buufk3hy";
+        let decoded = zbase32::decode_full_bytes_str(seed).unwrap();
+        let seed: [u8; 32] = decoded.try_into().unwrap();
+        let pair = Keypair::from_secret_key(&seed);
+        let pubkey = pair.public_key();
+        let seed = pair.to_z32();
+
+        let mut reply = Packet::new_reply(0);
+        let cname_icann = ResourceRecord::new(
+            Name::new("cname-icann").unwrap(),
+            simple_dns::CLASS::IN,
+            300,
+            simple_dns::rdata::RData::CNAME(CNAME(
+                Name::new("example.com").unwrap().into_owned()
+            )),
+        );
+        reply.answers.push(cname_icann);
+        let cname_pkd = ResourceRecord::new(
+            Name::new("cname-pkd").unwrap(),
+            simple_dns::CLASS::IN,
+            300,
+            simple_dns::rdata::RData::CNAME(CNAME(
+                Name::new("csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap().into_owned()
+            )),
+        );
+        reply.answers.push(cname_pkd);
+        let cname_pkd2 = ResourceRecord::new(
+            Name::new("cname-pkd2").unwrap(),
+            simple_dns::CLASS::IN,
+            300,
+            simple_dns::rdata::RData::CNAME(CNAME(
+                Name::new("cname-pkd.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap().into_owned()
+            )),
+        );
+        reply.answers.push(cname_pkd2);
+        let a = ResourceRecord::new(
+            Name::new("").unwrap(),
+            simple_dns::CLASS::IN,
+            300,
+            simple_dns::rdata::RData::A(A{
+                address: Ipv4Addr::new(127, 0, 0, 1).to_bits()
+            }),
+        );
+        reply.answers.push(a);
+        let signed = SignedPacket::from_packet(&pair, &reply).unwrap();
+        let client = PkarrClient::builder().resolvers(None).build().unwrap().as_async();
+        let _res = client.publish(&signed).await;
+    }
 
     #[tokio::test]
     async fn run_processor() {
         let listening: SocketAddr = "0.0.0.0:34254".parse().unwrap();
         let icann_fallback: SocketAddr = "8.8.8.8:53".parse().unwrap();
         let mut socket = DnsSocket::default().await.unwrap();
-        let join_handle = socket.start_receive_loop().await;
+        let cancel = socket.start_receive_loop();
 
         let mut query = Packet::new_query(0);
         let qname = Name::new("google.ch").unwrap();
@@ -426,29 +592,102 @@ mod tests {
         let result = socket.forward(&query, &to, Duration::from_secs(5)).await.unwrap();
         let reply = Packet::parse(&result).unwrap();
         dbg!(reply);
+        cancel.send(());
     }
 
-    #[tokio::test]
-    async fn recursion_cname() {
+    /// Create a new dns socket and query recursively.
+    async fn resolve_query_recursively(query: Vec<u8>) -> Vec<u8> {
         let listening: SocketAddr = DnsSocket::random_local_socket();
         let icann_resolver: SocketAddr = "8.8.8.8:53".parse().unwrap();
 
-        let mut socket = DnsSocket::new(listening, icann_resolver, 999, 999, 999, 999, 0, 0, NonZeroU64::new(1).unwrap(), 1, None).await.unwrap();
-        let join_handle = socket.start_receive_loop().await;
+        let mut socket = DnsSocket::new(
+            listening,
+            icann_resolver,
+            999,
+            999,
+            999,
+            999,
+            0,
+            0,
+            NonZeroU64::new(1).unwrap(),
+            1,
+            None,
+        )
+        .await
+        .unwrap();
+        let join_handle = socket.start_receive_loop();
+        let result = socket.query_me_recursively(&query, None).await;
+        join_handle.send(());
+        result
+    }
+
+    #[tokio::test]
+    async fn recursion_cname_icann() {
+        publish_cname_domain().await;
 
         let mut query = Packet::new_query(0);
-        let qname = Name::new("cname.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy").unwrap();
+        let qname = Name::new("cname-icann.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
         let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
         let qclass = simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN);
         let question = Question::new(qname, qtype, qclass, false);
         query.questions = vec![question];
-
+        query.set_flags(PacketFlag::RECURSION_DESIRED);
         let raw_query = query.build_bytes_vec_compressed().unwrap();
-        let to: SocketAddr = "8.8.8.8:53".parse().unwrap();
-        let result = socket.query_me_recursively(&raw_query, None).await;
-        let reply = Packet::parse(&result).unwrap();
-        dbg!(reply);
-        let handle = join_handle.unwrap();
 
+        let raw_reply = resolve_query_recursively(raw_query).await;
+        let reply = Packet::parse(&raw_reply).unwrap();
+        assert_eq!(reply.answers.len(), 2);
+        let cname = reply.answers.get(0).unwrap();
+        assert!(cname.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::CNAME)));
+        let a = reply.answers.get(1).unwrap().clone().into_owned();;
+        assert!(a.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::A)));
+    }
+
+    #[tokio::test]
+    async fn recursion_cname_pkd() {
+        // Single recursion CNAME
+        publish_cname_domain().await;
+        let mut query = Packet::new_query(0);
+        let qname = Name::new("cname-pkd.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
+        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
+        let qclass = simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN);
+        let question = Question::new(qname, qtype, qclass, false);
+        query.questions = vec![question];
+        query.set_flags(PacketFlag::RECURSION_DESIRED);
+        let raw_query = query.build_bytes_vec_compressed().unwrap();
+
+        let raw_reply = resolve_query_recursively(raw_query).await;
+        let reply = Packet::parse(&raw_reply).unwrap();
+        dbg!(&reply);
+        assert_eq!(reply.answers.len(), 2);
+        let cname = reply.answers.get(0).unwrap();
+        assert!(cname.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::CNAME)));
+        let a = reply.answers.get(1).unwrap().clone().into_owned();;
+        assert!(a.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::A)));
+    }
+
+    #[tokio::test]
+    async fn recursion_cname_pkd2() {
+        // Double recursion CNAME
+        publish_cname_domain().await;
+
+        let mut query = Packet::new_query(0);
+        let qname = Name::new("cname-pkd2.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
+        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
+        let qclass = simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN);
+        let question = Question::new(qname, qtype, qclass, false);
+        query.questions = vec![question];
+        query.set_flags(PacketFlag::RECURSION_DESIRED);
+        let raw_query = query.build_bytes_vec_compressed().unwrap();
+
+        let raw_reply = resolve_query_recursively(raw_query).await;
+        let reply = Packet::parse(&raw_reply).unwrap();
+        assert_eq!(reply.answers.len(), 3);
+        let cname1 = reply.answers.get(0).unwrap();
+        assert!(cname1.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::CNAME)));
+        let cname2 = reply.answers.get(1).unwrap();
+        assert!(cname2.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::CNAME)));
+        let a = reply.answers.get(2).unwrap().clone().into_owned();;
+        assert!(a.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::A)));
     }
 }

@@ -36,4 +36,5 @@ rand = "0.8"
 [dev-dependencies]
 axum-test = "16.4.1"
 dnsoverhttps = "0.6.0"
+tracing-test = "0.2.5"
 

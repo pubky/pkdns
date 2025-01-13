@@ -49,14 +49,6 @@ async fn resolve_question<'a>(pkarr_packet: &Packet<'a>, question: &Question<'a>
     if reply.answers.len() == 0 {
         // Not found. Maybe we have a name server?
         reply.name_servers = find_nameserver(pkarr_packet, &question.qname);
-        // if reply.name_servers.len() > 0 {
-        //     // Resolve ns
-
-        //     let ns_reply = resolve_with_ns(question, &reply.name_servers).await;
-        //     if let Some(ns_reply) = ns_reply {
-        //         return ns_reply;
-        //     }
-        // }
     };
 
     reply.build_bytes_vec_compressed().unwrap()

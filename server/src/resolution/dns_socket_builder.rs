@@ -160,7 +160,7 @@ mod tests {
         println!("Started");
         sleep(Duration::from_secs(5));
         println!("Stop");
-        join_handle.abort();
+        join_handle.send(());
         println!("Stopped");
     }
 }

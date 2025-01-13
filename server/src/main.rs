@@ -100,7 +100,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     wait_on_ctrl_c().await;
     println!();
     tracing::info!("Got it! Exiting...");
-    join_handle.abort();
+    join_handle.send(()).unwrap();
 
     Ok(())
 }
