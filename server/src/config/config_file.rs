@@ -92,6 +92,9 @@ pub struct Dns {
 
     #[serde(default = "default_icann_cache_mb")]
     pub icann_cache_mb: u64,
+
+    #[serde(default = "default_max_recursion_depth")]
+    pub max_recursion_depth: u8,
 }
 
 impl Default for Dns {
@@ -103,6 +106,7 @@ impl Default for Dns {
             query_rate_limit_burst: default_query_rate_limit_burst(),
             disable_any_queries: default_false(),
             icann_cache_mb: default_icann_cache_mb(),
+            max_recursion_depth: default_max_recursion_depth()
         }
     }
 }
@@ -125,6 +129,10 @@ fn default_query_rate_limit_burst() -> u32 {
 
 fn default_icann_cache_mb() -> u64 {
     100
+}
+
+fn default_max_recursion_depth() -> u8 {
+    3
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]

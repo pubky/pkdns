@@ -61,6 +61,7 @@ pub struct DnsSocket {
     rate_limiter: Arc<RateLimiter>,
     disable_any_queries: bool,
     icann_cache: IcannLruCache,
+    max_recursion_depth: u8
 }
 
 impl DnsSocket {
@@ -87,6 +88,7 @@ impl DnsSocket {
         pkarr_cache_mb: NonZeroU64,
         icann_cache_mb: u64,
         top_level_domain: Option<TopLevelDomain>,
+        max_recursion_depth: u8,
     ) -> tokio::io::Result<Self> {
         let socket = UdpSocket::bind(listening).await?;
         let limiter = RateLimiterBuilder::new()
@@ -114,6 +116,7 @@ impl DnsSocket {
             rate_limiter: Arc::new(limiter.build()),
             disable_any_queries: config.dns.disable_any_queries,
             icann_cache: IcannLruCache::new(icann_cache_mb, min_ttl, max_ttl),
+            max_recursion_depth,
         })
     }
 
@@ -281,7 +284,7 @@ impl DnsSocket {
 
             if parsed_reply.answers.len() == 0 && parsed_reply.name_servers.len() == 0 {
                 // No answers and NS received. Copy additional and ns entries and return.
-                println!("No answers and NS. Return what we got. Break");
+                println!("No answers and no NS. Return what we got. Break");
                 for additional in parsed_reply.additional_records {
                     main_reply.additional_records.push(additional.into_owned());
                 }
@@ -508,6 +511,7 @@ impl DnsSocket {
             rate_limiter: Arc::new(RateLimiterBuilder::new().build()),
             disable_any_queries: config.dns.disable_any_queries,
             icann_cache: IcannLruCache::new(100, config.dns.min_ttl, config.dns.max_ttl),
+            max_recursion_depth: 5
         })
     }
 }
@@ -550,6 +554,15 @@ mod tests {
             )),
         );
         reply.answers.push(cname_pkd);
+        let cname_infinte = ResourceRecord::new(
+            Name::new("cname-infinite").unwrap(),
+            simple_dns::CLASS::IN,
+            300,
+            simple_dns::rdata::RData::CNAME(CNAME(
+                Name::new("cname-infinite.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap().into_owned()
+            )),
+        );
+        reply.answers.push(cname_infinte);
         let cname_pkd2 = ResourceRecord::new(
             Name::new("cname-pkd2").unwrap(),
             simple_dns::CLASS::IN,
@@ -612,6 +625,7 @@ mod tests {
             NonZeroU64::new(1).unwrap(),
             1,
             None,
+            5,
         )
         .await
         .unwrap();
@@ -689,5 +703,25 @@ mod tests {
         assert!(cname2.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::CNAME)));
         let a = reply.answers.get(2).unwrap().clone().into_owned();;
         assert!(a.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::A)));
+    }
+
+    #[tokio::test]
+    async fn recursion_cname_infinite() {
+        // Infinite recursion CNAME
+        // Check max recursion depth
+        publish_cname_domain().await;
+
+        let mut query = Packet::new_query(0);
+        let qname = Name::new("cname-infinite.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
+        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
+        let qclass = simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN);
+        let question = Question::new(qname, qtype, qclass, false);
+        query.questions = vec![question];
+        query.set_flags(PacketFlag::RECURSION_DESIRED);
+        let raw_query = query.build_bytes_vec_compressed().unwrap();
+
+        let raw_reply = resolve_query_recursively(raw_query).await;
+        let reply = Packet::parse(&raw_reply).unwrap();
+        assert_eq!(reply.rcode(), RCODE::ServerFailure);
     }
 }

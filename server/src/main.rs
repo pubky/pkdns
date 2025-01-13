@@ -85,6 +85,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .max_queries_per_ip_per_second(config.dns.query_rate_limit)
         .max_queries_per_ip_burst(config.dns.query_rate_limit_burst)
         .top_level_domain(config.dht.top_level_domain)
+        .max_recursion_depth(config.dns.max_recursion_depth)
         .build()
         .await?;
 
