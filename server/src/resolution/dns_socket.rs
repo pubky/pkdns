@@ -264,27 +264,35 @@ impl DnsSocket {
 
     pub async fn query_me_recursively(&mut self, raw_query: &Vec<u8>, from: Option<IpAddr>) -> Vec<u8> {
         // Based on https://datatracker.ietf.org/doc/html/rfc1034#section-4.3.2
-        let max_recursions: u8 = 5;
         let mut main_reply = Packet::parse(&raw_query).unwrap().into_reply();
+        if self.max_recursion_depth <= 1 {
+            main_reply.remove_flags(PacketFlag::RECURSION_AVAILABLE);
+        } else {
+            main_reply.set_flags(PacketFlag::RECURSION_AVAILABLE);
+        }
         let mut next_raw_query = raw_query.clone();
-        for i in 1..max_recursions + 1 {
+        for i in 0..self.max_recursion_depth {
             let current_raw_query = next_raw_query.clone();
             let mut parsed_query = Packet::parse(&current_raw_query).expect("Valid query");
             let question = parsed_query.questions.first().unwrap().clone().into_owned();
-            println!("---");
-            println!("Iteration {i}/{max_recursions} - {question:?}");
+            tracing::trace!("Recursive lookup {i}/{} - {question:?}", self.max_recursion_depth);
             let reply = self.query_me_once(&current_raw_query, from.clone()).await;
             let parsed_reply = Packet::parse(&reply).expect("Reply must be a valid dns packet.");
-            println!("Reply {i} - {:?}", parsed_reply);
 
             if !parsed_query.has_flags(PacketFlag::RECURSION_DESIRED) {
-                println!("Recursion not desired. Return reply directly");
+                tracing::trace!("Recursion not desired return directly.");
                 return reply;
             }
 
+            if parsed_reply.rcode() != RCODE::NoError {
+                // Error happened
+                tracing::debug!("Recursion error {:?} during recursion", parsed_reply.rcode());
+                *main_reply.rcode_mut() = parsed_reply.rcode();
+                return main_reply.build_bytes_vec().unwrap();
+            }
+
             if parsed_reply.answers.len() == 0 && parsed_reply.name_servers.len() == 0 {
-                // No answers and NS received. Copy additional and ns entries and return.
-                println!("No answers and no NS. Return what we got. Break");
+                // No answers and NS received. Copy additional and return.
                 for additional in parsed_reply.additional_records {
                     main_reply.additional_records.push(additional.into_owned());
                 }
@@ -306,14 +314,20 @@ impl DnsSocket {
                     .collect();
                 if ns_matches.len() == 0 {
                     // No NS matches either; Copy additional and return main reply.
-                    println!("Neither direct nor NS matches.");
                     for additional in parsed_reply.additional_records {
                         main_reply.additional_records.push(additional.into_owned());
                     }
                     return main_reply.build_bytes_vec().unwrap();
                 }
                 // NS match
-                println!("NS matches. TODO. {ns_matches:?}");
+                tracing::trace!("NS matches. To be implemented. {parsed_reply:?}");
+                main_reply.remove_flags(PacketFlag::RECURSION_AVAILABLE);
+                for ns in parsed_reply.name_servers {
+                    main_reply.name_servers.push(ns.clone().into_owned());
+                };
+                for additional in parsed_reply.additional_records {
+                    main_reply.additional_records.push(additional.into_owned());
+                }
                 return main_reply.build_bytes_vec().unwrap();
             };
 
@@ -327,7 +341,7 @@ impl DnsSocket {
             if matching_answers_names_and_qtype.len() > 0 {
                 // We found answers matching the name and the type.
                 // Copy everything over and return.
-                println!("Final answer found.");
+                tracing::trace!("Recursion final answer found.");
                 for answer in parsed_reply.answers {
                     main_reply.answers.push(answer.into_owned());
                 }
@@ -347,7 +361,7 @@ impl DnsSocket {
 
             if let Some(rr) = matching_cname {
                 // Matching CNAME
-                println!("Matching CNAME {rr:?}");
+                tracing::trace!("Recursion: Matching CNAME {rr:?}");
                 if let simple_dns::rdata::RData::CNAME(val) = &rr.rdata {
                     // Clone CNAME answer to main reply.
                     main_reply.answers.push(rr.clone().into_owned());
@@ -723,5 +737,43 @@ mod tests {
         let raw_reply = resolve_query_recursively(raw_query).await;
         let reply = Packet::parse(&raw_reply).unwrap();
         assert_eq!(reply.rcode(), RCODE::ServerFailure);
+    }
+
+    #[tokio::test]
+    async fn recursion_not_found1() {
+        // Check if the error is copied to
+        publish_cname_domain().await;
+
+        let mut query = Packet::new_query(0);
+        let qname = Name::new("osjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
+        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
+        let qclass = simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN);
+        let question = Question::new(qname, qtype, qclass, false);
+        query.questions = vec![question];
+        query.set_flags(PacketFlag::RECURSION_DESIRED);
+        let raw_query = query.build_bytes_vec_compressed().unwrap();
+
+        let raw_reply = resolve_query_recursively(raw_query).await;
+        let reply = Packet::parse(&raw_reply).unwrap();
+        // dbg!(&reply);
+        assert_eq!(reply.rcode(), RCODE::NameError);
+    }
+
+    #[tokio::test]
+    async fn recursion_not_found2() {
+        publish_cname_domain().await;
+
+        let mut query = Packet::new_query(0);
+        let qname = Name::new("yolo.example.com").unwrap();
+        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
+        let qclass = simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN);
+        let question = Question::new(qname, qtype, qclass, false);
+        query.questions = vec![question];
+        query.set_flags(PacketFlag::RECURSION_DESIRED);
+        let raw_query = query.build_bytes_vec_compressed().unwrap();
+
+        let raw_reply = resolve_query_recursively(raw_query).await;
+        let reply = Packet::parse(&raw_reply).unwrap();
+        assert_eq!(reply.rcode(), RCODE::NameError);
     }
 }
