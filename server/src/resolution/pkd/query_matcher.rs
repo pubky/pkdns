@@ -49,6 +49,17 @@ async fn resolve_question<'a>(pkarr_packet: &Packet<'a>, question: &Question<'a>
     if reply.answers.len() == 0 {
         // Not found. Maybe we have a name server?
         reply.name_servers = find_nameserver(pkarr_packet, &question.qname);
+
+        // Add all glued A/AAAA records to the additional section
+        for ns in reply.name_servers.iter() {
+            if let RData::NS(val)  = &ns.rdata {
+                let name = &val.0;
+                let matches_a = direct_matches(pkarr_packet, name, &QTYPE::TYPE(TYPE::A));
+                let matches_aaaa = direct_matches(pkarr_packet, name, &QTYPE::TYPE(TYPE::AAAA));
+                let merged_matches: Vec<_> = matches_a.into_iter().chain(matches_aaaa.into_iter()).collect();
+                reply.additional_records.extend(merged_matches);
+            };
+        }
     };
 
     reply.build_bytes_vec_compressed().unwrap()
@@ -107,6 +118,7 @@ fn find_nameserver<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>) -> Vec<Resou
         .collect();
     matches
 }
+
 
 /**
  * Resolve name server ip
