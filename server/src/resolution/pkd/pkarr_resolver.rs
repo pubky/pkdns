@@ -239,7 +239,7 @@ impl PkarrResolver {
         from: Option<IpAddr>,
     ) -> std::prelude::v1::Result<Vec<u8>, CustomHandlerError> {
         let mut request = query.packet.parsed().clone();
-        let mut removed_tld = self.remove_tld_if_necessary(&mut request.clone());
+        let mut removed_tld = self.remove_tld_if_necessary(&mut request);
         if removed_tld {
             tracing::trace!("Removed tld from question: {:?}", request.questions.first().unwrap());
         }

@@ -267,9 +267,7 @@ impl DnsSocket {
                 self.max_recursion_depth,
                 current_query.question()
             );
-            println!("Recursive lookup {i}/{} NS:{next_name_server:?} - {:?}",
-            self.max_recursion_depth,
-            current_query.question());
+            // println!("Recursive lookup {i}/{} NS:{next_name_server:?} - {:?}", self.max_recursion_depth, current_query.question());
             let reply = self
                 .query_me_once(&current_query, from.clone(), next_name_server)
                 .await;
@@ -561,7 +559,7 @@ impl DnsSocket {
 #[cfg(test)]
 mod tests {
     use crate::resolution::dns_packets::ParsedQuery;
-    use crate::resolution::pkd::PkarrResolver;
+    use crate::resolution::pkd::{PkarrResolver, TopLevelDomain};
     use pkarr::dns::rdata::{RData, NS};
     use pkarr::dns::{
         rdata::{A, CNAME},
@@ -667,28 +665,6 @@ mod tests {
         let _res = client.publish(&signed).await;
     }
 
-    #[tokio::test]
-    async fn run_processor() {
-        let listening: SocketAddr = "0.0.0.0:34254".parse().unwrap();
-        let icann_fallback: SocketAddr = "8.8.8.8:53".parse().unwrap();
-        let mut socket = DnsSocket::default().await.unwrap();
-        let cancel = socket.start_receive_loop();
-
-        let mut query = Packet::new_query(0);
-        let qname = Name::new("google.ch").unwrap();
-        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
-        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
-        let question = Question::new(qname, qtype, qclass, false);
-        query.questions = vec![question];
-
-        let query = query.build_bytes_vec_compressed().unwrap();
-        let to: SocketAddr = "8.8.8.8:53".parse().unwrap();
-        let result = socket.forward(&query, &to, Duration::from_secs(5)).await.unwrap();
-        let reply = Packet::parse(&result).unwrap();
-        dbg!(reply);
-        cancel.send(());
-    }
-
     /// Create a new dns socket and query recursively.
     async fn resolve_query_recursively(query: Vec<u8>) -> Vec<u8> {
         let listening: SocketAddr = DnsSocket::random_local_socket();
@@ -705,7 +681,7 @@ mod tests {
             0,
             NonZeroU64::new(1).unwrap(),
             1,
-            None,
+            Some(TopLevelDomain::new("key".to_string())),
             5,
         )
         .await
@@ -723,6 +699,28 @@ mod tests {
 
         let mut query = Packet::new_query(0);
         let qname = Name::new("cname-icann.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
+        let question = Question::new(qname, qtype, qclass, false);
+        query.questions = vec![question];
+        query.set_flags(PacketFlag::RECURSION_DESIRED);
+        let raw_query = query.build_bytes_vec_compressed().unwrap();
+
+        let raw_reply = resolve_query_recursively(raw_query).await;
+        let reply = Packet::parse(&raw_reply).unwrap();
+        assert!(reply.answers.len()>= 2);
+        let cname = reply.answers.get(0).unwrap();
+        assert!(cname.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
+        let a = reply.answers.get(1).unwrap().clone().into_owned();
+        assert!(a.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A)));
+    }
+
+    #[tokio::test]
+    async fn recursion_cname_icann_with_tld() {
+        publish_domain().await;
+
+        let mut query = Packet::new_query(0);
+        let qname = Name::new("cname-icann.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto.key").unwrap();
         let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
         let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
         let question = Question::new(qname, qtype, qclass, false);
@@ -851,6 +849,33 @@ mod tests {
         publish_domain().await;
         let mut query = Packet::new_query(0);
         let qname = Name::new("sub.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
+        let question = Question::new(qname, qtype, qclass, false);
+        query.questions = vec![question];
+        query.set_flags(PacketFlag::RECURSION_DESIRED);
+        let raw_query = query.build_bytes_vec_compressed().unwrap();
+
+        let raw_reply = resolve_query_recursively(raw_query).await;
+        let reply = Packet::parse(&raw_reply).unwrap();
+        assert_eq!(reply.answers.len(), 1);
+        let a = reply.answers.get(0).unwrap().clone().into_owned();
+        assert!(a.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A)));
+        assert_eq!(
+            a.rdata,
+            RData::A(A {
+                address: Ipv4Addr::new(37, 27, 13, 182).to_bits()
+            })
+        );
+    }
+
+    #[tokio::test]
+    async fn recursion_ns_pkd_with_tld() {
+        // Single recursion with a delegated zone with an external name server
+        // Domain is saved in the name server and not in the pkarr zone.
+        publish_domain().await;
+        let mut query = Packet::new_query(0);
+        let qname = Name::new("sub.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto.key").unwrap();
         let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
         let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
         let question = Question::new(qname, qtype, qclass, false);
