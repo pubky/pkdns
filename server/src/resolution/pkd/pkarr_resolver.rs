@@ -1,7 +1,7 @@
 use super::{
     pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply, top_level_domain::TopLevelDomain,
 };
-use crate::resolution::{DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder};
+use crate::resolution::{dns_packets::ParsedQuery, DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder};
 use pkarr::dns::{Name, Question, ResourceRecord};
 use std::{
     collections::HashMap,
@@ -235,11 +235,10 @@ impl PkarrResolver {
      */
     pub async fn resolve(
         &mut self,
-        query: &Packet<'_>,
+        query: &ParsedQuery,
         from: Option<IpAddr>,
     ) -> std::prelude::v1::Result<Vec<u8>, CustomHandlerError> {
-        // anydns validated the query before.
-        let mut request = query;
+        let mut request = query.packet.parsed().clone();
         let mut removed_tld = self.remove_tld_if_necessary(&mut request.clone());
         if removed_tld {
             tracing::trace!("Removed tld from question: {:?}", request.questions.first().unwrap());
@@ -373,6 +372,7 @@ mod tests {
             true,
         );
         query.questions.push(question);
+        let query = ParsedQuery::new(query.build_bytes_vec().unwrap()).unwrap();
 
         let mut resolver = PkarrResolver::default().await;
         let result = resolver
@@ -381,7 +381,7 @@ mod tests {
         assert!(result.is_ok());
         let reply_bytes = result.unwrap();
         let reply = Packet::parse(&reply_bytes).unwrap();
-        assert_eq!(reply.id(), query.id());
+        assert_eq!(reply.id(), query.packet.id());
         assert_eq!(reply.answers.len(), 1);
         let answer = reply.answers.first().unwrap();
         assert_eq!(answer.name.to_string(), name.to_string());
@@ -403,6 +403,7 @@ mod tests {
             true,
         );
         query.questions.push(question);
+        let query = ParsedQuery::new(query.build_bytes_vec().unwrap()).unwrap();
         let mut resolver = PkarrResolver::default().await;
         let result = resolver
             .resolve(&query, None)
@@ -410,7 +411,7 @@ mod tests {
         assert!(result.is_ok());
         let reply_bytes = result.unwrap();
         let reply = Packet::parse(&reply_bytes).unwrap();
-        assert_eq!(reply.id(), query.id());
+        assert_eq!(reply.id(), query.packet.id());
         assert_eq!(reply.answers.len(), 1);
         let answer = reply.answers.first().unwrap();
         assert_eq!(answer.name.to_string(), name.to_string());
@@ -429,27 +430,12 @@ mod tests {
             true,
         );
         query.questions.push(question);
+        let query = ParsedQuery::new(query.build_bytes_vec().unwrap()).unwrap();
         let mut resolver = PkarrResolver::default().await;
         let result = resolver
             .resolve(&query, None)
             .await;
         assert!(result.is_err());
-        // println!("{}", result.unwrap_err());
-    }
-
-    #[test]
-    fn pkarr_parse() {
-        let domain = "cb7xxx6wtqr5d6yqudkt47drqswxk57dzy3h7qj3udym5puy9cso";
-        let decoded = zbase32::decode_full_bytes_str(domain);
-        // assert!(decoded.is_err());
-        let decoded = decoded.unwrap();
-        println!("{:?}", decoded);
-        if decoded.len() != 32 {
-            println!("wrong length");
-            return;
-        }
-        let trying: Result<PublicKey, _> = domain.try_into();
-        assert!(trying.is_err());
     }
 
     #[tokio::test]

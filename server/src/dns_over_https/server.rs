@@ -108,7 +108,8 @@ fn extract_client_ip(request_addr: &SocketAddr, headers: &HeaderMap) -> IpAddr {
 }
 
 async fn query_to_response(query: Vec<u8>, dns_socket: &mut DnsSocket, client_ip: IpAddr) -> Response<Body> {
-    let reply = dns_socket.query_me_recursively(&query, Some(client_ip)).await;
+    
+    let reply = dns_socket.query_me_recursively_raw(query, Some(client_ip)).await;
     let lowest_ttl = get_lowest_ttl(&reply);
 
     let response = Response::builder()

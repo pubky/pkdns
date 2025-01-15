@@ -12,7 +12,8 @@ mod pkd;
 mod query_id_manager;
 mod rate_limiter;
 mod response_cache;
-mod parsed_packet;
+
+mod dns_packets;
 
 pub use dns_socket::{DnsSocket, DnsSocketError};
 pub use dns_socket_builder::DnsSocketBuilder;

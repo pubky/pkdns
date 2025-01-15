@@ -1,11 +1,13 @@
 use anyhow::anyhow;
 use chrono::format::Parsed;
-use pkarr::dns::Packet;
+use pkarr::dns::{Packet, PacketFlag};
 use self_cell::self_cell;
 use std::{fmt::Display, pin::Pin};
 
+// Struct to hold the bytes and the packet in one place
+// to avoid lifetimes
 self_cell!(
-    struct Inner {
+    pub struct Inner {
         owner: Vec<u8>,
 
         #[covariant]
@@ -39,10 +41,17 @@ impl Clone for Inner {
     }
 }
 
+impl Into<Vec<u8>> for Inner {
+    fn into(self) -> Vec<u8> {
+        self.into_owner()
+    }
+}
 
+/// Parses a dns packet without having to deal with life times
+/// Both the raw bytes and the parsed struct is contained.
 #[derive(Debug, Clone)]
 pub struct ParsedPacket {
-    inner: Inner,
+    pub inner: Inner,
 }
 
 impl ParsedPacket {
@@ -51,8 +60,12 @@ impl ParsedPacket {
         Ok(Self { inner })
     }
 
+    pub fn id(&self) -> u16 {
+        self.parsed().id()
+    }
+
     /// Parsed DNS packet
-    pub fn packet(&self) -> &Packet {
+    pub fn parsed(&self) -> &Packet {
         self.inner.packet()
     }
 
@@ -61,20 +74,34 @@ impl ParsedPacket {
         &self.inner.raw_bytes()
     }
 
-    /// Checks if this packet is valid.
-    pub fn is_valid(&self) -> Result<(), anyhow::Error> {
-        let packet = self.packet();
-        let question = packet.questions.first();
-        if question.is_none() {
-            return Err(anyhow!("Packet without a question."));
-        };
-        let question = question.unwrap();
-        let labels = question.qname.get_labels();
-        if labels.len() == 0 {
-            return Err(anyhow!("Question with an empty qname."));
-        };
+    /// If this packet is a reply
+    pub fn is_reply(&self) -> bool {
+        self.parsed().has_flags(PacketFlag::RESPONSE)
+    }
 
-        Ok(())
+    /// If this packet is a reply
+    pub fn is_query(&self) -> bool {
+        !self.parsed().has_flags(PacketFlag::RESPONSE)
+    }
+
+    /// Create a REFUSED reply
+    pub fn create_refused_reply(&self) -> Vec<u8> {
+        let mut reply = Packet::new_reply(self.id());
+        *reply.rcode_mut() = pkarr::dns::RCODE::Refused;
+        reply.build_bytes_vec_compressed().unwrap()
+    }
+
+    /// Create SRVFAIL reply
+    pub fn create_server_fail_reply(&self) -> Vec<u8> {
+        let mut reply = Packet::new_reply(self.id());
+        *reply.rcode_mut() = pkarr::dns::RCODE::ServerFailure;
+        reply.build_bytes_vec_compressed().unwrap()
+    }
+}
+
+impl Into<Vec<u8>> for ParsedPacket {
+    fn into(self) -> Vec<u8> {
+        self.inner.into()
     }
 }
 
@@ -84,7 +111,7 @@ mod tests {
 
     use super::*;
     #[tokio::test]
-    async fn try_from_bytes() {
+    async fn new() {
         let mut query = Packet::new_query(0);
         let qname = Name::new("example.com").unwrap();
         let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
@@ -95,6 +122,6 @@ mod tests {
         let raw_query = query.build_bytes_vec_compressed().unwrap();
 
         let parsed = ParsedPacket::new(raw_query).unwrap();
-        assert_eq!(parsed.packet().id(), 0);
+        assert_eq!(parsed.parsed().id(), 0);
     }
 }
