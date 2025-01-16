@@ -148,3 +148,5 @@ Currently, pkdns only supports `A`, `AAAA`, `TXT`, `CNAME`, and `MX` records. Fo
 ---
 
 May the power ⚡ be with you. Powered by [pkarr](https://github.com/pubky/pkarr).
+
+test
