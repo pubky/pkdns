@@ -8,7 +8,7 @@ use axum::{
     Router,
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
-use simple_dns::Packet;
+use pkarr::dns::Packet;
 use std::{
     collections::HashMap,
     net::{IpAddr, SocketAddr},
@@ -108,7 +108,8 @@ fn extract_client_ip(request_addr: &SocketAddr, headers: &HeaderMap) -> IpAddr {
 }
 
 async fn query_to_response(query: Vec<u8>, dns_socket: &mut DnsSocket, client_ip: IpAddr) -> Response<Body> {
-    let reply = dns_socket.query_me(&query, Some(client_ip)).await;
+    
+    let reply = dns_socket.query_me_recursively_raw(query, Some(client_ip)).await;
     let lowest_ttl = get_lowest_ttl(&reply);
 
     let response = Response::builder()
@@ -198,7 +199,7 @@ pub async fn run_doh_server(addr: SocketAddr, dns_socket: DnsSocket) {
 mod tests {
     use crate::{dns_over_https::server::create_app, resolution::DnsSocket};
     use axum_test::TestServer;
-    use simple_dns::{Name, Packet, Question};
+    use pkarr::dns::{Name, Packet, Question};
 
     #[tokio::test]
     async fn query_doh_wireformat_get() {
@@ -242,8 +243,8 @@ mod tests {
         let mut query = Packet::new_query(50);
         let question = Question::new(
             Name::new_unchecked("example.com"),
-            simple_dns::QTYPE::TYPE(simple_dns::TYPE::A),
-            simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN),
+            pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A),
+            pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN),
             false,
         );
         query.questions.push(question);

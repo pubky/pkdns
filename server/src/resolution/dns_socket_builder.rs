@@ -39,7 +39,11 @@ pub struct DnsSocketBuilder {
     /// Burst size of the rate limit. 0 = disabled.
     max_dht_queries_per_ip_burst: u32,
 
+    /// Optional tld like `.key`.
     top_level_domain: Option<TopLevelDomain>,
+
+    /// Maximum recursion depth for recursive queries.
+    max_recursion_depth: u8,
 }
 
 impl DnsSocketBuilder {
@@ -56,6 +60,7 @@ impl DnsSocketBuilder {
             max_dht_queries_per_ip_burst: 0,
             icann_cache_mb: 100,
             top_level_domain: None,
+            max_recursion_depth: 3,
         }
     }
 
@@ -119,6 +124,12 @@ impl DnsSocketBuilder {
         self
     }
 
+    /// Maximum recursion depth for dns queries.
+    pub fn max_recursion_depth(mut self, depth: u8) -> Self {
+        self.max_recursion_depth = depth;
+        self
+    }
+
     /// Burst size of the rate limit.
     pub fn top_level_domain(mut self, label: Option<String>) -> Self {
         match label {
@@ -142,6 +153,7 @@ impl DnsSocketBuilder {
             self.pkarr_cache_mb,
             self.icann_cache_mb,
             self.top_level_domain,
+            self.max_recursion_depth,
         )
         .await
     }
@@ -160,7 +172,7 @@ mod tests {
         println!("Started");
         sleep(Duration::from_secs(5));
         println!("Stop");
-        join_handle.abort();
+        join_handle.send(());
         println!("Stopped");
     }
 }

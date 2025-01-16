@@ -33,6 +33,9 @@
 # ICANN response cache size in megabytes.
 # icann_cache_mb = 100
 
+# Maximum recursion depth
+# max_recursion_depth = 3
+
 [dht]
 # Maximum size of the pkarr packet cache in megabytes.
 # dht_cache_mb = 100

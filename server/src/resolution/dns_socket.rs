@@ -3,25 +3,34 @@ use crate::{
     config::get_global_config,
     resolution::{helpers::replace_packet_id, pkd::CustomHandlerError},
 };
+use rand::Rng;
+use tracing_subscriber::fmt::format;
 
 use super::{
+    dns_packets::{ParsedPacket, ParsedQuery},
     pending_request::{PendingRequest, PendingRequestStore},
     pkd::{PkarrResolver, ResolverSettings, TopLevelDomain},
     query_id_manager::QueryIdManager,
     rate_limiter::{RateLimiter, RateLimiterBuilder},
     response_cache::IcannLruCache,
 };
-use simple_dns::{Packet, SimpleDnsError, QTYPE, RCODE};
-use std::num;
+use pkarr::dns::{
+    rdata::{RData, A, AAAA, NS},
+    Packet, PacketFlag, SimpleDnsError, QTYPE, RCODE,
+};
 use std::{
     hash::{Hash, Hasher},
-    num::NonZeroU64,
+    num::NonZeroU64, thread::current,
 };
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
     num::NonZeroU32,
     sync::Arc,
     time::{Duration, Instant},
+};
+use std::{
+    net::{SocketAddrV4, SocketAddrV6},
+    num,
 };
 use tokio::{
     net::UdpSocket,
@@ -59,9 +68,20 @@ pub struct DnsSocket {
     rate_limiter: Arc<RateLimiter>,
     disable_any_queries: bool,
     icann_cache: IcannLruCache,
+    max_recursion_depth: u8,
 }
 
 impl DnsSocket {
+    /// Random local socket addr
+    /// 0.0.0.0:{49152..=65535}
+    /// Used for testing
+    pub fn random_local_socket() -> SocketAddr {
+        let mut rng = rand::thread_rng();
+        let random_port: u32 = rng.gen_range(49152..=65535);
+        let socket_str = format!("0.0.0.0:{random_port}");
+        socket_str.parse().unwrap()
+    }
+
     // Create a new DNS socket
     pub async fn new(
         listening: SocketAddr,
@@ -75,6 +95,7 @@ impl DnsSocket {
         pkarr_cache_mb: NonZeroU64,
         icann_cache_mb: u64,
         top_level_domain: Option<TopLevelDomain>,
+        max_recursion_depth: u8,
     ) -> tokio::io::Result<Self> {
         let socket = UdpSocket::bind(listening).await?;
         let limiter = RateLimiterBuilder::new()
@@ -102,7 +123,12 @@ impl DnsSocket {
             rate_limiter: Arc::new(limiter.build()),
             disable_any_queries: config.dns.disable_any_queries,
             icann_cache: IcannLruCache::new(icann_cache_mb, min_ttl, max_ttl),
+            max_recursion_depth,
         })
+    }
+
+    fn is_recursion_available(&self) -> bool {
+        self.max_recursion_depth >= 1
     }
 
     // Send message to address
@@ -112,16 +138,26 @@ impl DnsSocket {
 
     /// Starts the receive loop in the background.
     /// Returns the JoinHandle to stop the loop again.
-    pub fn start_receive_loop(&self) -> JoinHandle<()> {
+    pub fn start_receive_loop(&self) -> oneshot::Sender<()> {
         let mut cloned = self.clone();
-        let join_handle = tokio::spawn(async move {
+        let (tx, rx) = oneshot::channel::<()>();
+        tokio::spawn(async move {
+            let mut cancel = rx;
             loop {
-                if let Err(err) = cloned.receive_datagram().await {
-                    tracing::error!("Error while trying to receive. {err}");
+                tokio::select! {
+                    _ = &mut cancel => {
+                        tracing::info!("Stop UDP receive loop.");
+                        break;
+                    }
+                    result = cloned.receive_datagram() => {
+                        if let Err(err) = result {
+                            tracing::error!("Error while trying to receive. {err}");
+                        }
+                    }
                 }
             }
         });
-        join_handle
+        tx
     }
 
     async fn receive_datagram(&mut self) -> Result<(), DnsSocketError> {
@@ -132,18 +168,19 @@ impl DnsSocket {
         if data.len() > size {
             data.drain((size + 1)..data.len());
         }
-        let packet = Packet::parse(&data)?;
+
+        let packet = ParsedPacket::new(data)?;
+
         let packet_id = packet.id();
         let pending = self.pending.remove_by_forward_id(&packet_id, &from);
         if pending.is_some() {
             tracing::trace!("Received response from forward server. Send back to client.");
             let query = pending.unwrap();
-            query.tx.send(data).unwrap();
+            query.tx.send(packet.into()).unwrap();
             return Ok(());
         };
 
-        let is_reply = packet.questions.len() == 0;
-        if is_reply {
+        if packet.is_reply() {
             tracing::debug!(
                 "Received reply without an associated query {:?}. forward_id={packet_id} Ignore.",
                 packet
@@ -152,17 +189,16 @@ impl DnsSocket {
         };
 
         // New query
+        let query_parser: Result<ParsedQuery, _> = packet.try_into();
+        if let Err(e) = query_parser {
+            tracing::debug!("Failed to parse query {from}. id={packet_id}. {e} Drop.");
+            return Ok(());
+        };
+        let query = query_parser.unwrap();
         if self.disable_any_queries {
-            let includes_any_type_question = packet
-                .questions
-                .iter()
-                .map(|q| q.qtype == QTYPE::ANY)
-                .reduce(|a, b| a || b);
-            if let Some(includes_any_type_question) = includes_any_type_question {
-                if includes_any_type_question {
-                    tracing::debug!("Received ANY type question from {from}. id={packet_id}. Drop.");
-                    return Ok(());
-                }
+            if query.is_any_type() {
+                tracing::debug!("Received ANY type question from {from}. id={packet_id}. Drop.");
+                return Ok(());
             }
         }
 
@@ -176,51 +212,14 @@ impl DnsSocket {
         let mut socket = self.clone();
         tokio::spawn(async move {
             let start = Instant::now();
-            let query_packet = Packet::parse(&data).unwrap();
-
-            let question = query_packet.questions.first();
-            if question.is_none() {
-                tracing::debug!(
-                    "Query with no associated a question {:?}. Ignore. query_id={}",
-                    query_packet,
-                    query_packet.id()
-                );
-                return;
-            };
-            let question = question.unwrap();
-            let labels = question.qname.get_labels();
-            if labels.len() == 0 {
-                tracing::debug!(
-                    "DNS packet question with no domain. Ignore. query_id={}",
-                    query_packet.id()
-                );
-                return;
-            };
-            tracing::trace!(
-                "Received new query {} {:?}. query_id={}",
-                question.qname,
-                question.qtype,
-                query_packet.id()
-            );
-            let query_result = socket.on_query(&data, &from).await;
+            tracing::trace!("Received new query: {query}");
+            let query_result = socket.on_query(&query, &from).await;
             match query_result {
                 Ok(_) => {
-                    tracing::debug!(
-                        "Processed query {} {:?} within {}ms. query_id={}",
-                        question.qname,
-                        question.qtype,
-                        start.elapsed().as_millis(),
-                        query_packet.id()
-                    );
+                    tracing::debug!("Processed query {query} within {}ms.", start.elapsed().as_millis());
                 }
                 Err(err) => {
-                    tracing::error!(
-                        "Failed to respond to query {} {:?}: {} query_id={}",
-                        question.qname,
-                        question.qtype,
-                        err,
-                        query_packet.id()
-                    );
+                    tracing::error!("Failed to respond to query {query} {:?}", err);
                 }
             };
         });
@@ -229,63 +228,236 @@ impl DnsSocket {
     }
 
     // New query received.
-    async fn on_query(&mut self, query: &Vec<u8>, from: &SocketAddr) -> Result<usize, std::io::Error> {
-        let reply = self.query_me(query, Some(from.ip())).await;
+    async fn on_query(&mut self, query: &ParsedQuery, from: &SocketAddr) -> Result<usize, std::io::Error> {
+        let reply = self.query_me_recursively(&query, Some(from.ip())).await;
         self.send_to(&reply, from).await
     }
 
-    /// Query this DNS for data
-    pub async fn query_me(&mut self, query: &Vec<u8>, from: Option<IpAddr>) -> Vec<u8> {
-        let request = Packet::parse(query).expect("Should be valid query. Prevalidated already.");
-        let question = request
-            .questions
-            .first()
-            .expect("No question in query in pkarr_resolver.")
-            .clone();
+    pub async fn query_me_recursively_raw(&mut self, query: Vec<u8>, from: Option<IpAddr>) -> Vec<u8> {
+        let packet = ParsedPacket::new(query);
+        if let Err(e) = packet {
+            tracing::trace!("Failed to parse query {e}. Drop");
+            return vec![];
+        }
+        let packet = packet.unwrap();
+        match ParsedQuery::try_from(packet.clone()) {
+            Ok(parsed) => self.query_me_recursively(&parsed, from).await,
+            Err(e) => packet.create_server_fail_reply(),
+        }
+    }
 
-        tracing::debug!(
-            "New query: {} {:?} id={}",
-            question.qname.to_string(),
-            question.qtype,
-            request.id()
-        );
+    pub async fn query_me_recursively(&mut self, query: &ParsedQuery, from: Option<IpAddr>) -> Vec<u8> {
+        // Based on https://datatracker.ietf.org/doc/html/rfc1034#section-4.3.2
+        tracing::debug!("New query: {query}");
 
-        tracing::trace!("Try to resolve the query with the custom handler.");
-        let result = self.pkarr_resolver.resolve(query, from).await;
+        let client_query = query;
+        let client_query_data: Vec<u8> = client_query.packet.clone().into();
+        let mut client_reply = Packet::parse(&client_query_data).unwrap().into_reply();
+        if self.is_recursion_available() {
+            client_reply.set_flags(PacketFlag::RECURSION_AVAILABLE);
+        } else {
+            client_reply.remove_flags(PacketFlag::RECURSION_AVAILABLE);
+        }
+        let mut next_name_server: Option<SocketAddr> = None; // Name server to target. If none, falls back to default or DHT
+        let mut next_raw_query: Vec<u8> = client_query_data.clone();
+        for i in 0..self.max_recursion_depth {
+            let current_query = ParsedQuery::new(next_raw_query.clone()).unwrap();
+            tracing::trace!(
+                "Recursive lookup {i}/{} NS:{next_name_server:?} - {:?}",
+                self.max_recursion_depth,
+                current_query.question()
+            );
+            // println!("Recursive lookup {i}/{} NS:{next_name_server:?} - {:?}", self.max_recursion_depth, current_query.question());
+            let reply = self
+                .query_me_once(&current_query, from.clone(), next_name_server)
+                .await;
+            next_name_server = None; // Reset target DNS
+            let parsed_reply = Packet::parse(&reply).expect("Reply must be a valid dns packet.");
+            dbg!(&parsed_reply);
 
-        if result.is_ok() {
-            tracing::trace!("Custom handler resolved the query.");
-            // All good. Handler handled the query
-            return result.unwrap();
+            if !self.is_recursion_available() {
+                tracing::trace!("Recursion not available return.");
+                return reply;
+            }
+            if !client_query.is_recursion_desired() {
+                tracing::trace!("Recursion not desired. return.");
+                return reply;
+            }
+
+            if parsed_reply.rcode() != RCODE::NoError {
+                // Downstream server returned error.
+                tracing::debug!(
+                    "Downstream server returned error {:?} during recursion. Query: {current_query}",
+                    parsed_reply.rcode()
+                );
+                *client_reply.rcode_mut() = parsed_reply.rcode();
+                return client_reply.build_bytes_vec().unwrap();
+            }
+
+            if parsed_reply.answers.len() == 0 && parsed_reply.name_servers.len() == 0 {
+                // No answers and NS received.
+                return client_reply.build_bytes_vec().unwrap();
+            }
+
+            let matching_answers_names: Vec<&pkarr::dns::ResourceRecord<'_>> = parsed_reply
+                .answers
+                .iter()
+                .filter(|answer| answer.name == current_query.question().qname)
+                .collect();
+
+            // Check for direct matches
+            let matching_answers_names_and_qtype: Vec<&pkarr::dns::ResourceRecord<'_>> = matching_answers_names
+                .clone()
+                .into_iter()
+                .filter(|answer| answer.match_qtype(current_query.question().qtype))
+                .collect();
+
+            if matching_answers_names_and_qtype.len() > 0 {
+                // We found answers matching the name and the type.
+                // Copy everything over and return.
+                tracing::trace!("Recursion final answer found.");
+                for answer in parsed_reply.answers {
+                    client_reply.answers.push(answer.into_owned());
+                }
+                for additional in parsed_reply.additional_records {
+                    client_reply.additional_records.push(additional.into_owned());
+                }
+                for ns in parsed_reply.name_servers {
+                    client_reply.name_servers.push(ns.into_owned());
+                }
+                return client_reply.build_bytes_vec().unwrap();
+            }
+
+            // No direct answer matches
+            // Look for a CNAME
+            let matching_cname = matching_answers_names
+                .clone()
+                .into_iter()
+                .find(|answer| answer.match_qtype(QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
+
+            if let Some(rr) = matching_cname {
+                // Matching CNAME
+                tracing::trace!("Recursion: Matching CNAME {rr:?}");
+                if let pkarr::dns::rdata::RData::CNAME(val) = &rr.rdata {
+                    // Clone CNAME answer to main reply.
+                    client_reply.answers.push(rr.clone().into_owned());
+                    // Replace question with the content of the cname
+                    let mut question = current_query.question().clone().into_owned();
+                    question.qname = val.0.clone();
+                    let mut next_query = current_query.packet.parsed().clone();
+                    next_query.questions = vec![question];
+                    next_raw_query = next_query.build_bytes_vec().unwrap();
+                    continue;
+                } else {
+                    panic!("CNAME match failure. Shouldnt happen.")
+                };
+            };
+
+            // Look for NS referals
+            let ns_matches: Vec<&pkarr::dns::ResourceRecord<'_>> = parsed_reply
+                .name_servers
+                .iter()
+                .filter(|rr| {
+                    current_query.question().qname.is_subdomain_of(&rr.name)
+                        || current_query.question().qname == rr.name
+                })
+                .collect();
+            if ns_matches.len() == 0 {
+                // No NS matches either; Copy additional and return main reply.
+                for additional in parsed_reply.additional_records {
+                    client_reply.additional_records.push(additional.into_owned());
+                }
+                return client_reply.build_bytes_vec().unwrap();
+            }
+            // NS match, Not implemented yet. Disable recursion and return
+            tracing::trace!("NS matches. {parsed_reply:?}");
+            let found_name_server = parsed_reply.name_servers.iter().find_map(|ns| {
+                if let RData::NS(NS(ns_name)) = &ns.rdata {
+                    let ns_a_record = parsed_reply.additional_records.iter().find(|rr| {
+                        rr.name == *ns_name && rr.match_qtype(QTYPE::TYPE(pkarr::dns::TYPE::A))
+                            || rr.match_qtype(QTYPE::TYPE(pkarr::dns::TYPE::AAAA))
+                    });
+                    if ns_a_record.is_none() {
+                        return None;
+                    }
+                    let ns_a_record = ns_a_record.unwrap();
+                    let glued_ns_socket: SocketAddr = match ns_a_record.rdata {
+                        RData::A(A { address }) => {
+                            let ip = Ipv4Addr::from_bits(address);
+                            let socket = SocketAddrV4::new(ip, 53);
+                            socket.into()
+                        }
+                        RData::AAAA(AAAA { address }) => {
+                            let ip = Ipv6Addr::from_bits(address);
+                            let socket = SocketAddrV6::new(ip, 53, 0, 0);
+                            socket.into()
+                        }
+                        _ => panic!("Prefiltered, shouldnt happen"),
+                    };
+                    return Some(glued_ns_socket);
+                } else {
+                    return None;
+                }
+            });
+            if let Some(socket) = &found_name_server {
+                tracing::trace!("Found glued nameserver {socket}");
+                next_name_server = found_name_server;
+                continue;
+            };
+
+            // QNAME match but no QTYPE match nor a CNAME nor a NS
+            // So we don't have a match
+            return client_reply.build_bytes_vec().unwrap();
         }
 
-        let question = request
-            .questions
-            .first()
-            .expect("Should be valid query. Prevalidated already.");
-        let query_id = request.id();
+        // Max recursion exceeded
+        client_query.packet.create_server_fail_reply()
+    }
 
-        let query_name = format!("{} {:?} query_id={query_id}", question.qname, question.qtype);
+    /// Query this DNS for data once without recursion.
+    /// from: Client ip used for rate limiting. None disables rate limiting
+    /// target_dns: dns server to query. None falls back to the default fallback DNS
+    pub async fn query_me_once(
+        &mut self,
+        query: &ParsedQuery,
+        from: Option<IpAddr>,
+        target_dns: Option<SocketAddr>,
+    ) -> Vec<u8> {
+        // Only try the DHT first if no target_dns is manually specified.
+        if let None = &target_dns {
+            tracing::trace!("Trying to resolve the query with the custom handler.");
+            let result = self.pkarr_resolver.resolve(&query, from).await;
+            if result.is_ok() {
+                tracing::trace!("Custom handler resolved the query.");
+                // All good. Handler handled the query
+                return result.unwrap();
+            }
 
-        match result.unwrap_err() {
-            CustomHandlerError::Unhandled => {
-                // Fallback to ICANN
-                tracing::trace!("Custom handler rejected the query. {query_name}");
-                match self.forward_to_icann(query, Duration::from_secs(5)).await {
-                    Ok(reply) => reply,
-                    Err(e) => {
-                        tracing::warn!("Forwarding dns query failed. {e} {query_name}");
-                        Self::create_server_fail_reply(query_id)
-                    }
+            match result.unwrap_err() {
+                CustomHandlerError::Unhandled => {
+                    tracing::trace!("Custom handler rejected the query. {query}");
                 }
-            }
-            CustomHandlerError::Failed(err) => {
-                tracing::error!("Internal error {query_name}: {}", err);
-                Self::create_server_fail_reply(query_id)
-            }
-            CustomHandlerError::RateLimited(ip) => {
-                tracing::error!("IP is rate limited {query_name}: {}", ip);
-                Self::create_refused_reply(query_id)
+                CustomHandlerError::Failed(err) => {
+                    tracing::error!("Internal error {query}: {}", err);
+                    return query.packet.create_server_fail_reply()
+                }
+                CustomHandlerError::RateLimited(ip) => {
+                    tracing::error!("IP is rate limited {query}: {}", ip);
+                    return query.packet.create_refused_reply()
+                }
+            };
+        }
+
+        // Forward to ICANN
+        let dns_socket = target_dns.unwrap_or(self.icann_fallback.clone());
+        match self
+            .forward_to_icann(&query.packet.clone().into(), dns_socket, Duration::from_secs(5))
+            .await
+        {
+            Ok(reply) => reply,
+            Err(e) => {
+                tracing::warn!("Forwarding dns query failed. {e} {query}");
+                query.packet.create_server_fail_reply()
             }
         }
     }
@@ -324,7 +496,12 @@ impl DnsSocket {
     }
 
     /// Forward query to icann
-    pub async fn forward_to_icann(&mut self, query: &Vec<u8>, timeout: Duration) -> Result<Vec<u8>, DnsSocketError> {
+    pub async fn forward_to_icann(
+        &mut self,
+        query: &Vec<u8>,
+        dns_server: SocketAddr,
+        timeout: Duration,
+    ) -> Result<Vec<u8>, DnsSocketError> {
         // Check cache first before forwarding
         if let Ok(opt_item) = self.icann_cache.get(query).await {
             if let Some(item) = opt_item {
@@ -334,7 +511,7 @@ impl DnsSocket {
             };
         };
 
-        let reply = self.forward(query, &self.icann_fallback.clone(), timeout).await?;
+        let reply = self.forward(query, &dns_server, timeout).await?;
         // Store response in cache
         if let Err(e) = self.icann_cache.add(query.clone(), reply.clone()).await {
             tracing::warn!("Failed to add icann forward reply to cache. {e}");
@@ -374,36 +551,349 @@ impl DnsSocket {
             rate_limiter: Arc::new(RateLimiterBuilder::new().build()),
             disable_any_queries: config.dns.disable_any_queries,
             icann_cache: IcannLruCache::new(100, config.dns.min_ttl, config.dns.max_ttl),
+            max_recursion_depth: 5,
         })
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use crate::resolution::pkd::PkarrResolver;
-    use simple_dns::{Name, Packet, PacketFlag, Question, RCODE};
-    use std::{net::SocketAddr, time::Duration};
+    use crate::resolution::dns_packets::ParsedQuery;
+    use crate::resolution::pkd::{PkarrResolver, TopLevelDomain};
+    use pkarr::dns::rdata::{RData, NS};
+    use pkarr::dns::{
+        rdata::{A, CNAME},
+        Name, Packet, PacketFlag, Question, ResourceRecord, RCODE,
+    };
+    use pkarr::{Keypair, PkarrClient, SignedPacket};
+    use std::{
+        net::{Ipv4Addr, SocketAddr},
+        num::NonZeroU64,
+        time::Duration,
+    };
+    use tracing_test::traced_test;
 
     use super::DnsSocket;
 
+    async fn publish_domain() {
+        // Public key csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto
+        let seed = "a3kco17a6mqawd9jewgwijrd64gb1rmrer1zptxgire7buufk3hy";
+        let decoded = zbase32::decode_full_bytes_str(seed).unwrap();
+        let seed: [u8; 32] = decoded.try_into().unwrap();
+        let pair = Keypair::from_secret_key(&seed);
+        let pubkey = pair.public_key();
+        let seed = pair.to_z32();
+
+        let mut reply = Packet::new_reply(0);
+        // Regular ICANN CNAME
+        let cname_icann = ResourceRecord::new(
+            Name::new("cname-icann").unwrap(),
+            pkarr::dns::CLASS::IN,
+            300,
+            pkarr::dns::rdata::RData::CNAME(CNAME(Name::new("example.com").unwrap().into_owned())),
+        );
+        reply.answers.push(cname_icann);
+        // PKD CNAME
+        let cname_pkd = ResourceRecord::new(
+            Name::new("cname-pkd").unwrap(),
+            pkarr::dns::CLASS::IN,
+            300,
+            pkarr::dns::rdata::RData::CNAME(CNAME(
+                Name::new("csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto")
+                    .unwrap()
+                    .into_owned(),
+            )),
+        );
+        reply.answers.push(cname_pkd);
+        // PKD CNAME that points on itself and therefore causes an infinite loop
+        let cname_infinte = ResourceRecord::new(
+            Name::new("cname-infinite").unwrap(),
+            pkarr::dns::CLASS::IN,
+            300,
+            pkarr::dns::rdata::RData::CNAME(CNAME(
+                Name::new("cname-infinite.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto")
+                    .unwrap()
+                    .into_owned(),
+            )),
+        );
+        reply.answers.push(cname_infinte);
+        // PKD CNAME that points on another PKD CNAME that points on a A
+        let cname_pkd2 = ResourceRecord::new(
+            Name::new("cname-pkd2").unwrap(),
+            pkarr::dns::CLASS::IN,
+            300,
+            pkarr::dns::rdata::RData::CNAME(CNAME(
+                Name::new("cname-pkd.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto")
+                    .unwrap()
+                    .into_owned(),
+            )),
+        );
+        reply.answers.push(cname_pkd2);
+        // Regular A entry that anchors the domain.
+        let a = ResourceRecord::new(
+            Name::new("").unwrap(),
+            pkarr::dns::CLASS::IN,
+            300,
+            pkarr::dns::rdata::RData::A(A {
+                address: Ipv4Addr::new(127, 0, 0, 1).to_bits(),
+            }),
+        );
+        reply.answers.push(a);
+        // Define BIND name server for the sub.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto zone.
+        let ns = ResourceRecord::new(
+            Name::new("ns.sub").unwrap(),
+            pkarr::dns::CLASS::IN,
+            300,
+            pkarr::dns::rdata::RData::A(A {
+                address: Ipv4Addr::new(95, 217, 214, 181).to_bits(),
+            }),
+        );
+        reply.answers.push(ns);
+        // Delegate sub.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto to the name server.
+        let sub = ResourceRecord::new(
+            Name::new("sub").unwrap(),
+            pkarr::dns::CLASS::IN,
+            300,
+            pkarr::dns::rdata::RData::NS(NS(Name::new(
+                "ns.sub.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto",
+            )
+            .unwrap())),
+        );
+        reply.answers.push(sub);
+        let signed = SignedPacket::from_packet(&pair, &reply).unwrap();
+        let client = PkarrClient::builder().resolvers(None).build().unwrap().as_async();
+        let _res = client.publish(&signed).await;
+    }
+
+    /// Create a new dns socket and query recursively.
+    async fn resolve_query_recursively(query: Vec<u8>) -> Vec<u8> {
+        let listening: SocketAddr = DnsSocket::random_local_socket();
+        let icann_resolver: SocketAddr = "8.8.8.8:53".parse().unwrap();
+
+        let mut socket = DnsSocket::new(
+            listening,
+            icann_resolver,
+            999,
+            999,
+            999,
+            999,
+            0,
+            0,
+            NonZeroU64::new(1).unwrap(),
+            1,
+            Some(TopLevelDomain::new("key".to_string())),
+            5,
+        )
+        .await
+        .unwrap();
+        let join_handle = socket.start_receive_loop();
+        let parsed_query = ParsedQuery::new(query).unwrap();
+        let result = socket.query_me_recursively(&parsed_query, None).await;
+        join_handle.send(());
+        result
+    }
+
     #[tokio::test]
-    async fn run_processor() {
-        let listening: SocketAddr = "0.0.0.0:34254".parse().unwrap();
-        let icann_fallback: SocketAddr = "8.8.8.8:53".parse().unwrap();
-        let mut socket = DnsSocket::default().await.unwrap();
-        let join_handle = socket.start_receive_loop().await;
+    async fn recursion_cname_icann() {
+        publish_domain().await;
 
         let mut query = Packet::new_query(0);
-        let qname = Name::new("google.ch").unwrap();
-        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
-        let qclass = simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN);
+        let qname = Name::new("cname-icann.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
         let question = Question::new(qname, qtype, qclass, false);
         query.questions = vec![question];
+        query.set_flags(PacketFlag::RECURSION_DESIRED);
+        let raw_query = query.build_bytes_vec_compressed().unwrap();
 
-        let query = query.build_bytes_vec_compressed().unwrap();
-        let to: SocketAddr = "8.8.8.8:53".parse().unwrap();
-        let result = socket.forward(&query, &to, Duration::from_secs(5)).await.unwrap();
-        let reply = Packet::parse(&result).unwrap();
-        dbg!(reply);
+        let raw_reply = resolve_query_recursively(raw_query).await;
+        let reply = Packet::parse(&raw_reply).unwrap();
+        assert!(reply.answers.len()>= 2);
+        let cname = reply.answers.get(0).unwrap();
+        assert!(cname.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
+        let a = reply.answers.get(1).unwrap().clone().into_owned();
+        assert!(a.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A)));
     }
+
+    #[tokio::test]
+    async fn recursion_cname_icann_with_tld() {
+        publish_domain().await;
+
+        let mut query = Packet::new_query(0);
+        let qname = Name::new("cname-icann.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto.key").unwrap();
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
+        let question = Question::new(qname, qtype, qclass, false);
+        query.questions = vec![question];
+        query.set_flags(PacketFlag::RECURSION_DESIRED);
+        let raw_query = query.build_bytes_vec_compressed().unwrap();
+
+        let raw_reply = resolve_query_recursively(raw_query).await;
+        let reply = Packet::parse(&raw_reply).unwrap();
+        assert!(reply.answers.len()>= 2);
+        let cname = reply.answers.get(0).unwrap();
+        assert!(cname.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
+        let a = reply.answers.get(1).unwrap().clone().into_owned();
+        assert!(a.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A)));
+    }
+
+    #[tokio::test]
+    async fn recursion_cname_pkd() {
+        // Single recursion CNAME
+        publish_domain().await;
+        let mut query = Packet::new_query(0);
+        let qname = Name::new("cname-pkd.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
+        let question = Question::new(qname, qtype, qclass, false);
+        query.questions = vec![question];
+        query.set_flags(PacketFlag::RECURSION_DESIRED);
+        let raw_query = query.build_bytes_vec_compressed().unwrap();
+
+        let raw_reply = resolve_query_recursively(raw_query).await;
+        let reply = Packet::parse(&raw_reply).unwrap();
+        dbg!(&reply);
+        assert_eq!(reply.answers.len(), 2);
+        let cname = reply.answers.get(0).unwrap();
+        assert!(cname.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
+        let a = reply.answers.get(1).unwrap().clone().into_owned();
+        assert!(a.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A)));
+    }
+
+    #[tokio::test]
+    async fn recursion_cname_pkd2() {
+        // Double recursion CNAME
+        publish_domain().await;
+
+        let mut query = Packet::new_query(0);
+        let qname = Name::new("cname-pkd2.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
+        let question = Question::new(qname, qtype, qclass, false);
+        query.questions = vec![question];
+        query.set_flags(PacketFlag::RECURSION_DESIRED);
+        let raw_query = query.build_bytes_vec_compressed().unwrap();
+
+        let raw_reply = resolve_query_recursively(raw_query).await;
+        let reply = Packet::parse(&raw_reply).unwrap();
+        assert_eq!(reply.answers.len(), 3);
+        let cname1 = reply.answers.get(0).unwrap();
+        assert!(cname1.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
+        let cname2 = reply.answers.get(1).unwrap();
+        assert!(cname2.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
+        let a = reply.answers.get(2).unwrap().clone().into_owned();
+        assert!(a.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A)));
+    }
+
+    #[tokio::test]
+    async fn recursion_cname_infinite() {
+        // Infinite recursion CNAME
+        // Check max recursion depth
+        publish_domain().await;
+
+        let mut query = Packet::new_query(0);
+        let qname = Name::new("cname-infinite.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
+        let question = Question::new(qname, qtype, qclass, false);
+        query.questions = vec![question];
+        query.set_flags(PacketFlag::RECURSION_DESIRED);
+        let raw_query = query.build_bytes_vec_compressed().unwrap();
+
+        let raw_reply = resolve_query_recursively(raw_query).await;
+        let reply = Packet::parse(&raw_reply).unwrap();
+        assert_eq!(reply.rcode(), RCODE::ServerFailure);
+    }
+
+    #[tokio::test]
+    async fn recursion_not_found1() {
+        // Check if the error is copied to
+        publish_domain().await;
+
+        let mut query = Packet::new_query(0);
+        let qname = Name::new("osjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
+        let question = Question::new(qname, qtype, qclass, false);
+        query.questions = vec![question];
+        query.set_flags(PacketFlag::RECURSION_DESIRED);
+        let raw_query = query.build_bytes_vec_compressed().unwrap();
+
+        let raw_reply = resolve_query_recursively(raw_query).await;
+        let reply = Packet::parse(&raw_reply).unwrap();
+        // dbg!(&reply);
+        assert_eq!(reply.rcode(), RCODE::NameError);
+    }
+
+    #[tokio::test]
+    async fn recursion_not_found2() {
+        publish_domain().await;
+        let mut query = Packet::new_query(0);
+        let qname = Name::new("yolo.example.com").unwrap();
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
+        let question = Question::new(qname, qtype, qclass, false);
+        query.questions = vec![question];
+        query.set_flags(PacketFlag::RECURSION_DESIRED);
+        let raw_query = query.build_bytes_vec_compressed().unwrap();
+
+        let raw_reply = resolve_query_recursively(raw_query).await;
+        let reply = Packet::parse(&raw_reply).unwrap();
+        assert_eq!(reply.rcode(), RCODE::NameError);
+    }
+
+    #[tokio::test]
+    async fn recursion_ns_pkd() {
+        // Single recursion with a delegated zone with an external name server
+        // Domain is saved in the name server and not in the pkarr zone.
+        publish_domain().await;
+        let mut query = Packet::new_query(0);
+        let qname = Name::new("sub.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto").unwrap();
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
+        let question = Question::new(qname, qtype, qclass, false);
+        query.questions = vec![question];
+        query.set_flags(PacketFlag::RECURSION_DESIRED);
+        let raw_query = query.build_bytes_vec_compressed().unwrap();
+
+        let raw_reply = resolve_query_recursively(raw_query).await;
+        let reply = Packet::parse(&raw_reply).unwrap();
+        assert_eq!(reply.answers.len(), 1);
+        let a = reply.answers.get(0).unwrap().clone().into_owned();
+        assert!(a.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A)));
+        assert_eq!(
+            a.rdata,
+            RData::A(A {
+                address: Ipv4Addr::new(37, 27, 13, 182).to_bits()
+            })
+        );
+    }
+
+    // TODO: tld support for NS referrals
+    // #[tokio::test]
+    // async fn recursion_ns_pkd_with_tld() {
+    //     // Single recursion with a delegated zone with an external name server
+    //     // Domain is saved in the name server and not in the pkarr zone.
+    //     publish_domain().await;
+    //     let mut query = Packet::new_query(0);
+    //     let qname = Name::new("sub.csjbhp9jpbomwh3m5eyrj1py41m8sjpkzzqmzpj5madsi7sc4mto.key").unwrap();
+    //     let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+    //     let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
+    //     let question = Question::new(qname, qtype, qclass, false);
+    //     query.questions = vec![question];
+    //     query.set_flags(PacketFlag::RECURSION_DESIRED);
+    //     let raw_query = query.build_bytes_vec_compressed().unwrap();
+
+    //     let raw_reply = resolve_query_recursively(raw_query).await;
+    //     let reply = Packet::parse(&raw_reply).unwrap();
+    //     assert_eq!(reply.answers.len(), 1);
+    //     let a = reply.answers.get(0).unwrap().clone().into_owned();
+    //     assert!(a.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A)));
+    //     assert_eq!(
+    //         a.rdata,
+    //         RData::A(A {
+    //             address: Ipv4Addr::new(37, 27, 13, 182).to_bits()
+    //         })
+    //     );
+    // }
 }

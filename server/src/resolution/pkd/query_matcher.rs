@@ -4,7 +4,7 @@ use std::{
 };
 
 use crate::resolution::DnsSocket;
-use simple_dns::{
+use pkarr::dns::{
     rdata::{self, RData},
     Name, Packet, PacketFlag, Question, ResourceRecord, QTYPE, RCODE, TYPE,
 };
@@ -49,14 +49,17 @@ async fn resolve_question<'a>(pkarr_packet: &Packet<'a>, question: &Question<'a>
     if reply.answers.len() == 0 {
         // Not found. Maybe we have a name server?
         reply.name_servers = find_nameserver(pkarr_packet, &question.qname);
-        // if reply.name_servers.len() > 0 {
-        //     // Resolve ns
 
-        //     let ns_reply = resolve_with_ns(question, &reply.name_servers).await;
-        //     if let Some(ns_reply) = ns_reply {
-        //         return ns_reply;
-        //     }
-        // }
+        // Add all glued A/AAAA records to the additional section
+        for ns in reply.name_servers.iter() {
+            if let RData::NS(val)  = &ns.rdata {
+                let name = &val.0;
+                let matches_a = direct_matches(pkarr_packet, name, &QTYPE::TYPE(TYPE::A));
+                let matches_aaaa = direct_matches(pkarr_packet, name, &QTYPE::TYPE(TYPE::AAAA));
+                let merged_matches: Vec<_> = matches_a.into_iter().chain(matches_aaaa.into_iter()).collect();
+                reply.additional_records.extend(merged_matches);
+            };
+        }
     };
 
     reply.build_bytes_vec_compressed().unwrap()
@@ -116,6 +119,7 @@ fn find_nameserver<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>) -> Vec<Resou
     matches
 }
 
+
 /**
  * Resolve name server ip
  */
@@ -123,7 +127,7 @@ fn find_nameserver<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>) -> Vec<Resou
 //     let ns_question = Question::new(
 //         ns_name.clone(),
 //         QTYPE::TYPE(TYPE::A),
-//         simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN),
+//         pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN),
 //         false,
 //     );
 //     let mut query = Packet::new_query(0);
@@ -208,7 +212,7 @@ mod tests {
         dns::{Name, Packet, ResourceRecord},
         Keypair, PublicKey,
     };
-    use simple_dns::{rdata::RData, Question};
+    use pkarr::dns::{rdata::RData, Question};
 
     use super::{resolve_query, resolve_question};
 
@@ -228,13 +232,13 @@ mod tests {
 
         let name = Name::new(&pubkey_z32).unwrap();
         let ip: Ipv4Addr = "127.0.0.1".parse().unwrap();
-        let answer1 = ResourceRecord::new(name.clone(), simple_dns::CLASS::IN, 100, RData::A(ip.into()));
+        let answer1 = ResourceRecord::new(name.clone(), pkarr::dns::CLASS::IN, 100, RData::A(ip.into()));
         packet.answers.push(answer1);
 
         let name = format!("pknames.p2p.{pubkey_z32}");
         let name = Name::new(&name).unwrap();
         let ip: Ipv4Addr = "127.0.0.1".parse().unwrap();
-        let answer1 = ResourceRecord::new(name.clone(), simple_dns::CLASS::IN, 100, RData::A(ip.into()));
+        let answer1 = ResourceRecord::new(name.clone(), pkarr::dns::CLASS::IN, 100, RData::A(ip.into()));
         packet.answers.push(answer1);
 
         let name = format!("www.pknames.p2p.{pubkey_z32}");
@@ -243,9 +247,9 @@ mod tests {
         let data = Name::new(&data).unwrap();
         let answer3 = ResourceRecord::new(
             name.clone(),
-            simple_dns::CLASS::IN,
+            pkarr::dns::CLASS::IN,
             100,
-            RData::CNAME(simple_dns::rdata::CNAME(data)),
+            RData::CNAME(pkarr::dns::rdata::CNAME(data)),
         );
         packet.answers.push(answer3);
 
@@ -255,9 +259,9 @@ mod tests {
         let data = Name::new(&data).unwrap();
         let answer4 = ResourceRecord::new(
             name.clone(),
-            simple_dns::CLASS::IN,
+            pkarr::dns::CLASS::IN,
             100,
-            RData::NS(simple_dns::rdata::NS(data)),
+            RData::NS(pkarr::dns::rdata::NS(data)),
         );
         packet.answers.push(answer4);
 
@@ -272,11 +276,11 @@ mod tests {
 
         let name = format!("pknames.p2p.{pubkey_z32}");
         let name = Name::new(&name).unwrap();
-        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
         let question = Question::new(
             name.clone(),
             qtype,
-            simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN),
+            pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN),
             false,
         );
 
@@ -299,11 +303,11 @@ mod tests {
 
         let name = format!("www.pknames.p2p.{pubkey_z32}");
         let name = Name::new(&name).unwrap();
-        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
         let question = Question::new(
             name.clone(),
             qtype,
-            simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN),
+            pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN),
             false,
         );
 
@@ -316,7 +320,7 @@ mod tests {
 
         let answer1 = reply.answers.get(0).unwrap();
         assert_eq!(answer1.name, name);
-        assert!(answer1.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::CNAME)));
+        assert!(answer1.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
 
         let answer2 = reply.answers.get(1).unwrap();
         assert_eq!(answer2.name.to_string(), format!("pknames.p2p.{pubkey_z32}"));
@@ -331,11 +335,11 @@ mod tests {
 
         let name = format!("other.{pubkey_z32}");
         let name = Name::new(&name).unwrap();
-        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
         let question = Question::new(
             name.clone(),
             qtype,
-            simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN),
+            pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN),
             false,
         );
         let mut socket = get_dnssocket().await;
@@ -347,7 +351,7 @@ mod tests {
 
         let ns1 = reply.name_servers.get(0).unwrap();
         assert_eq!(ns1.name, name);
-        assert!(ns1.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::NS)));
+        assert!(ns1.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::NS)));
     }
 
     #[tokio::test]
@@ -358,11 +362,11 @@ mod tests {
 
         let name = format!("sub.other.{pubkey_z32}");
         let name = Name::new(&name).unwrap();
-        let qtype = simple_dns::QTYPE::TYPE(simple_dns::TYPE::A);
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
         let question = Question::new(
             name.clone(),
             qtype,
-            simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN),
+            pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN),
             false,
         );
 
@@ -375,7 +379,7 @@ mod tests {
 
         let ns1 = reply.name_servers.get(0).unwrap();
         assert_eq!(ns1.name.to_string(), format!("other.{pubkey_z32}"));
-        assert!(ns1.match_qtype(simple_dns::QTYPE::TYPE(simple_dns::TYPE::NS)));
+        assert!(ns1.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::NS)));
     }
 
     #[tokio::test]
@@ -386,8 +390,8 @@ mod tests {
         let mut query = Packet::new_query(0);
         query.questions = vec![Question::new(
             Name::new("pknames.p2p").unwrap(),
-            simple_dns::QTYPE::TYPE(simple_dns::TYPE::A),
-            simple_dns::QCLASS::CLASS(simple_dns::CLASS::IN),
+            pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A),
+            pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN),
             false,
         )];
 

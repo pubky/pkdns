@@ -9,8 +9,15 @@ use crate::{helpers::construct_pkarr_client, pkarr_packet::PkarrPacket};
 fn resolve_pkarr(uri: &str) -> (PkarrPacket, DateTime<Utc>) {
     let client = construct_pkarr_client();
     let pubkey: PublicKey = uri.try_into().expect("Should be valid pkarr public key.");
-    let _ = client.resolve(&pubkey);
-    thread::sleep(Duration::from_millis(500));
+    let res = client.resolve(&pubkey);
+    if let Err(e) = res {
+        eprintln!("Failed to resolve. {e}");
+        std::process::exit(1);
+    }
+    if let None = res.unwrap() {
+        eprintln!("Failed to find the packet on the first try. Try again.");
+    }
+    thread::sleep(Duration::from_millis(1000));
     let res = client.resolve(&pubkey);
     if let Err(e) = res {
         eprintln!("Failed to resolve. {e}");
@@ -18,12 +25,14 @@ fn resolve_pkarr(uri: &str) -> (PkarrPacket, DateTime<Utc>) {
     }
     let res = res.unwrap();
     if res.is_none() {
+        println!("Failed to find the packet on the second try.");
         return (PkarrPacket::empty(), DateTime::<Utc>::MIN_UTC);
     };
     let signed_packet = res.unwrap();
     let timestamp =
         chrono::DateTime::from_timestamp((signed_packet.timestamp() / 1000000).try_into().unwrap(), 0).unwrap();
     let packet = signed_packet.packet();
+
     let data = packet.build_bytes_vec_compressed().unwrap();
 
     (PkarrPacket::by_data(data), timestamp)
