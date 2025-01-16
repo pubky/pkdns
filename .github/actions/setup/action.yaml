@@ -9,6 +9,16 @@ runs:
     - name: Checkout Code
       uses: actions/checkout@v3
 
+    - name: Cache Cargo Dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
