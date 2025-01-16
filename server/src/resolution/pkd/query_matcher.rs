@@ -217,7 +217,7 @@ mod tests {
     use super::{resolve_query, resolve_question};
 
     async fn get_dnssocket() -> DnsSocket {
-        DnsSocket::default().await.unwrap()
+        DnsSocket::default_random_socket().await.unwrap()
     }
 
     fn example_pkarr_reply() -> (Vec<u8>, PublicKey) {
