@@ -33,6 +33,8 @@ pub fn get_resolver() -> ProviderResolver {
 
 #[cfg(test)]
 mod tests {
+    use crate::external_ip::providers::external_ip_resolver::is_ipv6_available;
+
     use super::*;
 
     #[tokio::test]
@@ -43,7 +45,10 @@ mod tests {
 
     #[tokio::test]
     async fn test_ipv6() {
-        let ip = resolve_ipv6().await;
-        ip.expect("Valid ipv6");
+        if is_ipv6_available() {
+            // Only run test if ipv6 is available on this system.
+            let ip = resolve_ipv6().await;
+            assert!(ip.is_ok());
+        }
     }
 }

@@ -1,6 +1,6 @@
 use std::{
     future::Future,
-    net::{AddrParseError, Ipv4Addr, Ipv6Addr},
+    net::{AddrParseError, Ipv4Addr, Ipv6Addr, TcpListener},
     pin::Pin,
 };
 
@@ -59,4 +59,9 @@ pub async fn resolve_ipv6_with_url<T: IntoUrl>(url: T) -> Result<Ipv6Addr, Exter
     let text = text.trim();
     let ip: Ipv6Addr = text.parse()?;
     Ok(ip)
+}
+
+
+pub fn is_ipv6_available() -> bool {
+    TcpListener::bind("[::1]:0").is_ok()
 }
