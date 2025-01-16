@@ -20,7 +20,8 @@ use pkarr::dns::{
 };
 use std::{
     hash::{Hash, Hasher},
-    num::NonZeroU64, thread::current,
+    num::NonZeroU64,
+    thread::current,
 };
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
@@ -278,9 +279,7 @@ impl DnsSocket {
                 current_query.question()
             );
             // println!("Recursive lookup {i}/{} NS:{next_name_server:?} - {:?}", self.max_recursion_depth, current_query.question());
-            let reply = self
-                .query_me_once(&current_query, from.clone(), next_name_server)
-                .await;
+            let reply = self.query_me_once(&current_query, from.clone(), next_name_server).await;
             next_name_server = None; // Reset target DNS
             let parsed_reply = Packet::parse(&reply).expect("Reply must be a valid dns packet.");
             // dbg!(&parsed_reply);
@@ -449,11 +448,11 @@ impl DnsSocket {
                 }
                 CustomHandlerError::Failed(err) => {
                     tracing::error!("Internal error {query}: {}", err);
-                    return query.packet.create_server_fail_reply()
+                    return query.packet.create_server_fail_reply();
                 }
                 CustomHandlerError::RateLimited(ip) => {
                     tracing::error!("IP is rate limited {query}: {}", ip);
-                    return query.packet.create_refused_reply()
+                    return query.packet.create_refused_reply();
                 }
             };
         }
@@ -700,7 +699,7 @@ mod tests {
 
         let raw_reply = resolve_query_recursively(raw_query).await;
         let reply = Packet::parse(&raw_reply).unwrap();
-        assert!(reply.answers.len()>= 2);
+        assert!(reply.answers.len() >= 2);
         let cname = reply.answers.get(0).unwrap();
         assert!(cname.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
         let a = reply.answers.get(1).unwrap().clone().into_owned();
@@ -722,7 +721,7 @@ mod tests {
 
         let raw_reply = resolve_query_recursively(raw_query).await;
         let reply = Packet::parse(&raw_reply).unwrap();
-        assert!(reply.answers.len()>= 2);
+        assert!(reply.answers.len() >= 2);
         let cname = reply.answers.get(0).unwrap();
         assert!(cname.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
         let a = reply.answers.get(1).unwrap().clone().into_owned();

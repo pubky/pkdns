@@ -1,10 +1,9 @@
-use std::net::{Ipv4Addr, Ipv6Addr};
-use rand::thread_rng;
 use rand::seq::SliceRandom;
+use rand::thread_rng;
+use std::net::{Ipv4Addr, Ipv6Addr};
 
 use super::providers::ProviderResolver;
 use super::providers::{icanhazip, identme, ipifyorg, ipinfoio, myip};
-
 
 /// Resolves the external IPv4 address randomly from a list of 5 service providers.
 /// Returns IP and the name of the service provider.
@@ -24,7 +23,7 @@ pub async fn resolve_ipv4() -> Result<(Ipv4Addr, String), &'static str> {
             Ok(ip) => return Ok((ip, provider.name.clone())),
             Err(e) => {
                 println!("Failed to fetch ip from {}. {e}", provider.name);
-            },
+            }
         }
     }
 
@@ -49,13 +48,12 @@ pub async fn resolve_ipv6() -> Result<(Ipv6Addr, String), &'static str> {
             Ok(ip) => return Ok((ip, provider.name.clone())),
             Err(e) => {
                 println!("Failed to fetch ip from {}. {e}", provider.name);
-            },
+            }
         }
     }
 
     Err("All ip providers failed to return the external ip.")
 }
-
 
 #[cfg(test)]
 mod tests {

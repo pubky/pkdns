@@ -14,7 +14,6 @@ use crate::{helpers::construct_pkarr_client, simple_zone::SimpleZone};
 
 const SECRET_KEY_LENGTH: usize = 32;
 
-
 /// Replaces {externl_ipv4} and {external_ipv6} variables in the zone file
 /// with the according ips.
 /// Errors if ips can't be resolved.
@@ -125,7 +124,7 @@ pub async fn cli_publish(matches: &ArgMatches) {
     let pubkey = keypair.to_z32();
     let client = construct_pkarr_client();
 
-    let zone = read_zone_file(matches, &pubkey).await ;
+    let zone = read_zone_file(matches, &pubkey).await;
     println!("{}", zone.packet);
     let packet = zone.packet.parsed();
     let packet = SignedPacket::from_packet(&keypair, &packet);
@@ -135,12 +134,10 @@ pub async fn cli_publish(matches: &ArgMatches) {
     }
     let packet = packet.unwrap();
 
-
     // if !should_packet_be_refreshed(&client, &keypair.public_key(), &packet) {
     //     println!("Don't publish packet because it did not change and last update was within < 1min.");
     //     return
     // };
-
 
     print!("Hang on...");
     std::io::stdout().flush().unwrap();

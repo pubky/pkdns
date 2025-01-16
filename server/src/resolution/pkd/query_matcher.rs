@@ -52,7 +52,7 @@ async fn resolve_question<'a>(pkarr_packet: &Packet<'a>, question: &Question<'a>
 
         // Add all glued A/AAAA records to the additional section
         for ns in reply.name_servers.iter() {
-            if let RData::NS(val)  = &ns.rdata {
+            if let RData::NS(val) = &ns.rdata {
                 let name = &val.0;
                 let matches_a = direct_matches(pkarr_packet, name, &QTYPE::TYPE(TYPE::A));
                 let matches_aaaa = direct_matches(pkarr_packet, name, &QTYPE::TYPE(TYPE::AAAA));
@@ -118,7 +118,6 @@ fn find_nameserver<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>) -> Vec<Resou
         .collect();
     matches
 }
-
 
 /**
  * Resolve name server ip
@@ -208,11 +207,11 @@ mod tests {
     use std::net::Ipv4Addr;
 
     use crate::resolution::{pkd::PkarrResolver, DnsSocket};
+    use pkarr::dns::{rdata::RData, Question};
     use pkarr::{
         dns::{Name, Packet, ResourceRecord},
         Keypair, PublicKey,
     };
-    use pkarr::dns::{rdata::RData, Question};
 
     use super::{resolve_query, resolve_question};
 

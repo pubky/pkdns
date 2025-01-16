@@ -1,0 +1,41 @@
+name: Build and Test Rust Project
+
+on:
+  pull_request:
+    branches:
+      - "*"
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Install Dependencies
+        run: |
+          rustup component add clippy rustfmt
+          cargo install cargo-audit
+
+      - name: Run Clippy (Lint)
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+    #   - name: Run Rustfmt (Code Formatting)
+    #     run: cargo fmt --all -- --check
+
+      - name: Build Project
+        run: cargo build --verbose
+
+      - name: Run Tests
+        run: cargo test --verbose
+
+      - name: Security Audit
+        run: cargo audit

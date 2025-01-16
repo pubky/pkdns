@@ -1,24 +1,24 @@
-use std::{future::Future, net::{AddrParseError, Ipv4Addr, Ipv6Addr}, pin::Pin};
+use std::{
+    future::Future,
+    net::{AddrParseError, Ipv4Addr, Ipv6Addr},
+    pin::Pin,
+};
 
 use reqwest::IntoUrl;
 
 pub struct ProviderResolver {
     pub name: String,
     ipv4: Pin<Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Ipv4Addr, ExternalIpResolverError>>>>>>,
-    ipv6: Pin<Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Ipv6Addr, ExternalIpResolverError>>>>>>
+    ipv6: Pin<Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Ipv6Addr, ExternalIpResolverError>>>>>>,
 }
 
-impl  ProviderResolver {
+impl ProviderResolver {
     pub fn new(
-        name: String, 
+        name: String,
         ipv4: Pin<Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Ipv4Addr, ExternalIpResolverError>>>>>>,
-        ipv6: Pin<Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Ipv6Addr, ExternalIpResolverError>>>>>>
+        ipv6: Pin<Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Ipv6Addr, ExternalIpResolverError>>>>>>,
     ) -> Self {
-        Self {
-            name,
-            ipv4,
-            ipv6
-        }
+        Self { name, ipv4, ipv6 }
     }
 
     /// Resolve this computers external ipv4 address.
