@@ -1,4 +1,4 @@
-name: Build and Test Rust Project
+name: Pipeline
 
 on:
   pull_request:

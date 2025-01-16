@@ -34,7 +34,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_ipv6() {
-        if is_ipv6_available() { // Only run test if ipv6 is available on this system.
+        if is_ipv6_available() {
+            // Only run test if ipv6 is available on this system.
             let ip = resolve_ipv6().await;
             assert!(ip.is_ok());
         }

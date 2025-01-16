@@ -61,7 +61,6 @@ pub async fn resolve_ipv6_with_url<T: IntoUrl>(url: T) -> Result<Ipv6Addr, Exter
     Ok(ip)
 }
 
-
 pub fn is_ipv6_available() -> bool {
     TcpListener::bind("[::1]:0").is_ok()
 }
