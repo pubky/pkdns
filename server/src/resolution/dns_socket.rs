@@ -371,7 +371,7 @@ impl DnsSocket {
                         || current_query.question().qname == rr.name
                 })
                 .collect();
-            if ns_matches.len() == 0 {
+            if ns_matches.is_empty() {
                 // No NS matches either; Copy additional and return main reply.
                 for additional in parsed_reply.additional_records {
                     client_reply.additional_records.push(additional.into_owned());

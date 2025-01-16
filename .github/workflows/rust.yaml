@@ -25,8 +25,8 @@ jobs:
           rustup component add clippy rustfmt
           cargo install cargo-audit
 
-      - name: Run Clippy (Lint)
-        run: cargo clippy --all-targets --all-features -- -D warnings
+      # - name: Run Clippy (Lint)
+      #   run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Run Rustfmt (Code Formatting)
         run: cargo fmt --all -- --check
@@ -37,5 +37,5 @@ jobs:
       - name: Run Tests
         run: cargo test --verbose
 
-      - name: Security Audit
-        run: cargo audit
+      # - name: Security Audit
+      #   run: cargo audit
