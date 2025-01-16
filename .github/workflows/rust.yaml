@@ -1,4 +1,4 @@
-name: Build and Test Rust Project
+name: Pipeline
 
 on:
   pull_request:
@@ -6,36 +6,43 @@ on:
       - "*"
 
 jobs:
-  build-and-test:
+  build:
+    name: Build
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
-
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
-
-      - name: Install Dependencies
-        run: |
-          rustup component add clippy rustfmt
-          cargo install cargo-audit
-
-      # - name: Run Clippy (Lint)
-      #   run: cargo clippy --all-targets --all-features -- -D warnings
-
-      - name: Run Rustfmt (Code Formatting)
-        run: cargo fmt --all -- --check
-
+      - uses: actions/checkout@v2
+      - name: Setup environment
+        id: setup
+        uses: ./.github/actions/setup
+      
       - name: Build Project
         run: cargo build --verbose
 
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup environment
+        id: setup
+        uses: ./.github/actions/setup
       - name: Run Tests
         run: cargo test --verbose
 
-      # - name: Security Audit
-      #   run: cargo audit
+
+  format:
+    name: Check Format
+    runs-on: ubuntu-latest
+    needs: build
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Setup environment
+        id: setup
+        uses: ./.github/actions/setup
+      - name: Run Rustfmt (Code Formatting)
+        run: cargo fmt --all -- --check
+
+      # - name: Run Clippy (Lint)
+      #   run: cargo clippy --all-targets --all-features -- -D warnings

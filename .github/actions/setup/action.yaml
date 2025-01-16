@@ -1,0 +1,33 @@
+name: Shared Setup
+
+description: "Install Rust, checkout code and install dependencies."
+
+
+runs:
+  using: "composite"
+  steps:
+    - name: Checkout Code
+      uses: actions/checkout@v3
+
+    - name: Cache Cargo Dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+
+    - name: Install Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+        profile: minimal
+        override: true
+
+    - name: Install Dependencies
+      shell: bash
+      run: |
+        rustup component add clippy rustfmt
+        cargo install cargo-audit

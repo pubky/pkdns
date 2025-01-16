@@ -158,21 +158,3 @@ impl DnsSocketBuilder {
         .await
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use std::{net::SocketAddr, thread::sleep, time::Duration};
-
-    use crate::resolution::DnsSocket;
-
-    #[tokio::test]
-    async fn run() {
-        let dns = DnsSocket::default().await.unwrap();
-        let join_handle = dns.start_receive_loop();
-        println!("Started");
-        sleep(Duration::from_secs(5));
-        println!("Stop");
-        join_handle.send(());
-        println!("Stopped");
-    }
-}

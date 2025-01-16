@@ -38,12 +38,13 @@ mod tests {
     #[tokio::test]
     async fn test_ipv4() {
         let ip = resolve_ipv4().await;
-        ip.expect("Valid ipv4");
+        assert!(ip.is_ok());
     }
 
+    #[ignore = "Github runners don't support ipv6 request."]
     #[tokio::test]
     async fn test_ipv6() {
         let ip = resolve_ipv6().await;
-        ip.expect("Valid ipv6");
+        assert!(ip.is_ok());
     }
 }
