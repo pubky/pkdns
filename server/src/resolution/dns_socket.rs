@@ -20,7 +20,8 @@ use pkarr::dns::{
 };
 use std::{
     hash::{Hash, Hasher},
-    num::NonZeroU64, thread::current,
+    num::NonZeroU64,
+    thread::current,
 };
 use std::{
     net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr},
@@ -75,11 +76,32 @@ impl DnsSocket {
     /// Random local socket addr
     /// 0.0.0.0:{49152..=65535}
     /// Used for testing
-    pub fn random_local_socket() -> SocketAddr {
+    fn random_local_socket() -> SocketAddr {
         let mut rng = rand::thread_rng();
         let random_port: u32 = rng.gen_range(49152..=65535);
         let socket_str = format!("0.0.0.0:{random_port}");
         socket_str.parse().unwrap()
+    }
+
+    /// Default dns socket but with a random listening port. Made for testing.
+    pub async fn default_random_socket() -> tokio::io::Result<Self> {
+        let listening = Self::random_local_socket();
+        let icann_resolver: SocketAddr = "8.8.8.8:53".parse().unwrap();
+        DnsSocket::new(
+            listening,
+            icann_resolver,
+            999,
+            999,
+            999,
+            999,
+            0,
+            0,
+            NonZeroU64::new(1).unwrap(),
+            1,
+            Some(TopLevelDomain::new("key".to_string())),
+            5,
+        )
+        .await
     }
 
     // Create a new DNS socket
@@ -257,12 +279,10 @@ impl DnsSocket {
                 current_query.question()
             );
             // println!("Recursive lookup {i}/{} NS:{next_name_server:?} - {:?}", self.max_recursion_depth, current_query.question());
-            let reply = self
-                .query_me_once(&current_query, from.clone(), next_name_server)
-                .await;
+            let reply = self.query_me_once(&current_query, from.clone(), next_name_server).await;
             next_name_server = None; // Reset target DNS
             let parsed_reply = Packet::parse(&reply).expect("Reply must be a valid dns packet.");
-            dbg!(&parsed_reply);
+            // dbg!(&parsed_reply);
 
             if !self.is_recursion_available() {
                 tracing::trace!("Recursion not available return.");
@@ -351,7 +371,7 @@ impl DnsSocket {
                         || current_query.question().qname == rr.name
                 })
                 .collect();
-            if ns_matches.len() == 0 {
+            if ns_matches.is_empty() {
                 // No NS matches either; Copy additional and return main reply.
                 for additional in parsed_reply.additional_records {
                     client_reply.additional_records.push(additional.into_owned());
@@ -428,11 +448,11 @@ impl DnsSocket {
                 }
                 CustomHandlerError::Failed(err) => {
                     tracing::error!("Internal error {query}: {}", err);
-                    return query.packet.create_server_fail_reply()
+                    return query.packet.create_server_fail_reply();
                 }
                 CustomHandlerError::RateLimited(ip) => {
                     tracing::error!("IP is rate limited {query}: {}", ip);
-                    return query.packet.create_refused_reply()
+                    return query.packet.create_refused_reply();
                 }
             };
         }
@@ -656,25 +676,7 @@ mod tests {
 
     /// Create a new dns socket and query recursively.
     async fn resolve_query_recursively(query: Vec<u8>) -> Vec<u8> {
-        let listening: SocketAddr = DnsSocket::random_local_socket();
-        let icann_resolver: SocketAddr = "8.8.8.8:53".parse().unwrap();
-
-        let mut socket = DnsSocket::new(
-            listening,
-            icann_resolver,
-            999,
-            999,
-            999,
-            999,
-            0,
-            0,
-            NonZeroU64::new(1).unwrap(),
-            1,
-            Some(TopLevelDomain::new("key".to_string())),
-            5,
-        )
-        .await
-        .unwrap();
+        let mut socket = DnsSocket::default_random_socket().await.unwrap();
         let join_handle = socket.start_receive_loop();
         let parsed_query = ParsedQuery::new(query).unwrap();
         let result = socket.query_me_recursively(&parsed_query, None).await;
@@ -697,7 +699,7 @@ mod tests {
 
         let raw_reply = resolve_query_recursively(raw_query).await;
         let reply = Packet::parse(&raw_reply).unwrap();
-        assert!(reply.answers.len()>= 2);
+        assert!(reply.answers.len() >= 2);
         let cname = reply.answers.get(0).unwrap();
         assert!(cname.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
         let a = reply.answers.get(1).unwrap().clone().into_owned();
@@ -719,7 +721,7 @@ mod tests {
 
         let raw_reply = resolve_query_recursively(raw_query).await;
         let reply = Packet::parse(&raw_reply).unwrap();
-        assert!(reply.answers.len()>= 2);
+        assert!(reply.answers.len() >= 2);
         let cname = reply.answers.get(0).unwrap();
         assert!(cname.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
         let a = reply.answers.get(1).unwrap().clone().into_owned();

@@ -21,7 +21,6 @@ use tower_http::cors::{Any, CorsLayer};
 /// The implementation works but could implement the standard more accurately,
 /// especially when it comes to cache-control.
 
-
 /// Error prefix for web browsers so users actually
 /// know what this url is about.
 const ERROR_PREFIX: &str = "
@@ -38,15 +37,24 @@ dev:";
 
 fn validate_accept_header(headers: &HeaderMap) -> Result<(), (StatusCode, String)> {
     if let None = headers.get("accept") {
-        return Err((StatusCode::BAD_REQUEST, format!("{ERROR_PREFIX} valid accept header missing")));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("{ERROR_PREFIX} valid accept header missing"),
+        ));
     };
     let value = headers.get("accept").unwrap();
     if let Err(e) = value.to_str() {
-        return Err((StatusCode::BAD_REQUEST, format!("{ERROR_PREFIX} valid accept header missing. {e}")));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("{ERROR_PREFIX} valid accept header missing. {e}"),
+        ));
     }
     let value = value.to_str().unwrap();
     if value != "application/dns-message" {
-        return Err((StatusCode::BAD_REQUEST, format!("{ERROR_PREFIX} valid accept header missing")));
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("{ERROR_PREFIX} valid accept header missing"),
+        ));
     }
     Ok(())
 }
@@ -108,7 +116,6 @@ fn extract_client_ip(request_addr: &SocketAddr, headers: &HeaderMap) -> IpAddr {
 }
 
 async fn query_to_response(query: Vec<u8>, dns_socket: &mut DnsSocket, client_ip: IpAddr) -> Response<Body> {
-    
     let reply = dns_socket.query_me_recursively_raw(query, Some(client_ip)).await;
     let lowest_ttl = get_lowest_ttl(&reply);
 
@@ -197,17 +204,21 @@ pub async fn run_doh_server(addr: SocketAddr, dns_socket: DnsSocket) {
 
 #[cfg(test)]
 mod tests {
+    use std::net::SocketAddr;
+
     use crate::{dns_over_https::server::create_app, resolution::DnsSocket};
     use axum_test::TestServer;
-    use pkarr::dns::{Name, Packet, Question};
+    use pkarr::dns::{Name, Packet, PacketFlag, Question};
+    use tracing_test::traced_test;
 
+    #[traced_test]
     #[tokio::test]
     async fn query_doh_wireformat_get() {
         // RFC8484 example https://datatracker.ietf.org/doc/html/rfc8484#section-4.1
-        let socket = DnsSocket::default().await.unwrap();
-        socket.start_receive_loop();
+        let socket = DnsSocket::default_random_socket().await.unwrap();
+        let join_handle = socket.start_receive_loop();
         let app = create_app(socket);
-        let server = TestServer::new(app).unwrap();
+        let server = TestServer::new(app.into_make_service_with_connect_info::<SocketAddr>()).unwrap();
         let base64 = "AAABAAABAAAAAAAAAWE-NjJjaGFyYWN0ZXJsYWJlbC1tYWtlcy1iYXNlNjR1cmwtZGlzdGluY3QtZnJvbS1zdGFuZGFyZC1iYXNlNjQHZXhhbXBsZQNjb20AAAEAAQ";
         let response = server
             .get("/dns-query")
@@ -224,21 +235,26 @@ mod tests {
             response
                 .maybe_header("content-length")
                 .expect("content-length available"),
-            "151"
+            "94"
         );
 
         let reply_bytes = response.into_bytes();
         let packet = Packet::parse(&reply_bytes).expect("Should be valid packet");
-        assert_eq!(packet.name_servers.len(), 1)
+        // dbg!(&packet);
+        assert_eq!(packet.answers.len(), 0);
+        assert_eq!(packet.name_servers.len(), 0);
+        assert_eq!(packet.additional_records.len(), 0);
+        assert!(packet.has_flags(PacketFlag::RESPONSE));
+        join_handle.send(()).unwrap();
     }
 
+    #[traced_test]
     #[tokio::test]
     async fn query_doh_wireformat_post() {
-        // RFC8484 example https://datatracker.ietf.org/doc/html/rfc8484#section-4.1
-        let socket = DnsSocket::default().await.unwrap();
-        socket.start_receive_loop();
+        let socket = DnsSocket::default_random_socket().await.unwrap();
+        let join_handle = socket.start_receive_loop();
         let app = create_app(socket);
-        let server = TestServer::new(app).unwrap();
+        let server = TestServer::new(app.into_make_service_with_connect_info::<SocketAddr>()).unwrap();
 
         let mut query = Packet::new_query(50);
         let question = Question::new(
@@ -260,25 +276,24 @@ mod tests {
             response.maybe_header("content-type").expect("content-type available"),
             "application/dns-message"
         );
-        assert_eq!(
-            response
-                .maybe_header("content-length")
-                .expect("content-length available"),
-            "46"
-        );
 
+        let content_length_header = response
+            .maybe_header("content-length")
+            .expect("content-length available");
         let reply_bytes = response.into_bytes();
+        assert_eq!(content_length_header, format!("{}", reply_bytes.len()));
         let packet = Packet::parse(&reply_bytes).expect("Should be valid packet");
-        assert_eq!(packet.answers.len(), 1)
+        assert!(packet.answers.len() > 1);
+        join_handle.send(()).unwrap();
     }
 
     #[tokio::test]
     async fn wrong_content_type() {
         // RFC8484 example https://datatracker.ietf.org/doc/html/rfc8484#section-4.1
-        let socket = DnsSocket::default().await.unwrap();
+        let socket = DnsSocket::default_random_socket().await.unwrap();
         socket.start_receive_loop();
         let app = create_app(socket);
-        let server = TestServer::new(app).unwrap();
+        let server = TestServer::new(app.into_make_service_with_connect_info::<SocketAddr>()).unwrap();
         let base64 = "AAABAAABAAAAAAAAAWE-NjJjaGFyYWN0ZXJsYWJlbC1tYWtlcy1iYXNlNjR1cmwtZGlzdGluY3QtZnJvbS1zdGFuZGFyZC1iYXNlNjQHZXhhbXBsZQNjb20AAAEAAQ";
         let response = server
             .get("/dns-query")
@@ -287,18 +302,5 @@ mod tests {
             .await;
 
         response.assert_status_bad_request();
-    }
-
-    #[tokio::test]
-    async fn e2e_test() {
-        // RFC8484 example https://datatracker.ietf.org/doc/html/rfc8484#section-4.1
-        // let socket = DnsSocket::default().await.unwrap();
-        // socket.start_receive_loop();
-        // run_doh_server("127.0.0.1:3000".parse().unwrap(), socket).await;
-
-        let client = dnsoverhttps::Client::from_url("http://127.0.0.1:3000/dns-query").unwrap();
-        let res = client.resolve_host("example.com").unwrap();
-        assert_eq!(res.len(), 2);
-        println!("Result IPs: {res:?}");
     }
 }

@@ -1,6 +1,8 @@
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-use super::external_ip_resolver::{resolve_ipv4_with_url, resolve_ipv6_with_url, ExternalIpResolverError, ProviderResolver};
+use super::external_ip_resolver::{
+    resolve_ipv4_with_url, resolve_ipv6_with_url, ExternalIpResolverError, ProviderResolver,
+};
 
 pub async fn resolve_ipv4() -> Result<Ipv4Addr, ExternalIpResolverError> {
     resolve_ipv4_with_url("https://api.ipify.org").await
@@ -9,7 +11,6 @@ pub async fn resolve_ipv4() -> Result<Ipv4Addr, ExternalIpResolverError> {
 pub async fn resolve_ipv6() -> Result<Ipv6Addr, ExternalIpResolverError> {
     resolve_ipv6_with_url("https://api6.ipify.org").await
 }
-
 
 pub fn get_resolver() -> ProviderResolver {
     ProviderResolver::new(

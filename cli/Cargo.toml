@@ -19,7 +19,7 @@ chrono = "0.4.38"
 shellexpand = "3.1.0"
 zbase32 = "0.1.2"
 ctrlc = "3.4.4"
-reqwest = { version="0.12.10", default-features = false, features = ["json", "rustls-tls", "http2"]}
+reqwest = { version="0.12.12", default-features = false, features = ["json", "rustls-tls", "http2"]}
 rand = {version = "0.8"}
 
 [dev-dependencies]

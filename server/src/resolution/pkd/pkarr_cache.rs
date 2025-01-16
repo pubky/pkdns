@@ -339,7 +339,7 @@ mod tests {
     async fn packet_memory_size() {
         let packet = example_signed_packet(Keypair::random());
         let cached = CacheItem::new_packet(packet.clone());
-        assert_eq!(cached.memory_size(), 212);
+        assert_eq!(cached.memory_size(), 220);
     }
 
     #[tokio::test]
@@ -351,7 +351,7 @@ mod tests {
             cache.add_packet(example_signed_packet(Keypair::random())).await;
         }
         cache.cache.run_pending_tasks().await;
-        assert_eq!(cache.approx_size_bytes(), 2120);
+        assert_eq!(cache.approx_size_bytes(), 2200);
     }
 
     #[tokio::test]

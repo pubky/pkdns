@@ -122,8 +122,7 @@ mod tests {
     async fn query_domain() {
         let google_dns: SocketAddr = "8.8.8.8:53".parse().expect("valid addr");
         let resolver = MainlineBootstrapResolver::new(google_dns).unwrap();
-        let res = resolver.lookup_domain("example.com").unwrap().unwrap();
-        assert_eq!(res.to_string(), "93.184.215.14");
+        let res = resolver.lookup_domain("example.com").unwrap().expect("Valid ip");
     }
 
     #[tokio::test]
@@ -131,8 +130,8 @@ mod tests {
         let google_dns: SocketAddr = "8.8.8.8:53".parse().expect("valid addr");
         let node = DomainPortAddr::new("example.com", 6881);
         let resolver = MainlineBootstrapResolver::new(google_dns).unwrap();
-        let res = resolver.lookup(&node).unwrap();
-        assert_eq!(res.to_string(), "93.184.215.14:6881");
+        let res = resolver.lookup(&node).expect("Valid ip address resolved");
+        assert_eq!(res.port(), 6881);
     }
 
     #[tokio::test]

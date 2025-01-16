@@ -375,9 +375,7 @@ mod tests {
         let query = ParsedQuery::new(query.build_bytes_vec().unwrap()).unwrap();
 
         let mut resolver = PkarrResolver::default().await;
-        let result = resolver
-            .resolve(&query, None)
-            .await;
+        let result = resolver.resolve(&query, None).await;
         assert!(result.is_ok());
         let reply_bytes = result.unwrap();
         let reply = Packet::parse(&reply_bytes).unwrap();
@@ -405,9 +403,7 @@ mod tests {
         query.questions.push(question);
         let query = ParsedQuery::new(query.build_bytes_vec().unwrap()).unwrap();
         let mut resolver = PkarrResolver::default().await;
-        let result = resolver
-            .resolve(&query, None)
-            .await;
+        let result = resolver.resolve(&query, None).await;
         assert!(result.is_ok());
         let reply_bytes = result.unwrap();
         let reply = Packet::parse(&reply_bytes).unwrap();
@@ -432,9 +428,7 @@ mod tests {
         query.questions.push(question);
         let query = ParsedQuery::new(query.build_bytes_vec().unwrap()).unwrap();
         let mut resolver = PkarrResolver::default().await;
-        let result = resolver
-            .resolve(&query, None)
-            .await;
+        let result = resolver.resolve(&query, None).await;
         assert!(result.is_err());
     }
 

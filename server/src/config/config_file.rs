@@ -1,8 +1,8 @@
 use anyhow::anyhow;
 use dirs::home_dir;
+use pkarr::dns::Name;
 use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
-use pkarr::dns::Name;
 use std::{
     fs,
     net::SocketAddr,
@@ -106,7 +106,7 @@ impl Default for Dns {
             query_rate_limit_burst: default_query_rate_limit_burst(),
             disable_any_queries: default_false(),
             icann_cache_mb: default_icann_cache_mb(),
-            max_recursion_depth: default_max_recursion_depth()
+            max_recursion_depth: default_max_recursion_depth(),
         }
     }
 }

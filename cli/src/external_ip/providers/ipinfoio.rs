@@ -31,7 +31,6 @@ pub fn get_resolver() -> ProviderResolver {
     )
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
