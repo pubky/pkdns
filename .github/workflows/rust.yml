@@ -28,8 +28,8 @@ jobs:
       - name: Run Clippy (Lint)
         run: cargo clippy --all-targets --all-features -- -D warnings
 
-    #   - name: Run Rustfmt (Code Formatting)
-    #     run: cargo fmt --all -- --check
+      - name: Run Rustfmt (Code Formatting)
+        run: cargo fmt --all -- --check
 
       - name: Build Project
         run: cargo build --verbose
