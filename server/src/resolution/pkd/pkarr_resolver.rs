@@ -172,7 +172,7 @@ impl PkarrResolver {
         };
 
         if let Some(ip) = from {
-            let is_rate_limited = self.rate_limiter.check_is_limited_and_increase(ip);
+            let is_rate_limited = self.rate_limiter.check_is_limited_and_increase(&ip);
             if is_rate_limited {
                 tracing::debug!("{ip} is rate limited from querying the DHT.");
                 return Err(CustomHandlerError::RateLimited(ip));

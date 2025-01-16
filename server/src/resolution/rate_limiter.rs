@@ -137,8 +137,9 @@ impl RateLimiter {
     /**
      * Checks if this IP address is limited. Increases the usage by one.
      */
-    pub fn check_is_limited_and_increase(&self, ip: IpAddr) -> bool {
+    pub fn check_is_limited_and_increase(&self, ip: &IpAddr) -> bool {
         if let Some(limiter) = &self.limiter {
+            let ip = ip.clone();
             let is_rate_limited = limiter.check_key(&ip.into()).is_err();
             return is_rate_limited;
         };
