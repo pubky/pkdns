@@ -7,51 +7,56 @@ on:
 
 jobs:
   build:
+    name: Build
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v3
+      - name: Setup environment
+        uses: ./.github/actions/setup/action.yml
 
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
+    # steps:
+      # - name: Shared Setup
+      #   uses: ./setup
 
-      - name: Install Dependencies
-        run: |
-          rustup component add clippy rustfmt
-          cargo install cargo-audit
+      # - name: Checkout Code
+      #   uses: actions/checkout@v3
 
-      - name: Run Rustfmt (Code Formatting)
-        run: cargo fmt --all -- --check
+      # - name: Install Rust
+      #   uses: actions-rs/toolchain@v1
+      #   with:
+      #     toolchain: stable
+      #     profile: minimal
+      #     override: true
 
-      - name: Build Project
-        run: cargo build --verbose
+      # - name: Install Dependencies
+      #   run: |
+      #     rustup component add clippy rustfmt
+      #     cargo install cargo-audit
+
+      # - name: Build Project
+      #   run: cargo build --verbose
 
       # - name: Security Audit
       #   run: cargo audit
 
 
-  test:
-    name: Test
-    runs-on: ubuntu-latest
-    needs: build
+  # test:
+  #   name: Test
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Setup environment
+  #       uses: ./.github/actions/setup
+  #     - name: Run Tests
+  #       run: cargo test --verbose
 
-    steps:
-      - name: Run Tests
-        run: cargo test --verbose
 
-  format:
-    name: Format
-    runs-on: ubuntu-latest
-    needs: build
+  # format:
+  #   name: Check Format
+  #   runs-on: ubuntu-latest
+  #   # needs: build
 
-    steps:
-      - name: Run Rustfmt (Code Formatting)
-        run: cargo fmt --all -- --check
+  #   steps:
+  #     - name: Run Rustfmt (Code Formatting)
+  #       run: cargo fmt --all -- --check
 
       # - name: Run Clippy (Lint)
       #   run: cargo clippy --all-targets --all-features -- -D warnings
