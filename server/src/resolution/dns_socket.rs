@@ -202,37 +202,17 @@ impl DnsSocket {
             }
         }
 
-        if self.rate_limiter.check_is_limited_and_increase(from.ip()) {
-            tracing::trace!("Rate limited {}. query_id={packet_id}", from.ip());
-            let reply = Self::create_refused_reply(packet_id);
-            self.send_to(&reply, &from).await?;
-            return Ok(());
-        };
-
         let mut socket = self.clone();
         tokio::spawn(async move {
             let start = Instant::now();
-            tracing::trace!("Received new query: {query}");
-            let query_result = socket.on_query(&query, &from).await;
-            match query_result {
-                Ok(_) => {
-                    tracing::debug!("Processed query {query} within {}ms.", start.elapsed().as_millis());
-                }
-                Err(err) => {
-                    tracing::error!("Failed to respond to query {query} {:?}", err);
-                }
-            };
+            let reply = socket.query_me_recursively(&query, Some(from.ip())).await;
+            socket.send_to(&reply, &from).await;
         });
 
         Ok(())
     }
 
-    // New query received.
-    async fn on_query(&mut self, query: &ParsedQuery, from: &SocketAddr) -> Result<usize, std::io::Error> {
-        let reply = self.query_me_recursively(&query, Some(from.ip())).await;
-        self.send_to(&reply, from).await
-    }
-
+    /// Queries recursively with a byte query. If the query can't be parsed, return a server fail.
     pub async fn query_me_recursively_raw(&mut self, query: Vec<u8>, from: Option<IpAddr>) -> Vec<u8> {
         let packet = ParsedPacket::new(query);
         if let Err(e) = packet {
@@ -246,7 +226,16 @@ impl DnsSocket {
         }
     }
 
+    /// Queries recursively. This is the main query function of this socket.
     pub async fn query_me_recursively(&mut self, query: &ParsedQuery, from: Option<IpAddr>) -> Vec<u8> {
+        // Rate limit check
+        if let Some(ip) = &from {
+            if self.rate_limiter.check_is_limited_and_increase(ip) {
+                tracing::trace!("Rate limited {}. query_id={}", query.packet.id(), ip);
+                return query.packet.create_refused_reply();
+            };
+        }
+
         // Based on https://datatracker.ietf.org/doc/html/rfc1034#section-4.3.2
         tracing::debug!("New query: {query}");
 
@@ -417,7 +406,7 @@ impl DnsSocket {
     /// Query this DNS for data once without recursion.
     /// from: Client ip used for rate limiting. None disables rate limiting
     /// target_dns: dns server to query. None falls back to the default fallback DNS
-    pub async fn query_me_once(
+    async fn query_me_once(
         &mut self,
         query: &ParsedQuery,
         from: Option<IpAddr>,
