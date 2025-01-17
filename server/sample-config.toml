@@ -34,7 +34,7 @@
 # icann_cache_mb = 100
 
 # Maximum recursion depth
-# max_recursion_depth = 3
+# max_recursion_depth = 15
 
 [dht]
 # Maximum size of the pkarr packet cache in megabytes.

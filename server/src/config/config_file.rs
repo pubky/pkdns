@@ -132,7 +132,7 @@ fn default_icann_cache_mb() -> u64 {
 }
 
 fn default_max_recursion_depth() -> u8 {
-    3
+    15
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
