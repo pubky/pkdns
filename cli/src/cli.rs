@@ -8,6 +8,7 @@ pub async fn run_cli() {
 
     let cmd = clap::Command::new("pkarr-cli")
         .version(VERSION)
+        .arg_required_else_help(true)
         .subcommand(
             clap::Command::new("publish")
                 .about("Publish pkarr dns records.")
