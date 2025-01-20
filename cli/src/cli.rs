@@ -22,17 +22,11 @@ pub async fn run_cli() {
                         .help("File path to the dns zone file.")
                         .default_value("./pkarr.zone"),
                 )
-                .arg(
-                    clap::Arg::new("once")
-                        .long("once")
-                        .required(false)
-                        .num_args(0)
-                        .help("File path to the dns records csv file."),
-                ),
         )
         .subcommand(
             clap::Command::new("resolve")
                 .about("Resolve pkarr dns records.")
+                .arg_required_else_help(true)
                 .arg(clap::Arg::new("pubkey").required(false).help("Pkarr public key uri.")),
         )
         .subcommand(clap::Command::new("generate").about("Generate a new zbase32 pkarr seed"))
