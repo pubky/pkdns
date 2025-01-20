@@ -168,7 +168,7 @@ impl DnsSocket {
             loop {
                 tokio::select! {
                     _ = &mut cancel => {
-                        tracing::info!("Stop UDP receive loop.");
+                        tracing::trace!("Stop UDP receive loop.");
                         break;
                     }
                     result = cloned.receive_datagram() => {
@@ -227,7 +227,7 @@ impl DnsSocket {
         let mut socket = self.clone();
         tokio::spawn(async move {
             let start = Instant::now();
-            let reply = socket.query_me_recursively(&query, Some(from.ip())).await;
+            let reply = socket.query_me_recursively_with_log(&query, Some(from.ip())).await;
             socket.send_to(&reply, &from).await;
         });
 
@@ -243,13 +243,21 @@ impl DnsSocket {
         }
         let packet = packet.unwrap();
         match ParsedQuery::try_from(packet.clone()) {
-            Ok(parsed) => self.query_me_recursively(&parsed, from).await,
+            Ok(parsed) => self.query_me_recursively_with_log(&parsed, from).await,
             Err(e) => packet.create_server_fail_reply(),
         }
     }
 
+    /// Queries recursively with a log.
+    pub async fn query_me_recursively_with_log(&mut self, query: &ParsedQuery, from: Option<IpAddr>) -> Vec<u8> {
+        let start = Instant::now();
+        let reply = self.query_me_recursively(&query, from).await;
+        tracing::debug!("{query} processed within {}ms.", start.elapsed().as_millis());
+        reply
+    }
+
     /// Queries recursively. This is the main query function of this socket.
-    pub async fn query_me_recursively(&mut self, query: &ParsedQuery, from: Option<IpAddr>) -> Vec<u8> {
+    async fn query_me_recursively(&mut self, query: &ParsedQuery, from: Option<IpAddr>) -> Vec<u8> {
         // Rate limit check
         if let Some(ip) = &from {
             if self.rate_limiter.check_is_limited_and_increase(ip) {
@@ -259,7 +267,6 @@ impl DnsSocket {
         }
 
         // Based on https://datatracker.ietf.org/doc/html/rfc1034#section-4.3.2
-        tracing::debug!("New query: {query}");
 
         let client_query = query;
         let client_query_data: Vec<u8> = client_query.packet.clone().into();
@@ -269,20 +276,18 @@ impl DnsSocket {
         } else {
             client_reply.remove_flags(PacketFlag::RECURSION_AVAILABLE);
         }
-        let mut next_name_server: Option<SocketAddr> = None; // Name server to target. If none, falls back to default or DHT
+        let mut next_name_server: Option<SocketAddr> = None; // Name server to target. If none, falls back to default and DHT
         let mut next_raw_query: Vec<u8> = client_query_data.clone();
         for i in 0..self.max_recursion_depth {
             let current_query = ParsedQuery::new(next_raw_query.clone()).unwrap();
             tracing::trace!(
-                "Recursive lookup {i}/{} NS:{next_name_server:?} - {:?}",
+                "Recursive lookup {i}/{} NS:{next_name_server:?} - {current_query}",
                 self.max_recursion_depth,
-                current_query.question()
             );
             // println!("Recursive lookup {i}/{} NS:{next_name_server:?} - {:?}", self.max_recursion_depth, current_query.question());
             let reply = self.query_me_once(&current_query, from.clone(), next_name_server).await;
             next_name_server = None; // Reset target DNS
             let parsed_reply = Packet::parse(&reply).expect("Reply must be a valid dns packet.");
-            // dbg!(&parsed_reply);
 
             if !self.is_recursion_available() {
                 tracing::trace!("Recursion not available return.");
@@ -305,6 +310,7 @@ impl DnsSocket {
 
             if parsed_reply.answers.len() == 0 && parsed_reply.name_servers.len() == 0 {
                 // No answers and NS received.
+                tracing::warn!("Empty reply {current_query}");
                 return client_reply.build_bytes_vec().unwrap();
             }
 
@@ -325,6 +331,7 @@ impl DnsSocket {
                 // We found answers matching the name and the type.
                 // Copy everything over and return.
                 tracing::trace!("Recursion final answer found.");
+
                 for answer in parsed_reply.answers {
                     client_reply.answers.push(answer.into_owned());
                 }
@@ -355,6 +362,7 @@ impl DnsSocket {
                     question.qname = val.0.clone();
                     let mut next_query = current_query.packet.parsed().clone();
                     next_query.questions = vec![question];
+                    next_query.set_flags(PacketFlag::RECURSION_DESIRED);
                     next_raw_query = next_query.build_bytes_vec().unwrap();
                     continue;
                 } else {
@@ -373,12 +381,13 @@ impl DnsSocket {
                 .collect();
             if ns_matches.is_empty() {
                 // No NS matches either; Copy additional and return main reply.
+                tracing::trace!("No direct and no ns matches");
                 for additional in parsed_reply.additional_records {
                     client_reply.additional_records.push(additional.into_owned());
                 }
                 return client_reply.build_bytes_vec().unwrap();
             }
-            // NS match, Not implemented yet. Disable recursion and return
+
             tracing::trace!("NS matches. {parsed_reply:?}");
             let found_name_server = parsed_reply.name_servers.iter().find_map(|ns| {
                 if let RData::NS(NS(ns_name)) = &ns.rdata {
@@ -414,12 +423,15 @@ impl DnsSocket {
                 continue;
             };
 
-            // QNAME match but no QTYPE match nor a CNAME nor a NS
-            // So we don't have a match
+            // Unhandled NS response. Probably SOA. Return
+            for ns in parsed_reply.name_servers.iter() {
+                client_reply.name_servers.push(ns.clone().into_owned());
+            }
             return client_reply.build_bytes_vec().unwrap();
         }
 
         // Max recursion exceeded
+        tracing::debug!("Max recursion exceeded. {query}");
         client_query.packet.create_server_fail_reply()
     }
 
@@ -858,6 +870,24 @@ mod tests {
                 address: Ipv4Addr::new(37, 27, 13, 182).to_bits()
             })
         );
+    }
+
+    #[tokio::test]
+    async fn recursion_ns_soa_icann() {
+        // NS SOA record with lots of cnames
+        let mut query = Packet::new_query(0);
+        let qname = Name::new("ap.lijit.com").unwrap();
+        let qtype = pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::A);
+        let qclass = pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN);
+        let question = Question::new(qname, qtype, qclass, false);
+        query.questions = vec![question];
+        query.set_flags(PacketFlag::RECURSION_DESIRED);
+        let raw_query = query.build_bytes_vec_compressed().unwrap();
+
+        let raw_reply = resolve_query_recursively(raw_query).await;
+        let final_reply = Packet::parse(&raw_reply).unwrap();
+        dbg!(&final_reply);
+        assert!(final_reply.answers.len() > 0);
     }
 
     // TODO: tld support for NS referrals
