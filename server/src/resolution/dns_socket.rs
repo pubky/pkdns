@@ -249,7 +249,7 @@ impl DnsSocket {
     }
 
     /// Queries recursively with a log.
-    pub async fn query_me_recursively_with_log(&mut self, query: &ParsedQuery, from: Option<IpAddr>) -> Vec<u8>  {
+    pub async fn query_me_recursively_with_log(&mut self, query: &ParsedQuery, from: Option<IpAddr>) -> Vec<u8> {
         let start = Instant::now();
         let reply = self.query_me_recursively(&query, from).await;
         tracing::debug!("{query} processed within {}ms.", start.elapsed().as_millis());
@@ -283,7 +283,6 @@ impl DnsSocket {
             tracing::trace!(
                 "Recursive lookup {i}/{} NS:{next_name_server:?} - {current_query}",
                 self.max_recursion_depth,
-                
             );
             // println!("Recursive lookup {i}/{} NS:{next_name_server:?} - {:?}", self.max_recursion_depth, current_query.question());
             let reply = self.query_me_once(&current_query, from.clone(), next_name_server).await;
