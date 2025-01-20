@@ -93,32 +93,6 @@ fn parse_seed(seed: &str) -> Keypair {
     keypair
 }
 
-// /// Determines if the packet on the DHT is different to the new packet
-// fn should_packet_be_refreshed(client: &PkarrClient, pubkey: &PublicKey, new_packet: &SignedPacket) -> bool {
-//     if let Ok(old_packet) = client.resolve(pubkey) {
-//         if let Some(old_packet) = old_packet {
-//             // Check if the packet even changed.
-//             let old_bytes = old_packet.packet().build_bytes_vec().unwrap();
-//             let new_bytes = new_packet.packet().build_bytes_vec().unwrap();
-//             let did_packet_change = old_bytes != new_bytes;
-//             if did_packet_change {
-//                 return true
-//             };
-
-//             // Only refresh a similar page max every 1min to avoid running into
-//             // a rate limit.
-//             let published_at = std::time::UNIX_EPOCH + std::time::Duration::from_micros(old_packet.timestamp());
-//             let datetime: chrono::DateTime<Utc> = published_at.clone().into();
-//             println!("Published at {datetime}");
-//             let age = published_at.elapsed().unwrap();
-//             let is_too_recent = age.as_secs() < 60;
-//             return !is_too_recent;
-//         };
-//     };
-//     // Not found on the DHT.
-//     true
-// }
-
 pub async fn cli_publish(matches: &ArgMatches) {
     let keypair = read_seed_file(matches);
     let pubkey = keypair.to_z32();
