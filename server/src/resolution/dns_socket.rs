@@ -168,7 +168,7 @@ impl DnsSocket {
             loop {
                 tokio::select! {
                     _ = &mut cancel => {
-                        tracing::info!("Stop UDP receive loop.");
+                        tracing::trace!("Stop UDP receive loop.");
                         break;
                     }
                     result = cloned.receive_datagram() => {
@@ -269,20 +269,19 @@ impl DnsSocket {
         } else {
             client_reply.remove_flags(PacketFlag::RECURSION_AVAILABLE);
         }
-        let mut next_name_server: Option<SocketAddr> = None; // Name server to target. If none, falls back to default or DHT
+        let mut next_name_server: Option<SocketAddr> = None; // Name server to target. If none, falls back to default and DHT
         let mut next_raw_query: Vec<u8> = client_query_data.clone();
         for i in 0..self.max_recursion_depth {
             let current_query = ParsedQuery::new(next_raw_query.clone()).unwrap();
             tracing::trace!(
                 "Recursive lookup {i}/{} NS:{next_name_server:?} - {:?}",
                 self.max_recursion_depth,
-                current_query.question()
+                current_query
             );
             // println!("Recursive lookup {i}/{} NS:{next_name_server:?} - {:?}", self.max_recursion_depth, current_query.question());
             let reply = self.query_me_once(&current_query, from.clone(), next_name_server).await;
             next_name_server = None; // Reset target DNS
             let parsed_reply = Packet::parse(&reply).expect("Reply must be a valid dns packet.");
-            // dbg!(&parsed_reply);
 
             if !self.is_recursion_available() {
                 tracing::trace!("Recursion not available return.");
@@ -305,6 +304,7 @@ impl DnsSocket {
 
             if parsed_reply.answers.len() == 0 && parsed_reply.name_servers.len() == 0 {
                 // No answers and NS received.
+                tracing::warn!("Empty reply {current_query}");
                 return client_reply.build_bytes_vec().unwrap();
             }
 
@@ -325,6 +325,7 @@ impl DnsSocket {
                 // We found answers matching the name and the type.
                 // Copy everything over and return.
                 tracing::trace!("Recursion final answer found.");
+
                 for answer in parsed_reply.answers {
                     client_reply.answers.push(answer.into_owned());
                 }
@@ -355,6 +356,7 @@ impl DnsSocket {
                     question.qname = val.0.clone();
                     let mut next_query = current_query.packet.parsed().clone();
                     next_query.questions = vec![question];
+                    next_query.set_flags(PacketFlag::RECURSION_DESIRED);
                     next_raw_query = next_query.build_bytes_vec().unwrap();
                     continue;
                 } else {
@@ -373,12 +375,13 @@ impl DnsSocket {
                 .collect();
             if ns_matches.is_empty() {
                 // No NS matches either; Copy additional and return main reply.
+                tracing::trace!("No direct and no ns matches");
                 for additional in parsed_reply.additional_records {
                     client_reply.additional_records.push(additional.into_owned());
                 }
                 return client_reply.build_bytes_vec().unwrap();
             }
-            // NS match, Not implemented yet. Disable recursion and return
+
             tracing::trace!("NS matches. {parsed_reply:?}");
             let found_name_server = parsed_reply.name_servers.iter().find_map(|ns| {
                 if let RData::NS(NS(ns_name)) = &ns.rdata {
@@ -416,10 +419,14 @@ impl DnsSocket {
 
             // QNAME match but no QTYPE match nor a CNAME nor a NS
             // So we don't have a match
+            tracing::warn!("QNAME match but no QTYPE match nor a CNAME nor a NS {current_query}");
+
+            dbg!(&parsed_reply);
             return client_reply.build_bytes_vec().unwrap();
         }
 
         // Max recursion exceeded
+        tracing::debug!("Max recursion exceeded. {query}");
         client_query.packet.create_server_fail_reply()
     }
 

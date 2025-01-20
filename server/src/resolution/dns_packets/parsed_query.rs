@@ -66,8 +66,8 @@ impl Display for ParsedQuery {
         let query_name = format!("{} {:?} query_id={query_id}", question.qname, question.qtype);
         write!(
             f,
-            "{} {:?} {:?} id={query_id}",
-            question.qname, question.qtype, question.qclass
+            "{} {:?} {:?} id={query_id} rd={}",
+            question.qname, question.qtype, question.qclass, self.packet.parsed().has_flags(PacketFlag::RECURSION_DESIRED)
         )
     }
 }
