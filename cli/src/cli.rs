@@ -21,7 +21,7 @@ pub async fn run_cli() {
                     clap::Arg::new("zonefile")
                         .help("File path to the dns zone file.")
                         .default_value("./pkarr.zone"),
-                )
+                ),
         )
         .subcommand(
             clap::Command::new("resolve")
