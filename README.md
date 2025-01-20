@@ -132,13 +132,10 @@ Options:
 - [How can I run my own DNS over HTTPS endpoint?](./docs/dns-over-https.md)
 - [How to configure DynDNS?](./docs/dyn-dns.md)
 
-## Limitations
+## Related Tools
 
-### Recursion
-
-pkdns does only partially support recursive lookups. Recursion only works
-- For a `CNAME` pointing directly to another record in the same pkarr packet.
-
+- [pkdns-vanity](https://github.com/jphastings/pkdns-vanity)
+- [awesome-pubky](https://github.com/aljazceru/awesome-pubky)
 
 ### Record Types
 
@@ -148,5 +145,3 @@ Currently, pkdns only supports `A`, `AAAA`, `TXT`, `CNAME`, and `MX` records. Fo
 ---
 
 May the power ⚡ be with you. Powered by [pkarr](https://github.com/pubky/pkarr).
-
-test
