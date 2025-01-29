@@ -6,6 +6,7 @@ use std::{
 
 use anyhow::anyhow;
 
+use chrono::DateTime;
 use clap::ArgMatches;
 use pkarr::{Keypair, SignedPacket};
 
@@ -115,10 +116,15 @@ pub async fn cli_publish(matches: &ArgMatches) {
 
     print!("Hang on...");
     std::io::stdout().flush().unwrap();
+    let timestamp = DateTime::from_timestamp_micros(packet.timestamp() as i64).unwrap();
     let result = client.publish(&packet);
     print!("\r");
     match result {
-        Ok(_) => println!("{} Successfully announced.", packet.timestamp()),
-        Err(e) => println!("Error {}", e.to_string()),
+        Ok(_) => {
+            println!("{} Successfully announced.", timestamp)
+        },
+        Err(e) => {
+            println!("{} Error {}", timestamp, e.to_string())
+        },
     };
 }

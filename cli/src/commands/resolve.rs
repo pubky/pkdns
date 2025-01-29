@@ -62,3 +62,46 @@ pub async fn cli_resolve(matches: &ArgMatches) {
         println!("Last updated at: {timestamp}");
     };
 }
+
+
+
+// Resolution test to describe a bug
+// #[cfg(test)]
+// mod tests {
+//     use pkarr::{Keypair, PkarrClientBuilder};
+
+//     use super::*;
+
+//     fn publish_key() {
+//         let key = Keypair::random();
+//         let client = PkarrClientBuilder::default()
+//         .resolvers(None)
+//         .build()
+//         .unwrap();
+
+//     }
+
+//     #[test]
+//     fn test_pkarr_resolve() {
+//         for i in 0..10 {
+//             let client = PkarrClientBuilder::default()
+//             .resolvers(None)
+//             .build()
+//             .unwrap();
+//             thread::sleep(Duration::from_millis(500));
+
+//             let pubkey: PublicKey = "7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy".try_into().unwrap();
+//             let val = client.resolve(&pubkey);
+//             let val = val.expect("Public key resolution failed.");
+//             if val.is_none() {
+//                 println!("{i} Not found");
+//             } else {
+//                 let val = val.unwrap();
+//                 let timestamp = DateTime::from_timestamp_micros(val.timestamp() as i64);
+//                 println!("{i} Found! {timestamp:?}");
+//                 break;
+//             }
+//         };
+//     }
+
+// }
