@@ -122,9 +122,9 @@ pub async fn cli_publish(matches: &ArgMatches) {
     match result {
         Ok(_) => {
             println!("{} Successfully announced.", timestamp)
-        },
+        }
         Err(e) => {
             println!("{} Error {}", timestamp, e.to_string())
-        },
+        }
     };
 }

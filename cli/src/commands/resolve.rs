@@ -62,5 +62,3 @@ pub async fn cli_resolve(matches: &ArgMatches) {
         println!("Last updated at: {timestamp}");
     };
 }
-
-
