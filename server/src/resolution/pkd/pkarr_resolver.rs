@@ -136,7 +136,6 @@ impl PkarrResolver {
         let client = Client::builder()
             .minimum_ttl(0)
             .maximum_ttl(0) // Disable Pkarr caching
-            .dht(|builder| builder)
             .bootstrap(&addrs)
             .no_relays()
             .build()
@@ -360,7 +359,7 @@ mod tests {
         packet.answers.push(record);
         let signed_packet = SignedPacket::new(&keypair, &packet.answers, Timestamp::now()).unwrap();
 
-        let client = Client::builder().build().unwrap();
+        let client = Client::builder().no_relays().build().unwrap();
         let result = client.publish(&signed_packet, None).await;
         result.expect("Should have published.");
     }
