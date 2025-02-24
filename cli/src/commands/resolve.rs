@@ -2,7 +2,10 @@ use chrono::{DateTime, Utc};
 use clap::ArgMatches;
 use pkarr::PublicKey;
 
-use crate::{helpers::construct_pkarr_client, pkarr_packet::PkarrPacket};
+use crate::{
+    helpers::{construct_pkarr_client, nts_to_chrono},
+    pkarr_packet::PkarrPacket,
+};
 
 async fn resolve_pkarr(uri: &str) -> (PkarrPacket, DateTime<Utc>) {
     let client = construct_pkarr_client();
@@ -13,9 +16,7 @@ async fn resolve_pkarr(uri: &str) -> (PkarrPacket, DateTime<Utc>) {
         return (PkarrPacket::empty(), DateTime::<Utc>::MIN_UTC);
     };
     let signed_packet = res.unwrap();
-    let timestamp =
-        chrono::DateTime::from_timestamp((signed_packet.timestamp().as_u64() / 1000000).try_into().unwrap(), 0)
-            .unwrap();
+    let timestamp = nts_to_chrono(signed_packet.timestamp());
 
     let data = signed_packet.encoded_packet();
 

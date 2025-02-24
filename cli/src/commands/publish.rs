@@ -10,6 +10,7 @@ use clap::ArgMatches;
 use pkarr::{Keypair, SignedPacket, Timestamp};
 
 use crate::external_ip::{resolve_ipv4, resolve_ipv6};
+use crate::helpers::nts_to_chrono;
 use crate::{helpers::construct_pkarr_client, simple_zone::SimpleZone};
 
 const SECRET_KEY_LENGTH: usize = 32;
@@ -119,7 +120,7 @@ pub async fn cli_publish(matches: &ArgMatches) {
     print!("\r");
     match result {
         Ok(_) => {
-            println!("{} Successfully announced.", packet)
+            println!("{} Successfully announced.", nts_to_chrono(packet.timestamp()))
         }
         Err(e) => {
             println!("{} Error {}", packet.timestamp(), e.to_string())
