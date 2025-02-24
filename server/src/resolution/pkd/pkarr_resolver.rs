@@ -2,7 +2,7 @@ use super::{
     pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply, top_level_domain::TopLevelDomain,
 };
 use crate::resolution::{dns_packets::ParsedQuery, DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder};
-use pkarr::dns::{Name, Question, ResourceRecord};
+use pkarr::{dns::{Name, Question, ResourceRecord}, Client};
 use std::{
     collections::HashMap,
     net::{IpAddr, SocketAddr},
@@ -16,7 +16,9 @@ use super::{
     pkarr_cache::{CacheItem, PkarrPacketLruCache},
     query_matcher::resolve_query,
 };
-use pkarr::{dns::Packet, mainline::dht::DhtSettings, Error as PkarrError, PkarrClient, PkarrClientAsync, PublicKey};
+use pkarr::{dns::Packet, 
+    // mainline::dht::DhtSettings, Error as PkarrError, PkarrClient, PkarrClientAsync, 
+    PublicKey};
 
 /// Errors that a CustomHandler can return.
 #[derive(thiserror::Error, Debug)]
@@ -78,8 +80,8 @@ impl ResolverSettings {
 
 #[derive(thiserror::Error, Debug)]
 pub enum PkarrResolverError {
-    #[error("Failed to query the DHT with pkarr: {0}")]
-    Dht(#[from] PkarrError),
+    // #[error("Failed to query the DHT with pkarr: {0}")]
+    // Dht(#[from] PkarrError),
 
     #[error("Failed to query the DHT with pkarr: {0}")]
     DnsSocket(#[from] DnsSocketError),
@@ -90,7 +92,7 @@ pub enum PkarrResolverError {
  */
 #[derive(Clone, Debug)]
 pub struct PkarrResolver {
-    client: PkarrClientAsync,
+    client: Client,
     cache: PkarrPacketLruCache,
     /**
      * Locks to use to update pkarr packets. This avoids concurrent updates.
@@ -127,18 +129,16 @@ impl PkarrResolver {
 
     pub async fn new(settings: ResolverSettings) -> Self {
         let addrs = Self::resolve_bootstrap_nodes(&settings.forward_dns_server);
-        let mut dht_settings = DhtSettings::default();
-        dht_settings.bootstrap = Some(addrs);
-        let client = PkarrClient::builder()
+        let client = Client::builder()
             .minimum_ttl(0)
             .maximum_ttl(0) // Disable Pkarr caching
-            .dht_settings(dht_settings) // Use resolved bootstrap node
-            .resolvers(None)
+            .dht(|builder| builder).bootstrap(&addrs)
+            .no_relays()
             .build()
             .unwrap();
         let limiter = RateLimiterBuilder::new().max_per_second(settings.max_dht_queries_per_ip_per_second.clone());
         Self {
-            client: client.as_async(),
+            client: client,
             cache: PkarrPacketLruCache::new(Some(settings.cache_mb)),
             lock_map: Arc::new(Mutex::new(HashMap::new())),
             rate_limiter: Arc::new(limiter.build()),
@@ -201,7 +201,7 @@ impl PkarrResolver {
         }
 
         tracing::trace!("Lookup [{pubkey}] on the DHT.");
-        let signed_packet = self.client.resolve(&pubkey).await?;
+        let signed_packet = self.client.resolve(&pubkey).await;
         if signed_packet.is_none() {
             tracing::debug!("DHT lookup for [{pubkey}] failed. Nothing found.");
             return Ok(self.cache.add_not_found(pubkey).await);
@@ -278,8 +278,11 @@ impl PkarrResolver {
                 };
 
                 let signed_packet = item.unwrap();
-                let packet = signed_packet.packet();
-                let reply = resolve_query(packet, &request).await;
+                let mut packet = Packet::new_reply(0);
+                for rr in signed_packet.all_resource_records() {
+                    packet.answers.push(rr.clone());
+                };
+                let reply = resolve_query(&packet, &request).await;
 
                 let reply = if removed_tld {
                     let mut packet = Packet::parse(&reply).unwrap();
@@ -300,7 +303,7 @@ mod tests {
     use chrono::{DateTime, Utc};
     use pkarr::{
         dns::{Name, Packet, Question, ResourceRecord},
-        Keypair, Settings, SignedPacket,
+        Keypair, SignedPacket, Timestamp,
     };
 
     // use pkarr::dns::{Name, Question, Packet};
@@ -314,7 +317,7 @@ mod tests {
 
     impl SignedPacketTimestamp for SignedPacket {
         fn chrono_timestamp(&self) -> DateTime<Utc> {
-            let timestamp = self.timestamp() / 1_000_000;
+            let timestamp = self.timestamp().as_u64() / 1_000_000;
             let timestamp = DateTime::from_timestamp((timestamp as u32).into(), 0).unwrap();
             timestamp
         }
@@ -350,10 +353,10 @@ mod tests {
             pkarr::dns::rdata::RData::A(ip.try_into().unwrap()),
         );
         packet.answers.push(record);
-        let signed_packet = SignedPacket::from_packet(&keypair, &packet).unwrap();
+        let signed_packet = SignedPacket::new(&keypair, &packet.answers, Timestamp::now()).unwrap();
 
-        let client = PkarrClient::new(Settings::default()).unwrap();
-        let result = client.publish(&signed_packet);
+        let client = Client::builder().build().unwrap();
+        let result = client.publish(&signed_packet, None).await;
         result.expect("Should have published.");
     }
 
@@ -441,16 +444,6 @@ mod tests {
         // assert!(result.is_some());
     }
 
-    #[tokio::test]
-    async fn pkarr_invalid_packet2() {
-        let pubkey = parse_pkarr_uri("7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy").unwrap();
-        let client = PkarrClient::new(Settings::default()).unwrap();
-        let signed_packet = client.resolve(&pubkey).unwrap().unwrap();
-        println!("Timestamp {}", signed_packet.chrono_timestamp());
-        let reply_bytes = signed_packet.packet().build_bytes_vec_compressed().unwrap();
-        Packet::parse(&reply_bytes).unwrap();
-    }
-
     #[test]
     fn pkarr_invalid_packet3() {
         let keypair = Keypair::random();
@@ -471,10 +464,10 @@ mod tests {
         packet.answers.push(answer3);
 
         // Sign packet
-        let signed_packet = SignedPacket::from_packet(&keypair, &packet).unwrap();
+        let signed_packet = SignedPacket::new(&keypair, &packet.answers, Timestamp::now()).unwrap();
 
         // Serialize and parse again
-        let reply_bytes = signed_packet.packet().build_bytes_vec().unwrap();
+        let reply_bytes = signed_packet.encoded_packet();
         Packet::parse(&reply_bytes).unwrap(); // Fail
     }
 }

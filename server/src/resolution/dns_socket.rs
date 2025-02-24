@@ -586,7 +586,7 @@ mod tests {
         rdata::{A, CNAME},
         Name, Packet, PacketFlag, Question, ResourceRecord, RCODE,
     };
-    use pkarr::{Keypair, PkarrClient, SignedPacket};
+    use pkarr::{Client, Keypair, SignedPacket, Timestamp};
     use std::{
         net::{Ipv4Addr, SocketAddr},
         num::NonZeroU64,
@@ -681,9 +681,10 @@ mod tests {
             .unwrap())),
         );
         reply.answers.push(sub);
-        let signed = SignedPacket::from_packet(&pair, &reply).unwrap();
-        let client = PkarrClient::builder().resolvers(None).build().unwrap().as_async();
-        let _res = client.publish(&signed).await;
+        let signed = SignedPacket::new(&pair, &reply.answers, Timestamp::now()).unwrap();
+        let relays: Vec<String> = vec!();
+        let client = Client::builder().relays(&relays).unwrap().build().unwrap();
+        let _res = client.publish(&signed, None).await;
     }
 
     /// Create a new dns socket and query recursively.
