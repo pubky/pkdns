@@ -118,7 +118,11 @@ pub async fn cli_publish(matches: &ArgMatches) {
     let result = client.publish(&packet, Some(packet.timestamp())).await;
     print!("\r");
     match result {
-        Ok(_) => println!("{} Successfully announced.", packet.timestamp()),
-        Err(e) => println!("Error {}", e.to_string()),
+        Ok(_) => {
+            println!("{} Successfully announced.", packet)
+        }
+        Err(e) => {
+            println!("{} Error {}", packet.timestamp(), e.to_string())
+        }
     };
 }
