@@ -109,21 +109,16 @@ pub async fn cli_publish(matches: &ArgMatches) {
     }
     let packet = packet.unwrap();
 
-    // if !should_packet_be_refreshed(&client, &keypair.public_key(), &packet) {
-    //     println!("Don't publish packet because it did not change and last update was within < 1min.");
-    //     return
-    // };
-
-    print!("Hang on...");
+    print!("Hang on... {}", nts_to_chrono(packet.timestamp()));
     std::io::stdout().flush().unwrap();
-    let result = client.publish(&packet, Some(packet.timestamp())).await;
+    let result = client.publish(&packet, None).await;
     print!("\r");
     match result {
         Ok(_) => {
             println!("{} Successfully announced.", nts_to_chrono(packet.timestamp()))
         }
         Err(e) => {
-            println!("{} Error {}", packet.timestamp(), e.to_string())
+            println!("Error {}", e.to_string())
         }
     };
 }
