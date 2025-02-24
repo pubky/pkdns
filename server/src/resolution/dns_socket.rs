@@ -682,8 +682,7 @@ mod tests {
         );
         reply.answers.push(sub);
         let signed = SignedPacket::new(&pair, &reply.answers, Timestamp::now()).unwrap();
-        let relays: Vec<String> = vec!();
-        let client = Client::builder().relays(&relays).unwrap().build().unwrap();
+        let client = Client::builder().no_relays().build().unwrap();
         let _res = client.publish(&signed, None).await;
     }
 
