@@ -7,7 +7,7 @@ use std::{
 use anyhow::anyhow;
 
 use clap::ArgMatches;
-use pkarr::{Keypair, SignedPacket};
+use pkarr::{Keypair, SignedPacket, Timestamp};
 
 use crate::external_ip::{resolve_ipv4, resolve_ipv6};
 use crate::{helpers::construct_pkarr_client, simple_zone::SimpleZone};
@@ -101,7 +101,7 @@ pub async fn cli_publish(matches: &ArgMatches) {
     let zone = read_zone_file(matches, &pubkey).await;
     println!("{}", zone.packet);
     let packet = zone.packet.parsed();
-    let packet = SignedPacket::from_packet(&keypair, &packet);
+    let packet = SignedPacket::new(&keypair, &packet.answers, Timestamp::now());
     if let Err(e) = packet {
         eprintln!("Failed to sign the pkarr packet. {e}");
         std::process::exit(1);
@@ -115,7 +115,7 @@ pub async fn cli_publish(matches: &ArgMatches) {
 
     print!("Hang on...");
     std::io::stdout().flush().unwrap();
-    let result = client.publish(&packet);
+    let result = client.publish(&packet, Some(packet.timestamp())).await;
     print!("\r");
     match result {
         Ok(_) => println!("{} Successfully announced.", packet.timestamp()),

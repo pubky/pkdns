@@ -734,7 +734,6 @@ checksum = "4a3daa8e81a3963a60642bcc1f90a670680bd4a77535faa384e9d1c79d620871"
 dependencies = [
  "curve25519-dalek",
  "ed25519",
- "rand_core",
  "serde",
  "sha2",
  "subtle",
@@ -797,7 +796,6 @@ checksum = "da0e4dd2a88388a1f4ccc7c9ce104604dab68d9f408dc34cd45823d5a9069095"
 dependencies = [
  "futures-core",
  "futures-sink",
- "nanorand",
  "spin 0.9.8",
 ]
 
@@ -1591,35 +1589,9 @@ dependencies = [
 
 [[package]]
 name = "lru"
-version = "0.12.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "234cf4f4a04dc1f57e24b96cc0cd600cf2af460d4161ac5ecdd0af8e1f3b2a38"
-
-[[package]]
-name = "lru"
 version = "0.13.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "227748d55f2f0ab4735d87fd623798cb6b664512fe979705f829c9f81c934465"
-
-[[package]]
-name = "mainline"
-version = "2.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b751ffb57303217bcae8f490eee6044a5b40eadf6ca05ff476cad37e7b7970d"
-dependencies = [
- "bytes",
- "crc",
- "ed25519-dalek",
- "flume",
- "lru 0.12.5",
- "rand",
- "serde",
- "serde_bencode",
- "serde_bytes",
- "sha1_smol",
- "thiserror 1.0.69",
- "tracing",
-]
 
 [[package]]
 name = "mainline"
@@ -1634,7 +1606,7 @@ dependencies = [
  "flume",
  "futures-lite",
  "getrandom",
- "lru 0.13.0",
+ "lru",
  "serde",
  "serde_bencode",
  "serde_bytes",
@@ -1745,15 +1717,6 @@ dependencies = [
  "mime",
  "spin 0.9.8",
  "version_check",
-]
-
-[[package]]
-name = "nanorand"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6a51313c5820b0b02bd422f4b44776fbf47961755c74ce64afc73bfad10226c3"
-dependencies = [
- "getrandom",
 ]
 
 [[package]]
@@ -2036,32 +1999,6 @@ checksum = "8b870d8c151b6f2fb93e84a13146138f05d02ed11c7e7c54f8826aaaf7c9f184"
 
 [[package]]
 name = "pkarr"
-version = "2.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9d2197a648cb1c6d2d062d6456a6273ee82272b7d838da75e4a9a1232dfc4699"
-dependencies = [
- "bytes",
- "document-features",
- "dyn-clone",
- "ed25519-dalek",
- "flume",
- "futures",
- "js-sys",
- "lru 0.12.5",
- "mainline 2.0.1",
- "rand",
- "self_cell",
- "simple-dns 0.6.2",
- "thiserror 1.0.69",
- "tracing",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "web-sys",
- "z32",
-]
-
-[[package]]
-name = "pkarr"
 version = "3.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "704cb19796c23eb116785fcbed4384187c4e7d4e78384f224221eed840a352b4"
@@ -2080,8 +2017,8 @@ dependencies = [
  "getrandom",
  "heed",
  "log",
- "lru 0.13.0",
- "mainline 5.3.1",
+ "lru",
+ "mainline",
  "ntimestamp",
  "page_size",
  "reqwest",
@@ -2090,7 +2027,7 @@ dependencies = [
  "self_cell",
  "serde",
  "sha1_smol",
- "simple-dns 0.9.3",
+ "simple-dns",
  "thiserror 2.0.11",
  "tokio",
  "tracing",
@@ -2126,7 +2063,7 @@ dependencies = [
  "governor",
  "moka",
  "once_cell",
- "pkarr 3.5.0",
+ "pkarr",
  "rand",
  "rustdns",
  "self_cell",
@@ -2151,7 +2088,7 @@ dependencies = [
  "clap",
  "ctrlc",
  "domain",
- "pkarr 2.2.1",
+ "pkarr",
  "rand",
  "reqwest",
  "serde",
@@ -2787,15 +2724,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "77549399552de45a898a580c1b41d445bf730df867cc44e6c0233bbc4b8329de"
 dependencies = [
  "rand_core",
-]
-
-[[package]]
-name = "simple-dns"
-version = "0.6.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "01607fe2e61894468c6dc0b26103abb073fb08b79a3d9e4b6d76a1a341549958"
-dependencies = [
- "bitflags",
 ]
 
 [[package]]
@@ -3815,12 +3743,6 @@ dependencies = [
  "syn 2.0.93",
  "synstructure",
 ]
-
-[[package]]
-name = "z32"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edb37266251c28b03d08162174a91c3a092e3bd4f476f8205ee1c507b78b7bdc"
 
 [[package]]
 name = "zbase32"
