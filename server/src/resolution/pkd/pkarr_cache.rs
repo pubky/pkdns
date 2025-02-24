@@ -145,7 +145,7 @@ impl CacheItem {
             CacheItem::Packet {
                 packet,
                 last_updated_at: _,
-            } => packet.timestamp(),
+            } => packet.timestamp().as_u64(),
         }
     }
 
@@ -175,7 +175,7 @@ impl CacheItem {
             CacheItem::Packet {
                 packet,
                 last_updated_at: _,
-            } => packet.packet().answers.iter().map(|answer| answer.ttl as u64).min(),
+            } => packet.all_resource_records().map(|answer| answer.ttl as u64).min(),
         }
     }
 
@@ -309,7 +309,7 @@ impl PkarrPacketLruCache {
 mod tests {
     use pkarr::{
         dns::{Name, Packet, ResourceRecord},
-        Keypair, SignedPacket,
+        Keypair, SignedPacket, Timestamp,
     };
 
     use super::*;
@@ -332,7 +332,7 @@ mod tests {
             pkarr::dns::rdata::RData::A(ip.try_into().unwrap()),
         );
         packet.answers.push(record);
-        SignedPacket::from_packet(&keypair, &packet).unwrap()
+        SignedPacket::new(&keypair, &packet.answers, Timestamp::now()).unwrap()
     }
 
     #[tokio::test]
@@ -379,7 +379,7 @@ mod tests {
         cache.add_packet(packet1.clone()).await;
         cache.add_packet(packet2.clone()).await;
         let cached = cache.get(&key.public_key()).await.unwrap();
-        assert_eq!(packet2.timestamp(), cached.controller_timestamp());
+        assert_eq!(packet2.timestamp().as_u64(), cached.controller_timestamp());
     }
 
     #[tokio::test]
@@ -393,7 +393,7 @@ mod tests {
         cache.add_packet(packet2.clone()).await;
         cache.add_packet(packet1.clone()).await;
         let cached = cache.get(&key.public_key()).await.unwrap();
-        assert_eq!(packet2.timestamp(), cached.controller_timestamp());
+        assert_eq!(packet2.timestamp().as_u64(), cached.controller_timestamp());
     }
 
     #[tokio::test]
@@ -406,7 +406,7 @@ mod tests {
         assert_eq!(cached.controller_timestamp(), 0);
         cache.add_packet(packet1.clone()).await;
         let cached = cache.get(&key.public_key()).await.unwrap();
-        assert_eq!(packet1.timestamp(), cached.controller_timestamp());
+        assert_eq!(packet1.timestamp().as_u64(), cached.controller_timestamp());
     }
 
     #[tokio::test]
@@ -417,6 +417,6 @@ mod tests {
         cache.add_packet(packet1.clone()).await;
         cache.add(CacheItem::new_not_found(key.public_key())).await;
         let cached = cache.get(&key.public_key()).await.unwrap();
-        assert_eq!(packet1.timestamp(), cached.controller_timestamp());
+        assert_eq!(packet1.timestamp().as_u64(), cached.controller_timestamp());
     }
 }
