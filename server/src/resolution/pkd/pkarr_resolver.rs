@@ -2,7 +2,10 @@ use super::{
     pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply, top_level_domain::TopLevelDomain,
 };
 use crate::resolution::{dns_packets::ParsedQuery, DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder};
-use pkarr::{dns::{Name, Question, ResourceRecord}, Client};
+use pkarr::{
+    dns::{Name, Question, ResourceRecord},
+    Client,
+};
 use std::{
     collections::HashMap,
     net::{IpAddr, SocketAddr},
@@ -16,9 +19,11 @@ use super::{
     pkarr_cache::{CacheItem, PkarrPacketLruCache},
     query_matcher::resolve_query,
 };
-use pkarr::{dns::Packet, 
-    // mainline::dht::DhtSettings, Error as PkarrError, PkarrClient, PkarrClientAsync, 
-    PublicKey};
+use pkarr::{
+    dns::Packet,
+    // mainline::dht::DhtSettings, Error as PkarrError, PkarrClient, PkarrClientAsync,
+    PublicKey,
+};
 
 /// Errors that a CustomHandler can return.
 #[derive(thiserror::Error, Debug)]
@@ -82,7 +87,6 @@ impl ResolverSettings {
 pub enum PkarrResolverError {
     // #[error("Failed to query the DHT with pkarr: {0}")]
     // Dht(#[from] PkarrError),
-
     #[error("Failed to query the DHT with pkarr: {0}")]
     DnsSocket(#[from] DnsSocketError),
 }
@@ -132,7 +136,8 @@ impl PkarrResolver {
         let client = Client::builder()
             .minimum_ttl(0)
             .maximum_ttl(0) // Disable Pkarr caching
-            .dht(|builder| builder).bootstrap(&addrs)
+            .dht(|builder| builder)
+            .bootstrap(&addrs)
             .no_relays()
             .build()
             .unwrap();
@@ -281,7 +286,7 @@ impl PkarrResolver {
                 let mut packet = Packet::new_reply(0);
                 for rr in signed_packet.all_resource_records() {
                     packet.answers.push(rr.clone());
-                };
+                }
                 let reply = resolve_query(&packet, &request).await;
 
                 let reply = if removed_tld {

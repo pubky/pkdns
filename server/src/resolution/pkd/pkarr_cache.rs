@@ -175,9 +175,7 @@ impl CacheItem {
             CacheItem::Packet {
                 packet,
                 last_updated_at: _,
-            } => {
-                packet.all_resource_records().map(|answer| answer.ttl as u64).min()
-            },
+            } => packet.all_resource_records().map(|answer| answer.ttl as u64).min(),
         }
     }
 

@@ -14,7 +14,8 @@ async fn resolve_pkarr(uri: &str) -> (PkarrPacket, DateTime<Utc>) {
     };
     let signed_packet = res.unwrap();
     let timestamp =
-        chrono::DateTime::from_timestamp((signed_packet.timestamp().as_u64() / 1000000).try_into().unwrap(), 0).unwrap();
+        chrono::DateTime::from_timestamp((signed_packet.timestamp().as_u64() / 1000000).try_into().unwrap(), 0)
+            .unwrap();
 
     let data = signed_packet.encoded_packet();
 
