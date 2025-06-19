@@ -5,10 +5,7 @@ FROM rust:1.86.0-alpine3.20 AS builder
 
 # Install build dependencies, including static OpenSSL libraries
 RUN apk add --no-cache \
-    musl-dev \
-    pkgconfig \
-    build-base \
-    curl
+    musl-dev
 
 # Add the MUSL target for static linking
 RUN rustup target add x86_64-unknown-linux-musl
