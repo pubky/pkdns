@@ -6,8 +6,6 @@ FROM rust:1.86.0-alpine3.20 AS builder
 # Install build dependencies, including static OpenSSL libraries
 RUN apk add --no-cache \
     musl-dev \
-    openssl-dev \
-    openssl-libs-static \
     pkgconfig \
     build-base \
     curl
@@ -32,10 +30,6 @@ COPY . .
 # Build the project in release mode for the MUSL target
 RUN cargo build --release --target x86_64-unknown-linux-musl
 
-# Strip the binary to reduce size
-RUN strip target/x86_64-unknown-linux-musl/release/pkdns
-RUN strip target/x86_64-unknown-linux-musl/release/pkdns-cli
-
 # ========================
 # Runtime Image
 # ========================
@@ -49,9 +43,6 @@ RUN apk add --no-cache ca-certificates
 # Copy the compiled binary from the builder stage
 COPY --from=builder /usr/src/app/target/x86_64-unknown-linux-musl/release/pkdns /usr/local/bin
 COPY --from=builder /usr/src/app/target/x86_64-unknown-linux-musl/release/pkdns-cli /usr/local/bin
-
-# Set the working directory
-WORKDIR /usr/local/bin
 
 # Expose the DNS port
 EXPOSE 53
