@@ -10,11 +10,6 @@ RUN apk add --no-cache \
     build-base \
     curl
 
-# Set environment variables for static linking with OpenSSL
-ENV OPENSSL_STATIC=yes
-ENV OPENSSL_LIB_DIR=/usr/lib
-ENV OPENSSL_INCLUDE_DIR=/usr/include
-
 # Add the MUSL target for static linking
 RUN rustup target add x86_64-unknown-linux-musl
 
