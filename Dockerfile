@@ -3,10 +3,6 @@
 # ========================
 FROM rust:1.86.0-alpine3.20 AS builder
 
-# Build platform argument (x86_64 or aarch64) (default: x86_64)
-ARG TARGETARCH=x86_64
-RUN echo "TARGETARCH: $TARGETARCH"
-
 # Install build dependencies, including static OpenSSL libraries
 RUN apk add --no-cache \
     musl-dev \
@@ -22,7 +18,7 @@ ENV OPENSSL_LIB_DIR=/usr/lib
 ENV OPENSSL_INCLUDE_DIR=/usr/include
 
 # Add the MUSL target for static linking
-RUN rustup target add $TARGETARCH-unknown-linux-musl
+RUN rustup target add x86_64-unknown-linux-musl
 
 # Set the working directory
 WORKDIR /usr/src/app
@@ -34,11 +30,11 @@ COPY Cargo.toml Cargo.lock ./
 COPY . .
 
 # Build the project in release mode for the MUSL target
-RUN cargo build --release --target $TARGETARCH-unknown-linux-musl
+RUN cargo build --release --target x86_64-unknown-linux-musl
 
 # Strip the binary to reduce size
-RUN strip target/$TARGETARCH-unknown-linux-musl/release/pkdns
-RUN strip target/$TARGETARCH-unknown-linux-musl/release/pkdns-cli
+RUN strip target/x86_64-unknown-linux-musl/release/pkdns
+RUN strip target/x86_64-unknown-linux-musl/release/pkdns-cli
 
 # ========================
 # Runtime Image
@@ -51,8 +47,8 @@ ARG TARGETARCH=x86_64
 RUN apk add --no-cache ca-certificates
 
 # Copy the compiled binary from the builder stage
-COPY --from=builder /usr/src/app/target/$TARGETARCH-unknown-linux-musl/release/pkdns /usr/local/bin
-COPY --from=builder /usr/src/app/target/$TARGETARCH-unknown-linux-musl/release/pkdns-cli /usr/local/bin
+COPY --from=builder /usr/src/app/target/x86_64-unknown-linux-musl/release/pkdns /usr/local/bin
+COPY --from=builder /usr/src/app/target/x86_64-unknown-linux-musl/release/pkdns-cli /usr/local/bin
 
 # Set the working directory
 WORKDIR /usr/local/bin
