@@ -28,17 +28,45 @@ Use one of the [hosted DNS servers](./servers.txt) to try out pkdns quickly.
 5. [Configure](#change-your-system-dns) your system dns.
 6. [Browse](#browse-the-self-sovereign-web) the self-sovereign web.
 
-
 ### Build It Yourself
 
-Make sure you have the [Rust toolchain](https://rustup.rs/) installed.
+#### Install Dependencies
 
-1. Clone repository `git clone https://github.com/pubky/pkdns.git`.
-2. Switch directory `cd pkdns`.
-3. Run `cargo run --package=pkdns`.
-4. [Verify](#verify-pkdns-is-working) the server is working. Your server ip is `127.0.0.1`.
-6. [Configure](#change-your-system-dns) your system dns.
-7. [Browse](#browse-the-self-sovereign-web) the self-sovereign web.
+1. **On Debian/Ubuntu Linux:**
+
+```bash
+sudo apt-get install gcc build-essential
+```
+
+*For other Linux distributions, please look for equivalent packages in your package manager.*
+
+2. **Install the [Rust toolchain](https://rustup.rs/).**
+
+#### Compile & Run the Project
+
+1. Clone the repository:
+
+   ```bash
+   git clone https://github.com/pubky/pkdns.git
+   ```
+
+2. Change to the project directory:
+
+   ```bash
+   cd pkdns
+   ```
+
+3. Run the project:
+
+   ```bash
+   cargo run --package=pkdns
+   ```
+
+4. [Verify](#verify-pkdns-is-working) that the server is running. The server IP is `127.0.0.1`.
+
+5. [Configure](#change-your-system-dns) your system DNS.
+
+6. [Browse](#browse-the-self-sovereign-web) the self-sovereign web.
 
 
 ### Use Docker Compose
