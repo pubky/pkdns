@@ -28,11 +28,6 @@ Use one of the [hosted DNS servers](./servers.txt) to try out pkdns quickly.
 5. [Configure](#change-your-system-dns) your system dns.
 6. [Browse](#browse-the-self-sovereign-web) the self-sovereign web.
 
-
-Вот исправленный вариант с устранением опечаток и стилистическими улучшениями:
-
----
-
 ### Build It Yourself
 
 #### Install Dependencies
