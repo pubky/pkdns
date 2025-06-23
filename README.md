@@ -62,6 +62,8 @@ sudo apt-get install gcc build-essential
    cargo run --package=pkdns
    ```
 
+   if the package does not run, refer to 
+
 4. [Verify](#verify-pkdns-is-working) that the server is running. The server IP is `127.0.0.1`.
 
 5. [Configure](#change-your-system-dns) your system DNS.
@@ -129,7 +131,22 @@ Hint: Always add a `./` to the end of a pkarr domain. Otherwise browsers will se
 
 ### Address already in use
 
-Other services might occupy the port 53 already. For example, [Docker Desktop](https://github.com/docker/for-mac/issues/7008) uses the port 53 on MacOS. [systemd-resolved](https://www.linuxuprising.com/2020/07/ubuntu-how-to-free-up-port-53-used-by.html) is using it on Ubuntu. Make sure to free those.
+Other services might occupy the port 53 already. For example, [Docker Desktop](https://github.com/docker/for-mac/issues/7008) uses the port 53 on MacOS. 
+On Linux a system service [systemd-resolved](https://www.linuxuprising.com/2020/07/ubuntu-how-to-free-up-port-53-used-by.html) is using it. 
+
+To check if the process uses a specific port, use:
+
+```bash
+lsof -i tcp:53
+```
+
+To stop DNS, enter
+
+```bash
+systemctl stop systemd-resolved && systemctl disable systemd-resolved
+```
+
+After that, pkdns may be launched either via `cargo run` or under systemd using this [configuration](server/pkdns.service).
 
 ## Configuration
 
