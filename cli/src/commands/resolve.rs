@@ -1,41 +1,26 @@
-use std::{thread, time::Duration};
-
 use chrono::{DateTime, Utc};
 use clap::ArgMatches;
 use pkarr::PublicKey;
 
-use crate::{helpers::construct_pkarr_client, pkarr_packet::PkarrPacket};
+use crate::{
+    helpers::{construct_pkarr_client, nts_to_chrono},
+    pkarr_packet::PkarrPacket,
+};
 
-fn resolve_pkarr(uri: &str) -> (PkarrPacket, DateTime<Utc>) {
+async fn resolve_pkarr(uri: &str) -> (PkarrPacket, DateTime<Utc>) {
     let client = construct_pkarr_client();
     let pubkey: PublicKey = uri.try_into().expect("Should be valid pkarr public key.");
-    let res = client.resolve(&pubkey);
-    if let Err(e) = res {
-        eprintln!("Failed to resolve. {e}");
-        std::process::exit(1);
-    }
-    if let None = res.unwrap() {
-        eprintln!("Failed to find the packet on the first try. Try again.");
-    }
-    thread::sleep(Duration::from_millis(1000));
-    let res = client.resolve(&pubkey);
-    if let Err(e) = res {
-        eprintln!("Failed to resolve. {e}");
-        std::process::exit(1);
-    }
-    let res = res.unwrap();
+    let res = client.resolve_most_recent(&pubkey).await;
     if res.is_none() {
-        println!("Failed to find the packet on the second try.");
+        println!("Failed to find the packet.");
         return (PkarrPacket::empty(), DateTime::<Utc>::MIN_UTC);
     };
     let signed_packet = res.unwrap();
-    let timestamp =
-        chrono::DateTime::from_timestamp((signed_packet.timestamp() / 1000000).try_into().unwrap(), 0).unwrap();
-    let packet = signed_packet.packet();
+    let timestamp = nts_to_chrono(signed_packet.timestamp());
 
-    let data = packet.build_bytes_vec_compressed().unwrap();
+    let data = signed_packet.encoded_packet();
 
-    (PkarrPacket::by_data(data), timestamp)
+    (PkarrPacket::by_data(data.to_vec()), timestamp)
 }
 
 fn get_arg_pubkey(matches: &ArgMatches) -> Option<PublicKey> {
@@ -55,7 +40,7 @@ pub async fn cli_resolve(matches: &ArgMatches) {
     let uri = pubkey.to_uri_string();
 
     println!("Resolve dns records of {}", uri);
-    let (packet, timestamp) = resolve_pkarr(&uri);
+    let (packet, timestamp) = resolve_pkarr(&uri).await;
 
     println!("{packet}");
     if !packet.is_emtpy() {

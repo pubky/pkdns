@@ -150,7 +150,7 @@ impl DnsSocket {
     }
 
     fn is_recursion_available(&self) -> bool {
-        self.max_recursion_depth >= 1
+        self.max_recursion_depth > 1
     }
 
     // Send message to address
@@ -586,7 +586,7 @@ mod tests {
         rdata::{A, CNAME},
         Name, Packet, PacketFlag, Question, ResourceRecord, RCODE,
     };
-    use pkarr::{Keypair, PkarrClient, SignedPacket};
+    use pkarr::{Client, Keypair, SignedPacket, Timestamp};
     use std::{
         net::{Ipv4Addr, SocketAddr},
         num::NonZeroU64,
@@ -681,9 +681,9 @@ mod tests {
             .unwrap())),
         );
         reply.answers.push(sub);
-        let signed = SignedPacket::from_packet(&pair, &reply).unwrap();
-        let client = PkarrClient::builder().resolvers(None).build().unwrap().as_async();
-        let _res = client.publish(&signed).await;
+        let signed = SignedPacket::new(&pair, &reply.answers, Timestamp::now()).unwrap();
+        let client = Client::builder().no_relays().build().unwrap();
+        let _res = client.publish(&signed, None).await;
     }
 
     /// Create a new dns socket and query recursively.

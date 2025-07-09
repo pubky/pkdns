@@ -6,11 +6,11 @@ use std::{
 
 use anyhow::anyhow;
 
-use chrono::DateTime;
 use clap::ArgMatches;
-use pkarr::{Keypair, SignedPacket};
+use pkarr::{Keypair, SignedPacket, Timestamp};
 
 use crate::external_ip::{resolve_ipv4, resolve_ipv6};
+use crate::helpers::nts_to_chrono;
 use crate::{helpers::construct_pkarr_client, simple_zone::SimpleZone};
 
 const SECRET_KEY_LENGTH: usize = 32;
@@ -102,29 +102,23 @@ pub async fn cli_publish(matches: &ArgMatches) {
     let zone = read_zone_file(matches, &pubkey).await;
     println!("{}", zone.packet);
     let packet = zone.packet.parsed();
-    let packet = SignedPacket::from_packet(&keypair, &packet);
+    let packet = SignedPacket::new(&keypair, &packet.answers, Timestamp::now());
     if let Err(e) = packet {
         eprintln!("Failed to sign the pkarr packet. {e}");
         std::process::exit(1);
     }
     let packet = packet.unwrap();
 
-    // if !should_packet_be_refreshed(&client, &keypair.public_key(), &packet) {
-    //     println!("Don't publish packet because it did not change and last update was within < 1min.");
-    //     return
-    // };
-
-    print!("Hang on...");
+    print!("Hang on... {}", nts_to_chrono(packet.timestamp()));
     std::io::stdout().flush().unwrap();
-    let timestamp = DateTime::from_timestamp_micros(packet.timestamp() as i64).unwrap();
-    let result = client.publish(&packet);
+    let result = client.publish(&packet, None).await;
     print!("\r");
     match result {
         Ok(_) => {
-            println!("{} Successfully announced.", timestamp)
+            println!("{} Successfully announced.", nts_to_chrono(packet.timestamp()))
         }
         Err(e) => {
-            println!("{} Error {}", timestamp, e.to_string())
+            println!("Error {}", e.to_string())
         }
     };
 }

@@ -28,6 +28,6 @@ pub fn parse_pkarr_uri(uri: &str) -> Result<PublicKey, PubkeyParserError> {
         return Err(PubkeyParserError::ValidButDifferent);
     }
 
-    let trying: Result<PublicKey, pkarr::Error> = uri.try_into();
+    let trying: Result<PublicKey, _> = uri.try_into();
     trying.map_err(|err| PubkeyParserError::InvalidKey(err.to_string()))
 }
