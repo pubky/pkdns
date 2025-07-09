@@ -150,7 +150,7 @@ impl DnsSocket {
     }
 
     fn is_recursion_available(&self) -> bool {
-        self.max_recursion_depth >= 1
+        self.max_recursion_depth > 1
     }
 
     // Send message to address
