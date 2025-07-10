@@ -13,9 +13,6 @@ use pkarr::dns::{
  * Handles all possible ways on how to resolve a query into a reply.
  * Does not support forwards, only recursive queries.
  * Max CNAME depth == 1.
- */
-
-/**
  * Uses a query to transforms a pkarr reply into an regular reply
  */
 pub async fn resolve_query<'a>(pkarr_packet: &Packet<'a>, query: &Packet<'a>) -> Vec<u8> {
@@ -117,9 +114,9 @@ fn find_nameserver<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>) -> Vec<Resou
     matches
 }
 
-/**
- * Resolve name server ip
- */
+// /**
+//  * Resolve name server ip
+//  */
 // async fn resolve_ns_ip<'a>(ns_name: &Name<'a>) -> Option<Vec<SocketAddr>> {
 //     let ns_question = Question::new(
 //         ns_name.clone(),

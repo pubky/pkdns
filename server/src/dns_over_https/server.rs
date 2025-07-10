@@ -1,3 +1,8 @@
+//! RFC8484 Dns-over-http wireformat
+//! https://datatracker.ietf.org/doc/html/rfc8484
+//! The implementation works but could implement the standard more accurately,
+//! especially when it comes to cache-control.
+
 use crate::resolution::DnsSocket;
 use axum::{
     body::Body,
@@ -16,10 +21,7 @@ use std::{
 };
 use tower_http::cors::{Any, CorsLayer};
 
-/// RFC8484 Dns-over-http wireformat
-/// https://datatracker.ietf.org/doc/html/rfc8484
-/// The implementation works but could implement the standard more accurately,
-/// especially when it comes to cache-control.
+
 
 /// Error prefix for web browsers so users actually
 /// know what this url is about.
@@ -80,7 +82,7 @@ fn decode_dns_base64_packet(param: &String) -> Result<Vec<u8>, (StatusCode, Stri
 }
 
 /// Extract lowest ttl of answer to set caching parameter
-fn get_lowest_ttl(reply: &Vec<u8>) -> u32 {
+fn get_lowest_ttl(reply: &[u8]) -> u32 {
     const DEFAULT_VALUE: u32 = 300;
 
     let parsed_packet = match Packet::parse(reply) {

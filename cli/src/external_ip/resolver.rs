@@ -8,12 +8,13 @@ use super::providers::{icanhazip, identme, ipifyorg, ipinfoio, myip};
 /// Resolves the external IPv4 address randomly from a list of 5 service providers.
 /// Returns IP and the name of the service provider.
 pub async fn resolve_ipv4() -> Result<(Ipv4Addr, String), &'static str> {
-    let mut providers: Vec<ProviderResolver> = vec![];
-    providers.push(icanhazip::get_resolver());
-    providers.push(identme::get_resolver());
-    providers.push(ipifyorg::get_resolver());
-    providers.push(ipinfoio::get_resolver());
-    providers.push(myip::get_resolver());
+    let mut providers: Vec<ProviderResolver> = vec![
+        icanhazip::get_resolver(),
+        identme::get_resolver(),
+        ipifyorg::get_resolver(),
+        ipinfoio::get_resolver(),
+        myip::get_resolver(),
+    ];
 
     let mut rng = thread_rng();
     providers.shuffle(&mut rng);
@@ -33,12 +34,13 @@ pub async fn resolve_ipv4() -> Result<(Ipv4Addr, String), &'static str> {
 /// Resolves the external IPv6 address randomly from a list of 5 service providers.
 /// Returns IP and the name of the service provider.
 pub async fn resolve_ipv6() -> Result<(Ipv6Addr, String), &'static str> {
-    let mut providers: Vec<ProviderResolver> = vec![];
-    providers.push(icanhazip::get_resolver());
-    providers.push(identme::get_resolver());
-    providers.push(ipifyorg::get_resolver());
-    providers.push(ipinfoio::get_resolver());
-    providers.push(myip::get_resolver());
+    let mut providers: Vec<ProviderResolver> = vec![
+        icanhazip::get_resolver(),
+        identme::get_resolver(),
+        ipifyorg::get_resolver(),
+        ipinfoio::get_resolver(),
+        myip::get_resolver(),
+    ];
 
     let mut rng = thread_rng();
     providers.shuffle(&mut rng);

@@ -482,7 +482,7 @@ impl DnsSocket {
     /// Send dns request to configured forward server
     pub async fn forward(
         &mut self,
-        query: &Vec<u8>,
+        query: &[u8],
         to: &SocketAddr,
         timeout: Duration,
     ) -> Result<Vec<u8>, DnsSocketError> {
@@ -499,7 +499,6 @@ impl DnsSocket {
             tx,
         };
 
-        let query = packet.build_bytes_vec_compressed()?;
         let query = replace_packet_id(&query, forward_id)?;
 
         self.pending.insert(request);
@@ -520,12 +519,10 @@ impl DnsSocket {
         timeout: Duration,
     ) -> Result<Vec<u8>, DnsSocketError> {
         // Check cache first before forwarding
-        if let Ok(opt_item) = self.icann_cache.get(query).await {
-            if let Some(item) = opt_item {
-                let query_packet = Packet::parse(query)?;
-                let new_response = replace_packet_id(&item.response, query_packet.id())?;
-                return Ok(new_response);
-            };
+        if let Ok(Some(item)) = self.icann_cache.get(query).await {
+            let query_packet = Packet::parse(query)?;
+            let new_response = replace_packet_id(&item.response, query_packet.id())?;
+            return Ok(new_response);
         };
 
         let reply = self.forward(query, &dns_server, timeout).await?;

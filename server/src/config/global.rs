@@ -1,9 +1,13 @@
+//! Safe the application wide configuration in a globally accessible way
+//! so we don't need to pass variables all over.
+
+
+
 use super::config_file::PkdnsConfig;
 use once_cell::sync::Lazy;
 use std::sync::RwLock;
 
-/// Safe the application wide configuration in a globally accessible way
-/// so we don't need to pass variables all over.
+
 
 pub static GLOBAL_CONFIG: Lazy<RwLock<PkdnsConfig>> = Lazy::new(|| RwLock::new(PkdnsConfig::default()));
 

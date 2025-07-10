@@ -1,12 +1,13 @@
+//!
+//! Goal1: Cache things as long as possible to make any attack on the DHT unfeasible.
+//! Goal2: Prevent attackers from overflowing the cache and evict values this way.
+
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use moka::future::Cache;
 use pkarr::{PublicKey, SignedPacket};
 
-/**
- * Goal1: Cache things as long as possible to make any attack on the DHT unfeasible.
- * Goal2: Prevent attackers from overflowing the cache and evict values this way.
- */
+
 
 /**
  * Timestamp in seconds since UNIX_EPOCH
@@ -56,15 +57,7 @@ impl CacheItem {
 
     /// Checks if this cache includes a signed packet.
     pub fn is_found(&self) -> bool {
-        if let CacheItem::Packet {
-            packet: _,
-            last_updated_at: _,
-        } = self
-        {
-            true
-        } else {
-            false
-        }
+        matches!(self, CacheItem::Packet { packet: _, last_updated_at: _ })
     }
 
     pub fn not_found(&self) -> bool {
@@ -73,15 +66,7 @@ impl CacheItem {
 
     #[allow(dead_code)]
     pub fn is_packet(&self) -> bool {
-        if let CacheItem::Packet {
-            packet: _,
-            last_updated_at: _,
-        } = self
-        {
-            true
-        } else {
-            false
-        }
+        matches!(self, CacheItem::Packet { packet: _, last_updated_at: _ })
     }
 
     /**

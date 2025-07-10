@@ -27,7 +27,7 @@ impl CacheItem {
 
     /// Derives a query key from the first question. May fail if the packet cant be parsed
     /// or the query doesn't have a question.
-    pub fn derive_query_key(query: &Vec<u8>) -> Result<String, anyhow::Error> {
+    pub fn derive_query_key(query: &[u8]) -> Result<String, anyhow::Error> {
         let packet = Packet::parse(query)?;
         let question = packet
             .questions
