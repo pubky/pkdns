@@ -13,9 +13,6 @@ use pkarr::dns::{
  * Handles all possible ways on how to resolve a query into a reply.
  * Does not support forwards, only recursive queries.
  * Max CNAME depth == 1.
- */
-
-/**
  * Uses a query to transforms a pkarr reply into an regular reply
  */
 pub async fn resolve_query<'a>(pkarr_packet: &Packet<'a>, query: &Packet<'a>) -> Vec<u8> {
@@ -40,13 +37,13 @@ async fn resolve_question<'a>(pkarr_packet: &Packet<'a>, question: &Question<'a>
     let direct_matchs = direct_matches(pkarr_packet, &question.qname, &question.qtype);
     reply.answers.extend(direct_matchs.clone());
 
-    if reply.answers.len() == 0 {
+    if reply.answers.is_empty() {
         // Not found. Maybe it is a cname?
         let cname_matches = resolve_cname_for(pkarr_packet, question);
         reply.answers.extend(cname_matches);
     };
 
-    if reply.answers.len() == 0 {
+    if reply.answers.is_empty() {
         // Not found. Maybe we have a name server?
         reply.name_servers = find_nameserver(pkarr_packet, &question.qname);
 
@@ -79,7 +76,7 @@ fn resolve_cname_for<'a>(pkarr_packet: &Packet<'a>, question: &Question<'a>) -> 
             } else {
                 panic!("Should be cname");
             };
-            let matches = direct_matches(pkarr_packet, &cname_content, &question.qtype);
+            let matches = direct_matches(pkarr_packet, cname_content, &question.qtype);
             matches
         })
         .collect();
@@ -99,7 +96,7 @@ fn direct_matches<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>, qtype: &QTYPE
         .answers
         .iter()
         .filter(|record| record.name == *qname && record.match_qtype(*qtype))
-        .map(|record| record.clone())
+        .cloned()
         .collect();
     matches
 }
@@ -114,14 +111,14 @@ fn find_nameserver<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>) -> Vec<Resou
         .filter(|record| {
             record.match_qtype(QTYPE::TYPE(TYPE::NS)) && (qname.is_subdomain_of(&record.name) || record.name == *qname)
         })
-        .map(|record| record.clone())
+        .cloned()
         .collect();
     matches
 }
 
-/**
- * Resolve name server ip
- */
+// /**
+//  * Resolve name server ip
+//  */
 // async fn resolve_ns_ip<'a>(ns_name: &Name<'a>) -> Option<Vec<SocketAddr>> {
 //     let ns_question = Question::new(
 //         ns_name.clone(),
@@ -133,13 +130,13 @@ fn find_nameserver<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>) -> Vec<Resou
 //     query.questions.push(ns_question);
 //     query.set_flags(PacketFlag::RECURSION_DESIRED);
 //     let query = query.build_bytes_vec_compressed().unwrap();
-
+//
 //     let reply = socket.query_me(&query, None).await;
 //     let reply = Packet::parse(&reply).ok()?;
 //     if reply.answers.len() == 0 {
 //         return None;
 //     };
-
+//
 //     let addresses: Vec<SocketAddr> = reply
 //         .answers
 //         .into_iter()
@@ -155,21 +152,21 @@ fn find_nameserver<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>) -> Vec<Resou
 //             _ => None,
 //         })
 //         .collect();
-
+//
 //     Some(addresses)
 // }
-
-/**
- * Resolves the question with a single ns redirection.
- */
+//
+// /**
+//  * Resolves the question with a single ns redirection.
+//  */
 // async fn resolve_with_ns<'a>(
 //     question: &Question<'a>,
 //     name_servers: &Vec<ResourceRecord<'a>>,
 // ) -> Option<Vec<u8>> {
 //     if name_servers.len() == 0 {
 //         return None;
-//     };
-
+//     }
+//
 //     let ns_names: Vec<Name<'_>> = name_servers
 //         .iter()
 //         .filter_map(|record| {
@@ -180,16 +177,16 @@ fn find_nameserver<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>) -> Vec<Resou
 //             }
 //         })
 //         .collect();
-
+//
 //     let ns_name = ns_names.first().unwrap();
 //     let addresses = resolve_ns_ip(ns_name).await?;
 //     let addr = addresses.first().unwrap();
-
+//
 //     let mut query = Packet::new_query(0);
 //     query.questions.push(question.clone());
 //     query.set_flags(PacketFlag::RECURSION_DESIRED);
 //     let query = query.build_bytes_vec_compressed().unwrap();
-
+//
 //     socket.forward(&query, addr, Duration::from_millis(1000)).await.ok()
 // }
 
@@ -254,7 +251,7 @@ mod tests {
 
         let name = format!("other.{pubkey_z32}");
         let name = Name::new(&name).unwrap();
-        let data = format!("my.ns.example.com");
+        let data = "my.ns.example.com".to_string();
         let data = Name::new(&data).unwrap();
         let answer4 = ResourceRecord::new(
             name.clone(),
@@ -317,7 +314,7 @@ mod tests {
         assert_eq!(reply.additional_records.len(), 0);
         assert_eq!(reply.name_servers.len(), 0);
 
-        let answer1 = reply.answers.get(0).unwrap();
+        let answer1 = reply.answers.first().unwrap();
         assert_eq!(answer1.name, name);
         assert!(answer1.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
 
@@ -348,7 +345,7 @@ mod tests {
         assert_eq!(reply.additional_records.len(), 0);
         assert_eq!(reply.name_servers.len(), 1);
 
-        let ns1 = reply.name_servers.get(0).unwrap();
+        let ns1 = reply.name_servers.first().unwrap();
         assert_eq!(ns1.name, name);
         assert!(ns1.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::NS)));
     }
@@ -376,7 +373,7 @@ mod tests {
         assert_eq!(reply.additional_records.len(), 0);
         assert_eq!(reply.name_servers.len(), 1);
 
-        let ns1 = reply.name_servers.get(0).unwrap();
+        let ns1 = reply.name_servers.first().unwrap();
         assert_eq!(ns1.name.to_string(), format!("other.{pubkey_z32}"));
         assert!(ns1.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::NS)));
     }

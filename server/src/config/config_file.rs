@@ -10,21 +10,11 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct PkdnsConfig {
     pub general: General,
     pub dns: Dns,
     pub dht: Dht,
-}
-
-impl Default for PkdnsConfig {
-    fn default() -> Self {
-        Self {
-            general: General::default(),
-            dns: Dns::default(),
-            dht: Dht::default(),
-        }
-    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -172,19 +162,10 @@ where
     D: Deserializer<'de>,
 {
     // Deserialize the input as an Option<String>
-    let value = match Option::<String>::deserialize(deserializer)? {
-        Some(val) => {
-            if val == "" {
-                None
-            } else {
-                Some(val)
-            }
-        }
-        None => None,
-    };
+    let value = Option::<String>::deserialize(deserializer)?.filter(|val| !val.is_empty());
 
     if let Some(label) = &value {
-        let name = match Name::new(&label) {
+        let name = match Name::new(label) {
             Ok(name) => name,
             Err(e) => return Err(D::Error::custom(e)),
         };

@@ -6,7 +6,7 @@ use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::Subscriber
  * Sets `RUST_BACKTRACE=1` as default so we always get a full stacktrace
  * on an error.
  */
-pub(crate) fn set_full_stacktrace_as_default() -> () {
+pub(crate) fn set_full_stacktrace_as_default() {
     let key = "RUST_BACKTRACE";
 
     let is_value_already_set = env::var(key).is_ok();
@@ -23,7 +23,7 @@ pub(crate) fn enable_logging(verbose: bool) {
         Err(_) => "".to_string(),
     };
 
-    if value.len() > 0 {
+    if !value.is_empty() {
         tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::from_default_env())
             .init();

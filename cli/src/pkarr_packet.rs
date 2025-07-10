@@ -47,19 +47,14 @@ impl PkarrPacket {
 impl fmt::Display for PkarrPacket {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if self.answers_len() == 0 {
-            println!("Packet is empty.");
+            writeln!(f, "Packet is empty.")?;
             return Ok(());
         };
         let records = self.to_records();
-        write!(f, "Packet {}\n", records.get(0).unwrap().pubkey()).unwrap();
-        write!(
-            f,
-            "{0: <20} {1: <7} {2: <6} {3: <25}{4:}",
-            "Name", "TTL", "Type", "Data", "\n"
-        )
-        .unwrap();
+        writeln!(f, "Packet {}", records.first().unwrap().pubkey())?;
+        writeln!(f, "Name TTL Type Data")?;
         for record in self.to_records() {
-            write!(f, "{record}\n").unwrap();
+            writeln!(f, "{record}")?;
         }
         Ok(())
     }

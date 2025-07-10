@@ -140,9 +140,9 @@ impl PkarrResolver {
             .no_relays()
             .build()
             .unwrap();
-        let limiter = RateLimiterBuilder::new().max_per_second(settings.max_dht_queries_per_ip_per_second.clone());
+        let limiter = RateLimiterBuilder::new().max_per_second(settings.max_dht_queries_per_ip_per_second);
         Self {
-            client: client,
+            client,
             cache: PkarrPacketLruCache::new(Some(settings.cache_mb)),
             lock_map: Arc::new(Mutex::new(HashMap::new())),
             rate_limiter: Arc::new(limiter.build()),
@@ -218,12 +218,12 @@ impl PkarrResolver {
 
     fn remove_tld_if_necessary(&self, mut query: &mut Packet<'_>) -> bool {
         if let Some(tld) = &self.settings.top_level_domain {
-            if tld.question_ends_with_pubkey_tld(&query) {
+            if tld.question_ends_with_pubkey_tld(query) {
                 tld.remove(query);
                 return true;
             }
         }
-        return false;
+        false
     }
 
     fn add_tld_if_necessary(&self, mut reply: &mut Packet<'_>) -> bool {
@@ -231,7 +231,7 @@ impl PkarrResolver {
             tld.add(reply);
             return true;
         }
-        return false;
+        false
     }
 
     /**
@@ -313,7 +313,6 @@ mod tests {
     // use pkarr::dns::{Name, Question, Packet};
     use super::*;
     use std::net::Ipv4Addr;
-    use zbase32;
 
     trait SignedPacketTimestamp {
         fn chrono_timestamp(&self) -> DateTime<Utc>;
@@ -322,8 +321,8 @@ mod tests {
     impl SignedPacketTimestamp for SignedPacket {
         fn chrono_timestamp(&self) -> DateTime<Utc> {
             let timestamp = self.timestamp().as_u64() / 1_000_000;
-            let timestamp = DateTime::from_timestamp((timestamp as u32).into(), 0).unwrap();
-            timestamp
+
+            DateTime::from_timestamp((timestamp as u32).into(), 0).unwrap()
         }
     }
 
@@ -332,8 +331,8 @@ mod tests {
         let secret = "6kfe1u5jyqxg644eqfgk1cp4w9yjzwq51rn11ftysuo6xkpc64by";
         let seed = zbase32::decode_full_bytes_str(secret).unwrap();
         let slice: &[u8; 32] = &seed[0..32].try_into().unwrap();
-        let keypair = Keypair::from_secret_key(slice);
-        keypair
+
+        Keypair::from_secret_key(slice)
     }
 
     async fn publish_record() {
@@ -347,14 +346,14 @@ mod tests {
             Name::new("pknames.p2p").unwrap(),
             pkarr::dns::CLASS::IN,
             100,
-            pkarr::dns::rdata::RData::A(ip.try_into().unwrap()),
+            pkarr::dns::rdata::RData::A(ip.into()),
         );
         packet.answers.push(record);
         let record = ResourceRecord::new(
             Name::new(".").unwrap(),
             pkarr::dns::CLASS::IN,
             100,
-            pkarr::dns::rdata::RData::A(ip.try_into().unwrap()),
+            pkarr::dns::rdata::RData::A(ip.into()),
         );
         packet.answers.push(record);
         let signed_packet = SignedPacket::new(&keypair, &packet.answers, Timestamp::now()).unwrap();
@@ -424,7 +423,7 @@ mod tests {
     #[tokio::test]
     async fn query_invalid_pubkey() {
         let domain = "invalid_pubkey";
-        let name = Name::new(&domain).unwrap();
+        let name = Name::new(domain).unwrap();
         let mut query = Packet::new_query(0);
         let question = Question::new(
             name.clone(),

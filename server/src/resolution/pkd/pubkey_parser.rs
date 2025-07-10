@@ -10,11 +10,10 @@ pub enum PubkeyParserError {
 
 /// Parses a public key domain from it's zbase32 format.
 pub fn parse_pkarr_uri(uri: &str) -> Result<PublicKey, PubkeyParserError> {
-    let decoded = zbase32::decode_full_bytes_str(uri);
-    if decoded.is_err() {
-        return Err(PubkeyParserError::InvalidKey(decoded.unwrap_err().to_string()));
+    let decoded = match zbase32::decode_full_bytes_str(uri) {
+        Ok(bytes) => bytes,
+        Err(e) => return Err(PubkeyParserError::InvalidKey(e.to_string())),
     };
-    let decoded = decoded.unwrap();
     if decoded.len() != 32 {
         return Err(PubkeyParserError::InvalidKey(
             "zbase32 pubkey should be 32 bytes but is not.".to_string(),

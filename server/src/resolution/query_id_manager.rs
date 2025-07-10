@@ -23,11 +23,11 @@ impl QueryIdManager {
     pub fn get_next(&mut self, server: &SocketAddr) -> u16 {
         let mut locked = self.ids.lock().expect("Lock success");
         let current = match locked.get(server) {
-            Some(val) => val.clone(),
+            Some(val) => *val,
             None => 0,
         };
         let next = if current == u16::MAX { 0 } else { current + 1 };
-        locked.insert(server.clone(), next);
+        locked.insert(*server, next);
         next
     }
 

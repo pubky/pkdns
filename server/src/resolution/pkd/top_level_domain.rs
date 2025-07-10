@@ -58,13 +58,7 @@ impl TopLevelDomain {
             .join(".");
 
         let name = Name::new(&new_domain).unwrap().into_owned();
-        let new_question = Question::new(
-            name,
-            question.qtype.clone(),
-            question.qclass.clone(),
-            question.unicast_response,
-        )
-        .into_owned();
+        let new_question = Question::new(name, question.qtype, question.qclass, question.unicast_response).into_owned();
         packet.questions = vec![new_question];
     }
 
@@ -83,19 +77,19 @@ impl TopLevelDomain {
         };
 
         let second_label = labels.get(labels.len() - 2).unwrap().to_string();
-        return parse_pkarr_uri(&second_label).is_ok();
+        parse_pkarr_uri(&second_label).is_ok()
     }
 
     /// Checks if the name ends with a public key domain
     pub fn name_ends_with_pubkey(&self, name: &Name<'_>) -> bool {
         let labels = name.get_labels();
-        if labels.len() < 1 {
+        if labels.is_empty() {
             // Needs at least 2 labels. First: tld, second: publickey
             return false;
         }
 
         let mut question_tld = labels.last().unwrap().to_string();
-        return parse_pkarr_uri(&question_tld).is_ok();
+        parse_pkarr_uri(&question_tld).is_ok()
     }
 
     /// Append the top level domain to the reply. Zones are stored without a tld on Mainline
@@ -140,7 +134,6 @@ mod tests {
     use super::*;
     use pkarr::dns::rdata::A;
     use std::net::Ipv4Addr;
-    use zbase32;
 
     fn create_query_with_domain(domain: &str) -> Vec<u8> {
         let tld = TopLevelDomain::new("pkd".to_string());
@@ -176,7 +169,7 @@ mod tests {
         let tld = TopLevelDomain::new("pkd".to_string());
         let domain = create_query_with_domain("7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy.pkd");
         let packet = Packet::parse(&domain).unwrap();
-        assert_eq!(tld.question_ends_with_pubkey_tld(&packet), true);
+        assert!(tld.question_ends_with_pubkey_tld(&packet));
     }
 
     #[tokio::test]
@@ -184,7 +177,7 @@ mod tests {
         let tld = TopLevelDomain::new("pkd".to_string());
         let domain = create_query_with_domain("test.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy.pkd");
         let packet = Packet::parse(&domain).unwrap();
-        assert_eq!(tld.question_ends_with_pubkey_tld(&packet), true);
+        assert!(tld.question_ends_with_pubkey_tld(&packet));
     }
 
     #[tokio::test]
@@ -192,7 +185,7 @@ mod tests {
         let tld = TopLevelDomain::new("pkd".to_string());
         let domain = create_query_with_domain("pkd");
         let packet = Packet::parse(&domain).unwrap();
-        assert_eq!(tld.question_ends_with_pubkey_tld(&packet), false);
+        assert!(!tld.question_ends_with_pubkey_tld(&packet));
     }
 
     #[tokio::test]
@@ -200,7 +193,7 @@ mod tests {
         let tld = TopLevelDomain::new("nopubkey.pkd".to_string());
         let domain = create_query_with_domain("pkd");
         let packet = Packet::parse(&domain).unwrap();
-        assert_eq!(tld.question_ends_with_pubkey_tld(&packet), false);
+        assert!(!tld.question_ends_with_pubkey_tld(&packet));
     }
 
     #[tokio::test]
@@ -208,7 +201,7 @@ mod tests {
         let tld = TopLevelDomain::new("7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy.wrongpkd".to_string());
         let domain = create_query_with_domain("pkd");
         let packet = Packet::parse(&domain).unwrap();
-        assert_eq!(tld.question_ends_with_pubkey_tld(&packet), false);
+        assert!(!tld.question_ends_with_pubkey_tld(&packet));
     }
 
     #[tokio::test]

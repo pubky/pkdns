@@ -1,12 +1,11 @@
+//!
+//! Goal1: Cache things as long as possible to make any attack on the DHT unfeasible.
+//! Goal2: Prevent attackers from overflowing the cache and evict values this way.
+
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use moka::future::Cache;
 use pkarr::{PublicKey, SignedPacket};
-
-/**
- * Goal1: Cache things as long as possible to make any attack on the DHT unfeasible.
- * Goal2: Prevent attackers from overflowing the cache and evict values this way.
- */
 
 /**
  * Timestamp in seconds since UNIX_EPOCH
@@ -14,7 +13,7 @@ use pkarr::{PublicKey, SignedPacket};
 fn get_timestamp_seconds() -> u64 {
     let start = SystemTime::now();
     let since_the_epoch = start.duration_since(UNIX_EPOCH).expect("Time went backwards");
-    since_the_epoch.as_secs() as u64
+    since_the_epoch.as_secs()
 }
 
 /**
@@ -42,7 +41,7 @@ pub enum CacheItem {
 impl CacheItem {
     pub fn new_packet(packet: SignedPacket) -> Self {
         Self::Packet {
-            packet: packet,
+            packet,
             last_updated_at: get_timestamp_seconds(),
         }
     }
@@ -56,15 +55,13 @@ impl CacheItem {
 
     /// Checks if this cache includes a signed packet.
     pub fn is_found(&self) -> bool {
-        if let CacheItem::Packet {
-            packet: _,
-            last_updated_at: _,
-        } = self
-        {
-            true
-        } else {
-            false
-        }
+        matches!(
+            self,
+            CacheItem::Packet {
+                packet: _,
+                last_updated_at: _
+            }
+        )
     }
 
     pub fn not_found(&self) -> bool {
@@ -73,15 +70,13 @@ impl CacheItem {
 
     #[allow(dead_code)]
     pub fn is_packet(&self) -> bool {
-        if let CacheItem::Packet {
-            packet: _,
-            last_updated_at: _,
-        } = self
-        {
-            true
-        } else {
-            false
-        }
+        matches!(
+            self,
+            CacheItem::Packet {
+                packet: _,
+                last_updated_at: _
+            }
+        )
     }
 
     /**
@@ -93,7 +88,7 @@ impl CacheItem {
             last_updated_at: _,
         } = self
         {
-            return packet;
+            packet
         } else {
             panic!("Can not unwrap CacheItem without a packet.")
         }
@@ -154,11 +149,11 @@ impl CacheItem {
             CacheItem::NotFound {
                 public_key: _,
                 last_updated_at: cached_at,
-            } => cached_at.clone(),
+            } => *cached_at,
             CacheItem::Packet {
                 packet: _,
                 last_updated_at: cached_at,
-            } => cached_at.clone(),
+            } => *cached_at,
         }
     }
 
@@ -213,11 +208,7 @@ impl CacheItem {
             .as_secs();
 
         let age_seconds = now - self.last_updated_at();
-        if age_seconds > ttl {
-            0
-        } else {
-            ttl - age_seconds
-        }
+        ttl.saturating_sub(age_seconds)
     }
 }
 
@@ -322,14 +313,14 @@ mod tests {
             Name::new("pknames.p2p").unwrap(),
             pkarr::dns::CLASS::IN,
             100,
-            pkarr::dns::rdata::RData::A(ip.try_into().unwrap()),
+            pkarr::dns::rdata::RData::A(ip.into()),
         );
         packet.answers.push(record);
         let record = ResourceRecord::new(
             Name::new(".").unwrap(),
             pkarr::dns::CLASS::IN,
             100,
-            pkarr::dns::rdata::RData::A(ip.try_into().unwrap()),
+            pkarr::dns::rdata::RData::A(ip.into()),
         );
         packet.answers.push(record);
         SignedPacket::new(&keypair, &packet.answers, Timestamp::now()).unwrap()

@@ -14,7 +14,7 @@ pub(crate) struct DomainPortAddr {
 
 impl DomainPortAddr {
     pub const fn new(domain: &'static str, port: u16) -> Self {
-        Self { domain: domain, port }
+        Self { domain, port }
     }
 }
 
@@ -65,7 +65,7 @@ impl MainlineBootstrapResolver {
 
         // Take the response bytes and turn it into another DNS Message.
         let answer = Message::from_slice(&resp[0..len])?;
-        if answer.answers.len() == 0 {
+        if answer.answers.is_empty() {
             return Ok(None);
         };
         let first = answer.answers.first().unwrap();
@@ -77,7 +77,7 @@ impl MainlineBootstrapResolver {
     }
 
     fn lookup(&self, boostrap_node: &DomainPortAddr) -> Result<SocketAddr, anyhow::Error> {
-        let res = self.lookup_domain(&boostrap_node.domain)?;
+        let res = self.lookup_domain(boostrap_node.domain)?;
         if res.is_none() {
             return Err(anyhow!("No ip found."));
         };
@@ -88,7 +88,7 @@ impl MainlineBootstrapResolver {
     pub fn get_bootstrap_nodes(&self) -> Result<Vec<SocketAddr>, anyhow::Error> {
         let mut addrs: Vec<SocketAddr> = vec![];
         for node in DEFAULT_BOOTSTRAP_NODES.iter() {
-            match self.lookup(&node) {
+            match self.lookup(node) {
                 Ok(val) => {
                     addrs.push(val);
                 }
@@ -97,7 +97,7 @@ impl MainlineBootstrapResolver {
                 }
             }
         }
-        if addrs.len() > 0 {
+        if !addrs.is_empty() {
             Ok(addrs)
         } else {
             Err(anyhow!(
@@ -107,7 +107,7 @@ impl MainlineBootstrapResolver {
     }
 
     pub fn get_addrs(dns_server: &SocketAddr) -> Result<Vec<String>, anyhow::Error> {
-        let resolver = MainlineBootstrapResolver::new(dns_server.clone()).unwrap();
+        let resolver = MainlineBootstrapResolver::new(*dns_server).unwrap();
         let addrs = resolver.get_bootstrap_nodes()?;
         let addrs: Vec<String> = addrs.into_iter().map(|addr| addr.to_string()).collect();
         Ok(addrs)
