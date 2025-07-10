@@ -3,13 +3,14 @@ use tracing::Level;
 use tracing_subscriber::{filter::Targets, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 /**
- * Sets `RUST_BACKTRACE=full` as default so we always get a full stacktrace
+ * Sets `RUST_BACKTRACE=1` as default so we always get a full stacktrace
  * on an error.
  */
 pub(crate) fn set_full_stacktrace_as_default() -> () {
     let key = "RUST_BACKTRACE";
-    let value = env::var(key);
-    if value.is_ok() {
+
+    let is_value_already_set = env::var(key).is_ok();
+    if is_value_already_set {
         return;
     }
     env::set_var(key, "1");
@@ -26,9 +27,9 @@ pub(crate) fn enable_logging(verbose: bool) {
         tracing_subscriber::fmt()
             .with_env_filter(EnvFilter::from_default_env())
             .init();
-        tracing::info!("Used RUST_LOG={} env variable to set logging output.", value);
+        tracing::info!("Use RUST_LOG={} env variable to set logging output.", value);
         if verbose {
-            tracing::warn!("RUST_LOG= is set. Ignore --verbose flag.")
+            tracing::warn!("RUST_LOG= environment variable is already set. Ignore --verbose flag.")
         }
         return;
     }

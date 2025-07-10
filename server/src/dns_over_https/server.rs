@@ -35,58 +35,61 @@ Add this DNS url to your browsers to enable self-sovereign Public Key Domains (P
 
 dev:";
 
+
+/// Validates the accept header.
+/// Returns an error if the accept header is missing or not application/dns-message.
 fn validate_accept_header(headers: &HeaderMap) -> Result<(), (StatusCode, String)> {
-    if let None = headers.get("accept") {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            format!("{ERROR_PREFIX} valid accept header missing"),
-        ));
+    let error: Result<(), (StatusCode, String)> = Err((
+        StatusCode::BAD_REQUEST,
+        format!("{ERROR_PREFIX} valid accept header missing"),
+    ));
+    let accept_header = match headers.get("accept") {
+        Some(value) => value,
+        None => return error
     };
-    let value = headers.get("accept").unwrap();
-    if let Err(e) = value.to_str() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            format!("{ERROR_PREFIX} valid accept header missing. {e}"),
-        ));
-    }
-    let value = value.to_str().unwrap();
-    if value != "application/dns-message" {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            format!("{ERROR_PREFIX} valid accept header missing"),
-        ));
+
+    let value_str = match accept_header.to_str() {
+        Ok(value) => value,
+        Err(_) => return error
+    };
+
+    if value_str != "application/dns-message" {
+        return error
     }
     Ok(())
 }
 
 fn decode_dns_base64_packet(param: &String) -> Result<Vec<u8>, (StatusCode, String)> {
-    let val = URL_SAFE_NO_PAD.decode(param);
-    if let Err(e) = val {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            format!("Error decoding the dns base64 query parameter. {e}"),
-        ));
+    let bytes = match URL_SAFE_NO_PAD.decode(param) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                format!("Error decoding the dns base64 query parameter. {e}"),
+            ));
+        }
     };
-    let vec = val.unwrap();
-    if let Err(e) = Packet::parse(&vec) {
-        tracing::info!("{e}");
+
+    if let Err(e) = Packet::parse(&bytes) {
+        tracing::info!("Failed to parse the base64 as a valid dns packet. {e}");
         return Err((
             StatusCode::BAD_REQUEST,
             format!("Failed to parse the base64 as a valid dns packet. {e}"),
         ));
     }
-    Ok(vec)
+    Ok(bytes)
 }
 
 /// Extract lowest ttl of answer to set caching parameter
 fn get_lowest_ttl(reply: &Vec<u8>) -> u32 {
     const DEFAULT_VALUE: u32 = 300;
-    let parsed = Packet::parse(reply);
-    if let Err(_) = parsed {
-        return DEFAULT_VALUE;
+
+    let parsed_packet = match Packet::parse(reply) {
+        Ok(parsed) => parsed,
+        Err(_) => return DEFAULT_VALUE
     };
-    let parsed = parsed.unwrap();
-    let val = parsed
+
+    let val = parsed_packet
         .answers
         .iter()
         .map(|answer| answer.ttl)
@@ -99,14 +102,12 @@ fn get_lowest_ttl(reply: &Vec<u8>) -> u32 {
 /// Uses the "x-forwarded-for" header to support proxies.
 /// If not available, uses the client IP directly.
 fn extract_client_ip(request_addr: &SocketAddr, headers: &HeaderMap) -> IpAddr {
-    let proxy_x_forwarded_ip = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok());
-    if let None = proxy_x_forwarded_ip {
-        return request_addr.ip();
+    let origin_ip = match headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
+        Some(value) => value,
+        None => return request_addr.ip()
     };
 
-    let proxy_x_forwarded_ip = proxy_x_forwarded_ip.unwrap();
-    let ip_parsed: Result<IpAddr, _> = proxy_x_forwarded_ip.parse();
-    match ip_parsed {
+    match origin_ip.parse() {
         Ok(ip) => ip,
         Err(e) => {
             tracing::debug!("Failed to parse the 'x-forwarded-for' header ip address. {e}");
@@ -125,7 +126,7 @@ async fn query_to_response(query: Vec<u8>, dns_socket: &mut DnsSocket, client_ip
         .header(header::CONTENT_LENGTH, reply.len())
         .header(header::CACHE_CONTROL, format!("max-age={lowest_ttl}"))
         .body(Body::from(reply))
-        .unwrap();
+        .expect("Failed to build response");
 
     response
 }
@@ -137,18 +138,14 @@ async fn dns_query_get(
     ConnectInfo(client_addr): ConnectInfo<SocketAddr>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
     let client_ip = extract_client_ip(&client_addr, &headers);
-    if let Err(response) = validate_accept_header(&headers) {
-        return Err(response);
-    }
+    validate_accept_header(&headers)?;
 
-    if let None = params.get("dns") {
-        return Err((StatusCode::BAD_REQUEST, format!("valid dns query param required")));
-    }
-    let result = decode_dns_base64_packet(params.get("dns").unwrap());
-    if let Err(e) = result {
-        return Err(e);
-    }
-    let packet_bytes = result.unwrap();
+    let dns_param = match params.get("dns") {
+        Some(value) => value,
+        None => return Err((StatusCode::BAD_REQUEST, format!("valid dns query param required")))
+    };
+    let packet_bytes = decode_dns_base64_packet(dns_param)?;
+
     let mut socket = state.socket.clone();
     Ok(query_to_response(packet_bytes, &mut socket, client_ip).await)
 }
@@ -160,16 +157,13 @@ async fn dns_query_post(
     request: axum::http::Request<axum::body::Body>,
 ) -> Result<impl IntoResponse, impl IntoResponse> {
     let client_ip = extract_client_ip(&client_addr, &headers);
-    if let Err(response) = validate_accept_header(&headers) {
-        return Err(response);
-    }
+    validate_accept_header(&headers)?;
 
-    let body_result = axum::body::to_bytes(request.into_body(), 65535usize).await;
-    if let Err(e) = body_result {
-        return Err((StatusCode::BAD_REQUEST, e.to_string()));
-    }
+    let packet_bytes = match axum::body::to_bytes(request.into_body(), 65535usize).await {
+        Ok(bytes) => bytes.to_vec(),
+        Err(e) => return Err((StatusCode::BAD_REQUEST, e.to_string()))
+    };
 
-    let packet_bytes: Vec<u8> = body_result.unwrap().into();
     let mut socket = state.socket.clone();
     Ok(query_to_response(packet_bytes, &mut socket, client_ip).await)
 }
@@ -192,14 +186,16 @@ fn create_app(dns_socket: DnsSocket) -> Router {
     app
 }
 
-pub async fn run_doh_server(addr: SocketAddr, dns_socket: DnsSocket) {
+pub async fn run_doh_server(addr: SocketAddr, dns_socket: DnsSocket) -> Result<(), anyhow::Error> {
     let app = create_app(dns_socket);
-    let listener = tokio::net::TcpListener::bind(addr).await.unwrap();
+    let listener = tokio::net::TcpListener::bind(addr).await?;
     tokio::spawn(async move {
         axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
             .await
             .unwrap();
     });
+
+    Ok(())
 }
 
 #[cfg(test)]

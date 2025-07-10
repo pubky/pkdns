@@ -9,12 +9,25 @@ pub static GLOBAL_CONFIG: Lazy<RwLock<PkdnsConfig>> = Lazy::new(|| RwLock::new(P
 
 /// Updates the global configuration safely.
 pub fn update_global_config(new_value: PkdnsConfig) {
-    let mut config = GLOBAL_CONFIG.write().unwrap();
+    let mut config = match GLOBAL_CONFIG.write() {
+        Ok(config) => config,
+        Err(e) => {
+            // Lock poisoned, this should never happen.
+            panic!("Failed to update global config: {}", e);
+        }
+    };
+
     *config = new_value;
 }
 
 /// Returns a copy of the global configuration.
 pub fn get_global_config() -> PkdnsConfig {
-    let config = GLOBAL_CONFIG.read().unwrap();
+    let config = match GLOBAL_CONFIG.read() {
+        Ok(config) => config,
+        Err(e) => {
+            // Lock poisoned, this should never happen.
+            panic!("Failed to read global config: {}", e);
+        }
+    };
     config.clone()
 }
