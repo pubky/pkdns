@@ -80,13 +80,13 @@ impl DnsSocket {
         let mut rng = rand::thread_rng();
         let random_port: u32 = rng.gen_range(49152..=65535);
         let socket_str = format!("0.0.0.0:{random_port}");
-        socket_str.parse().unwrap()
+        socket_str.parse().expect("Should always be a valid socket address")
     }
 
     /// Default dns socket but with a random listening port. Made for testing.
     pub async fn default_random_socket() -> tokio::io::Result<Self> {
         let listening = Self::random_local_socket();
-        let icann_resolver: SocketAddr = "8.8.8.8:53".parse().unwrap();
+        let icann_resolver: SocketAddr = "8.8.8.8:53".parse().expect("Should always be a valid socket address");
         DnsSocket::new(
             listening,
             icann_resolver,
@@ -96,7 +96,7 @@ impl DnsSocket {
             999,
             0,
             0,
-            NonZeroU64::new(1).unwrap(),
+            NonZeroU64::new(1).expect("1 is always non-zero"),
             1,
             Some(TopLevelDomain::new("key".to_string())),
             5,
