@@ -24,6 +24,6 @@ runs:
       with:
         toolchain: 1.87
         profile: minimal
-        components: clippy, rustfmt, cargo-audit
+        components: clippy, rustfmt
         override: true
 
