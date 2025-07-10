@@ -105,6 +105,8 @@ impl DnsSocket {
     }
 
     // Create a new DNS socket
+    // TODO: Fix this too many arguments
+    #[allow(clippy::too_many_arguments)]
     pub async fn new(
         listening: SocketAddr,
         icann_resolver: SocketAddr,
