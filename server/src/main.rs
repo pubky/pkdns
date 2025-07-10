@@ -94,7 +94,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     tracing::info!("Listening on {}. Waiting for Ctrl-C...", config.general.socket);
 
     if let Some(http_socket) = config.general.dns_over_http_socket {
-        run_doh_server(http_socket, dns_socket).await;
+        run_doh_server(http_socket, dns_socket).await?;
         tracing::info!("[EXPERIMENTAL] DNS-over-HTTP listening on http://{http_socket}/dns-query.");
     };
 
