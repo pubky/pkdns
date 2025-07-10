@@ -22,12 +22,8 @@ runs:
     - name: Install Rust
       uses: actions-rs/toolchain@v1
       with:
-        toolchain: stable
+        toolchain: 1.87
         profile: minimal
+        components: clippy, rustfmt, cargo-audit
         override: true
 
-    - name: Install Dependencies
-      shell: bash
-      run: |
-        rustup component add clippy rustfmt
-        cargo install cargo-audit
