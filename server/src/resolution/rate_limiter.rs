@@ -111,15 +111,15 @@ impl RateLimiterBuilder {
 
         let mut quota: Quota;
         if self.max_per_minute > 0 {
-            quota = Quota::per_minute(NonZeroU32::new(self.max_per_minute).unwrap());
+            quota = Quota::per_minute(NonZeroU32::new(self.max_per_minute).expect("max_per_minute is always non-zero"));
         } else if self.max_per_second > 0 {
-            quota = Quota::per_second(NonZeroU32::new(self.max_per_second).unwrap());
+            quota = Quota::per_second(NonZeroU32::new(self.max_per_second).expect("max_per_second is always non-zero"));
         } else {
             return RateLimiter { limiter: None };
         }
 
         if self.burst_size > 0 {
-            quota = quota.allow_burst(NonZeroU32::new(self.burst_size).unwrap());
+            quota = quota.allow_burst(NonZeroU32::new(self.burst_size).expect("burst_size is always non-zero"));
         }
 
         RateLimiter {

@@ -61,7 +61,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
 
     tracing::info!("Starting pkdns v{VERSION}");
-    tracing::debug!("Configuration:\n{}", toml::to_string(&config).unwrap());
+    tracing::debug!("Configuration:\n{}", toml::to_string(&config)?);
     tracing::info!("Forward ICANN queries to {}", config.general.forward);
 
     // Exit the main thread if anything panics
@@ -101,7 +101,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     wait_on_ctrl_c().await;
     println!();
     tracing::info!("Got it! Exiting...");
-    join_handle.send(()).unwrap();
+    join_handle
+        .send(())
+        .expect("Failed to send shutdown signal to DNS socket."); // If this fails, we panic as we are already trying to exit.
 
     Ok(())
 }

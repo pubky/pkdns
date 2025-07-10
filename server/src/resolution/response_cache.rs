@@ -16,6 +16,7 @@ pub struct CacheItem {
 
 impl CacheItem {
     pub fn new(query: Vec<u8>, response: Vec<u8>) -> Result<Self, anyhow::Error> {
+        let packet = Packet::parse(&response)?;
         let _ = Packet::parse(&response)?; // Validate that the response is parseable.
         Ok(Self {
             query_key: Self::derive_query_key(&query)?,

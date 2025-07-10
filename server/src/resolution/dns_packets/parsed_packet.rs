@@ -5,7 +5,7 @@ use self_cell::self_cell;
 use std::{fmt::Display, pin::Pin};
 
 // Struct to hold the bytes and the packet in one place
-// to avoid lifetimes
+// to avoid lifetimes aka a self-referencing struct.
 self_cell!(
     pub struct Inner {
         owner: Vec<u8>,
