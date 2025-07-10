@@ -54,7 +54,7 @@ impl DnsSocketBuilder {
             max_queries_per_ip_per_second: 0,
             max_queries_per_ip_burst_size: 0,
             max_ttl: 60 * 60 * 24, // 1 day
-            min_ttl: 60 * 1,
+            min_ttl: 60,
             pkarr_cache_mb: NonZeroU64::new(100).unwrap(),
             max_dht_queries_per_ip_per_second: 0,
             max_dht_queries_per_ip_burst: 0,

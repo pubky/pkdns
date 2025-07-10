@@ -38,7 +38,7 @@ impl ParsedQuery {
         };
         let question = question.unwrap();
         let labels = question.qname.get_labels();
-        if labels.len() == 0 {
+        if labels.is_empty() {
             return Err(anyhow!("Question with an empty qname."));
         };
 
@@ -84,9 +84,9 @@ impl TryFrom<ParsedPacket> for ParsedQuery {
     }
 }
 
-impl Into<ParsedPacket> for ParsedQuery {
-    fn into(self) -> ParsedPacket {
-        self.packet
+impl From<ParsedQuery> for ParsedPacket {
+    fn from(val: ParsedQuery) -> Self {
+        val.packet
     }
 }
 

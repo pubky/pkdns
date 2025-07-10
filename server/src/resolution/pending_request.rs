@@ -40,8 +40,8 @@ impl PendingRequestStore {
     pub fn insert(&mut self, request: PendingRequest) {
         let mut locked = self.pending.lock().expect("Lock success");
         let key = PendingRequestKey {
-            forward_query_id: request.forward_query_id.clone(),
-            to: request.to.clone(),
+            forward_query_id: request.forward_query_id,
+            to: request.to,
         };
         locked.insert(key, request);
     }
@@ -49,8 +49,8 @@ impl PendingRequestStore {
     pub fn remove_by_forward_id(&mut self, forward_query_id: &u16, from: &SocketAddr) -> Option<PendingRequest> {
         let mut locked = self.pending.lock().expect("Lock success");
         let key = PendingRequestKey {
-            forward_query_id: forward_query_id.clone(),
-            to: from.clone(),
+            forward_query_id: *forward_query_id,
+            to: *from,
         };
         locked.remove(&key)
     }

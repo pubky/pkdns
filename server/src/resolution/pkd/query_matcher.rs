@@ -40,13 +40,13 @@ async fn resolve_question<'a>(pkarr_packet: &Packet<'a>, question: &Question<'a>
     let direct_matchs = direct_matches(pkarr_packet, &question.qname, &question.qtype);
     reply.answers.extend(direct_matchs.clone());
 
-    if reply.answers.len() == 0 {
+    if reply.answers.is_empty() {
         // Not found. Maybe it is a cname?
         let cname_matches = resolve_cname_for(pkarr_packet, question);
         reply.answers.extend(cname_matches);
     };
 
-    if reply.answers.len() == 0 {
+    if reply.answers.is_empty() {
         // Not found. Maybe we have a name server?
         reply.name_servers = find_nameserver(pkarr_packet, &question.qname);
 
@@ -79,7 +79,7 @@ fn resolve_cname_for<'a>(pkarr_packet: &Packet<'a>, question: &Question<'a>) -> 
             } else {
                 panic!("Should be cname");
             };
-            let matches = direct_matches(pkarr_packet, &cname_content, &question.qtype);
+            let matches = direct_matches(pkarr_packet, cname_content, &question.qtype);
             matches
         })
         .collect();
@@ -98,8 +98,7 @@ fn direct_matches<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>, qtype: &QTYPE
     let matches: Vec<ResourceRecord<'_>> = pkarr_packet
         .answers
         .iter()
-        .filter(|record| record.name == *qname && record.match_qtype(*qtype))
-        .map(|record| record.clone())
+        .filter(|record| record.name == *qname && record.match_qtype(*qtype)).cloned()
         .collect();
     matches
 }
@@ -113,8 +112,7 @@ fn find_nameserver<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>) -> Vec<Resou
         .iter()
         .filter(|record| {
             record.match_qtype(QTYPE::TYPE(TYPE::NS)) && (qname.is_subdomain_of(&record.name) || record.name == *qname)
-        })
-        .map(|record| record.clone())
+        }).cloned()
         .collect();
     matches
 }
@@ -254,7 +252,7 @@ mod tests {
 
         let name = format!("other.{pubkey_z32}");
         let name = Name::new(&name).unwrap();
-        let data = format!("my.ns.example.com");
+        let data = "my.ns.example.com".to_string();
         let data = Name::new(&data).unwrap();
         let answer4 = ResourceRecord::new(
             name.clone(),
@@ -317,7 +315,7 @@ mod tests {
         assert_eq!(reply.additional_records.len(), 0);
         assert_eq!(reply.name_servers.len(), 0);
 
-        let answer1 = reply.answers.get(0).unwrap();
+        let answer1 = reply.answers.first().unwrap();
         assert_eq!(answer1.name, name);
         assert!(answer1.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::CNAME)));
 
@@ -348,7 +346,7 @@ mod tests {
         assert_eq!(reply.additional_records.len(), 0);
         assert_eq!(reply.name_servers.len(), 1);
 
-        let ns1 = reply.name_servers.get(0).unwrap();
+        let ns1 = reply.name_servers.first().unwrap();
         assert_eq!(ns1.name, name);
         assert!(ns1.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::NS)));
     }
@@ -376,7 +374,7 @@ mod tests {
         assert_eq!(reply.additional_records.len(), 0);
         assert_eq!(reply.name_servers.len(), 1);
 
-        let ns1 = reply.name_servers.get(0).unwrap();
+        let ns1 = reply.name_servers.first().unwrap();
         assert_eq!(ns1.name.to_string(), format!("other.{pubkey_z32}"));
         assert!(ns1.match_qtype(pkarr::dns::QTYPE::TYPE(pkarr::dns::TYPE::NS)));
     }

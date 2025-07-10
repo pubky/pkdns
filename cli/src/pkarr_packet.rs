@@ -51,15 +51,14 @@ impl fmt::Display for PkarrPacket {
             return Ok(());
         };
         let records = self.to_records();
-        write!(f, "Packet {}\n", records.get(0).unwrap().pubkey()).unwrap();
-        write!(
+        writeln!(f, "Packet {}", records.first().unwrap().pubkey()).unwrap();
+        writeln!(
             f,
-            "{0: <20} {1: <7} {2: <6} {3: <25}{4:}",
-            "Name", "TTL", "Type", "Data", "\n"
+            "Name TTL Type Data"
         )
         .unwrap();
         for record in self.to_records() {
-            write!(f, "{record}\n").unwrap();
+            writeln!(f, "{record}").unwrap();
         }
         Ok(())
     }

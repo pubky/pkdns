@@ -68,7 +68,7 @@ impl CacheItem {
 
     /// If this cached item is outdated (expired ttl).
     pub fn is_outdated(&self, min_ttl: u64, max_ttl: u64) -> bool {
-        return self.expires_in(min_ttl, max_ttl) < SystemTime::now();
+        self.expires_in(min_ttl, max_ttl) < SystemTime::now()
     }
 }
 
@@ -103,7 +103,7 @@ impl IcannLruCache {
 
     /// Get cached packet by query. Fails if the query can't per parsed.
     pub async fn get(&self, query: &Vec<u8>) -> Result<Option<CacheItem>, anyhow::Error> {
-        let key = CacheItem::derive_query_key(&query)?;
+        let key = CacheItem::derive_query_key(query)?;
         let value = self.cache.get(&key).await;
         if let Some(item) = &value {
             if item.is_outdated(self.min_ttl, self.max_ttl) {

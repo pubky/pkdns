@@ -81,7 +81,7 @@ fn read_seed_file(matches: &ArgMatches) -> Keypair {
 
 fn parse_seed(seed: &str) -> Keypair {
     let seed = seed.trim();
-    let decode_result = zbase32::decode_full_bytes_str(&seed);
+    let decode_result = zbase32::decode_full_bytes_str(seed);
     if let Err(e) = decode_result {
         eprintln!("Failed to parse the seed file. {e} {seed}");
         std::process::exit(1);
@@ -90,8 +90,8 @@ fn parse_seed(seed: &str) -> Keypair {
     let plain_secret = decode_result.unwrap();
 
     let slice: &[u8; SECRET_KEY_LENGTH] = &plain_secret[0..SECRET_KEY_LENGTH].try_into().unwrap();
-    let keypair = Keypair::from_secret_key(slice);
-    keypair
+    
+    Keypair::from_secret_key(slice)
 }
 
 pub async fn cli_publish(matches: &ArgMatches) {
@@ -118,7 +118,7 @@ pub async fn cli_publish(matches: &ArgMatches) {
             println!("{} Successfully announced.", nts_to_chrono(packet.timestamp()))
         }
         Err(e) => {
-            println!("Error {}", e.to_string())
+            println!("Error {}", e)
         }
     };
 }

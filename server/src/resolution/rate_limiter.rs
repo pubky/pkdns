@@ -35,7 +35,7 @@ impl RateLimitingKey {
             | ((segments[1] as u64) << 32)
             | ((segments[2] as u64) << 16)
             | (segments[3] as u64);
-        return Self::IpV6 { significant_bits: key };
+        Self::IpV6 { significant_bits: key }
     }
 }
 
@@ -52,11 +52,11 @@ impl Hash for RateLimitingKey {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match self {
             RateLimitingKey::Ipv4(ipv4_addr) => {
-                (0 as u8).hash(state); // IPv4 indicator to prevent overlap with the Ipv6 space.
+                0_u8.hash(state); // IPv4 indicator to prevent overlap with the Ipv6 space.
                 ipv4_addr.hash(state);
             }
             RateLimitingKey::IpV6 { significant_bits } => {
-                (1 as u8).hash(state); // IPv6 indicator to prevent overlap with the Ipv4 space.
+                1_u8.hash(state); // IPv6 indicator to prevent overlap with the Ipv4 space.
                 significant_bits.hash(state);
             }
         }
@@ -139,10 +139,10 @@ impl RateLimiter {
      */
     pub fn check_is_limited_and_increase(&self, ip: &IpAddr) -> bool {
         if let Some(limiter) = &self.limiter {
-            let ip = ip.clone();
+            let ip = *ip;
             let is_rate_limited = limiter.check_key(&ip.into()).is_err();
             return is_rate_limited;
         };
-        return false;
+        false
     }
 }

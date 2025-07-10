@@ -14,7 +14,7 @@ use pkarr::{PublicKey, SignedPacket};
 fn get_timestamp_seconds() -> u64 {
     let start = SystemTime::now();
     let since_the_epoch = start.duration_since(UNIX_EPOCH).expect("Time went backwards");
-    since_the_epoch.as_secs() as u64
+    since_the_epoch.as_secs()
 }
 
 /**
@@ -42,7 +42,7 @@ pub enum CacheItem {
 impl CacheItem {
     pub fn new_packet(packet: SignedPacket) -> Self {
         Self::Packet {
-            packet: packet,
+            packet,
             last_updated_at: get_timestamp_seconds(),
         }
     }
@@ -93,7 +93,7 @@ impl CacheItem {
             last_updated_at: _,
         } = self
         {
-            return packet;
+            packet
         } else {
             panic!("Can not unwrap CacheItem without a packet.")
         }
@@ -154,11 +154,11 @@ impl CacheItem {
             CacheItem::NotFound {
                 public_key: _,
                 last_updated_at: cached_at,
-            } => cached_at.clone(),
+            } => *cached_at,
             CacheItem::Packet {
                 packet: _,
                 last_updated_at: cached_at,
-            } => cached_at.clone(),
+            } => *cached_at,
         }
     }
 
@@ -213,11 +213,7 @@ impl CacheItem {
             .as_secs();
 
         let age_seconds = now - self.last_updated_at();
-        if age_seconds > ttl {
-            0
-        } else {
-            ttl - age_seconds
-        }
+        ttl.saturating_sub(age_seconds)
     }
 }
 
@@ -322,14 +318,14 @@ mod tests {
             Name::new("pknames.p2p").unwrap(),
             pkarr::dns::CLASS::IN,
             100,
-            pkarr::dns::rdata::RData::A(ip.try_into().unwrap()),
+            pkarr::dns::rdata::RData::A(ip.into()),
         );
         packet.answers.push(record);
         let record = ResourceRecord::new(
             Name::new(".").unwrap(),
             pkarr::dns::CLASS::IN,
             100,
-            pkarr::dns::rdata::RData::A(ip.try_into().unwrap()),
+            pkarr::dns::rdata::RData::A(ip.into()),
         );
         packet.answers.push(record);
         SignedPacket::new(&keypair, &packet.answers, Timestamp::now()).unwrap()

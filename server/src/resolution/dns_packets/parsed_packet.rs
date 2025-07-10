@@ -20,7 +20,7 @@ self_cell!(
 impl Inner {
     /// Try to parse the packet from bytes
     pub fn try_from_bytes(bytes: Vec<u8>) -> Result<Self, pkarr::dns::SimpleDnsError> {
-        Self::try_new(bytes, |bytes| Packet::parse(&bytes))
+        Self::try_new(bytes, |bytes| Packet::parse(bytes))
     }
 
     /// Parsed DNS packet
@@ -30,7 +30,7 @@ impl Inner {
 
     /// Raw bytes the packet is build with
     pub fn raw_bytes(&self) -> &Vec<u8> {
-        &self.borrow_owner()
+        self.borrow_owner()
     }
 }
 
@@ -41,9 +41,9 @@ impl Clone for Inner {
     }
 }
 
-impl Into<Vec<u8>> for Inner {
-    fn into(self) -> Vec<u8> {
-        self.into_owner()
+impl From<Inner> for Vec<u8> {
+    fn from(val: Inner) -> Self {
+        val.into_owner()
     }
 }
 
@@ -71,7 +71,7 @@ impl ParsedPacket {
 
     /// Raw bytes the packet is build with
     pub fn raw_bytes(&self) -> &Vec<u8> {
-        &self.inner.raw_bytes()
+        self.inner.raw_bytes()
     }
 
     /// If this packet is a reply
@@ -99,9 +99,9 @@ impl ParsedPacket {
     }
 }
 
-impl Into<Vec<u8>> for ParsedPacket {
-    fn into(self) -> Vec<u8> {
-        self.inner.into()
+impl From<ParsedPacket> for Vec<u8> {
+    fn from(val: ParsedPacket) -> Self {
+        val.inner.into()
     }
 }
 

@@ -8,5 +8,5 @@ pub fn replace_packet_id(packet: &Vec<u8>, new_id: u16) -> Result<Vec<u8>, Simpl
     std::mem::replace(&mut cloned[1], id_bytes[1]);
 
     let parsed_packet = Packet::parse(&cloned)?;
-    Ok(parsed_packet.build_bytes_vec()?)
+    parsed_packet.build_bytes_vec()
 }
