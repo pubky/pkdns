@@ -6,6 +6,8 @@ use std::{
 
 use reqwest::IntoUrl;
 
+
+
 pub struct ProviderResolver {
     pub name: String,
     ipv4: Pin<Box<dyn Fn() -> Pin<Box<dyn Future<Output = Result<Ipv4Addr, ExternalIpResolverError>>>>>>,

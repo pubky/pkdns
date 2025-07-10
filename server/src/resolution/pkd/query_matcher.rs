@@ -128,13 +128,13 @@ fn find_nameserver<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>) -> Vec<Resou
 //     query.questions.push(ns_question);
 //     query.set_flags(PacketFlag::RECURSION_DESIRED);
 //     let query = query.build_bytes_vec_compressed().unwrap();
-
+//
 //     let reply = socket.query_me(&query, None).await;
 //     let reply = Packet::parse(&reply).ok()?;
 //     if reply.answers.len() == 0 {
 //         return None;
 //     };
-
+//
 //     let addresses: Vec<SocketAddr> = reply
 //         .answers
 //         .into_iter()
@@ -150,21 +150,21 @@ fn find_nameserver<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>) -> Vec<Resou
 //             _ => None,
 //         })
 //         .collect();
-
+//
 //     Some(addresses)
 // }
-
-/**
- * Resolves the question with a single ns redirection.
- */
+//
+// /**
+//  * Resolves the question with a single ns redirection.
+//  */
 // async fn resolve_with_ns<'a>(
 //     question: &Question<'a>,
 //     name_servers: &Vec<ResourceRecord<'a>>,
 // ) -> Option<Vec<u8>> {
 //     if name_servers.len() == 0 {
 //         return None;
-//     };
-
+//     }
+//
 //     let ns_names: Vec<Name<'_>> = name_servers
 //         .iter()
 //         .filter_map(|record| {
@@ -175,16 +175,16 @@ fn find_nameserver<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>) -> Vec<Resou
 //             }
 //         })
 //         .collect();
-
+//
 //     let ns_name = ns_names.first().unwrap();
 //     let addresses = resolve_ns_ip(ns_name).await?;
 //     let addr = addresses.first().unwrap();
-
+//
 //     let mut query = Packet::new_query(0);
 //     query.questions.push(question.clone());
 //     query.set_flags(PacketFlag::RECURSION_DESIRED);
 //     let query = query.build_bytes_vec_compressed().unwrap();
-
+//
 //     socket.forward(&query, addr, Duration::from_millis(1000)).await.ok()
 // }
 

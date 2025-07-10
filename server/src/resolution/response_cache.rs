@@ -102,7 +102,7 @@ impl IcannLruCache {
     }
 
     /// Get cached packet by query. Fails if the query can't per parsed.
-    pub async fn get(&self, query: &Vec<u8>) -> Result<Option<CacheItem>, anyhow::Error> {
+    pub async fn get(&self, query: &[u8]) -> Result<Option<CacheItem>, anyhow::Error> {
         let key = CacheItem::derive_query_key(query)?;
         let value = self.cache.get(&key).await;
         if let Some(item) = &value {

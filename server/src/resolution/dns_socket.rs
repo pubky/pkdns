@@ -468,7 +468,7 @@ impl DnsSocket {
         // Forward to ICANN
         let dns_socket = target_dns.unwrap_or(self.icann_fallback);
         match self
-            .forward_to_icann(&query.packet.clone().into(), dns_socket, Duration::from_secs(5))
+            .forward_to_icann(query.packet.clone().raw_bytes(), dns_socket, Duration::from_secs(5))
             .await
         {
             Ok(reply) => reply,
@@ -499,7 +499,7 @@ impl DnsSocket {
             tx,
         };
 
-        let query = replace_packet_id(&query, forward_id)?;
+        let query = replace_packet_id(query, forward_id)?;
 
         self.pending.insert(request);
         self.send_to(&query, to).await?;
@@ -514,7 +514,7 @@ impl DnsSocket {
     /// Forward query to icann
     pub async fn forward_to_icann(
         &mut self,
-        query: &Vec<u8>,
+        query: &[u8],
         dns_server: SocketAddr,
         timeout: Duration,
     ) -> Result<Vec<u8>, DnsSocketError> {
@@ -527,7 +527,7 @@ impl DnsSocket {
 
         let reply = self.forward(query, &dns_server, timeout).await?;
         // Store response in cache
-        if let Err(e) = self.icann_cache.add(query.clone(), reply.clone()).await {
+        if let Err(e) = self.icann_cache.add(query.to_vec(), reply.clone()).await {
             tracing::warn!("Failed to add icann forward reply to cache. {e}");
         };
 
@@ -535,7 +535,7 @@ impl DnsSocket {
     }
 
     // Extracts the id of the query
-    fn extract_query_id(&self, query: &Vec<u8>) -> Result<u16, SimpleDnsError> {
+    fn extract_query_id(&self, query: &[u8]) -> Result<u16, SimpleDnsError> {
         Packet::parse(query).map(|packet| packet.id())
     }
 
