@@ -5,7 +5,7 @@
 [![Docker](https://img.shields.io/badge/Image-Docker-red)](https://hub.docker.com/r/synonymsoft/pkdns)
 [![Telegram Chat Group](https://img.shields.io/badge/Chat-Telegram-violet)](https://t.me/pubkycore)
 
-A DNS server providing self-sovereign and censorship-resistant domain names. It resolves records hosted on the [Mainline DHT](https://en.wikipedia.org/wiki/Mainline_DHT), the biggest DHT on the planet with ~15M nodes that services torrents since 15 years.
+A DNS server providing self-sovereign and censorship-resistant domain names. It resolves records hosted on the [Mainline DHT](https://en.wikipedia.org/wiki/Mainline_DHT), the biggest DHT on the planet with ~10M nodes that services torrents since 15 years.
 
 
 ## Getting Started
@@ -135,6 +135,7 @@ Options:
 
 ## Related Tools
 
+- [pkarr zone explorer](https://pkdns.net/)
 - [pkdns-vanity](https://github.com/jphastings/pkdns-vanity)
 - [awesome-pubky](https://github.com/aljazceru/awesome-pubky)
 
