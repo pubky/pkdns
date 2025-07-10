@@ -7,8 +7,6 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use moka::future::Cache;
 use pkarr::{PublicKey, SignedPacket};
 
-
-
 /**
  * Timestamp in seconds since UNIX_EPOCH
  */
@@ -57,7 +55,13 @@ impl CacheItem {
 
     /// Checks if this cache includes a signed packet.
     pub fn is_found(&self) -> bool {
-        matches!(self, CacheItem::Packet { packet: _, last_updated_at: _ })
+        matches!(
+            self,
+            CacheItem::Packet {
+                packet: _,
+                last_updated_at: _
+            }
+        )
     }
 
     pub fn not_found(&self) -> bool {
@@ -66,7 +70,13 @@ impl CacheItem {
 
     #[allow(dead_code)]
     pub fn is_packet(&self) -> bool {
-        matches!(self, CacheItem::Packet { packet: _, last_updated_at: _ })
+        matches!(
+            self,
+            CacheItem::Packet {
+                packet: _,
+                last_updated_at: _
+            }
+        )
     }
 
     /**

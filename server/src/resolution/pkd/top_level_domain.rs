@@ -58,13 +58,7 @@ impl TopLevelDomain {
             .join(".");
 
         let name = Name::new(&new_domain).unwrap().into_owned();
-        let new_question = Question::new(
-            name,
-            question.qtype,
-            question.qclass,
-            question.unicast_response,
-        )
-        .into_owned();
+        let new_question = Question::new(name, question.qtype, question.qclass, question.unicast_response).into_owned();
         packet.questions = vec![new_question];
     }
 
@@ -140,7 +134,6 @@ mod tests {
     use super::*;
     use pkarr::dns::rdata::A;
     use std::net::Ipv4Addr;
-    
 
     fn create_query_with_domain(domain: &str) -> Vec<u8> {
         let tld = TopLevelDomain::new("pkd".to_string());

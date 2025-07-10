@@ -95,7 +95,8 @@ fn direct_matches<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>, qtype: &QTYPE
     let matches: Vec<ResourceRecord<'_>> = pkarr_packet
         .answers
         .iter()
-        .filter(|record| record.name == *qname && record.match_qtype(*qtype)).cloned()
+        .filter(|record| record.name == *qname && record.match_qtype(*qtype))
+        .cloned()
         .collect();
     matches
 }
@@ -109,7 +110,8 @@ fn find_nameserver<'a>(pkarr_packet: &Packet<'a>, qname: &Name<'a>) -> Vec<Resou
         .iter()
         .filter(|record| {
             record.match_qtype(QTYPE::TYPE(TYPE::NS)) && (qname.is_subdomain_of(&record.name) || record.name == *qname)
-        }).cloned()
+        })
+        .cloned()
         .collect();
     matches
 }

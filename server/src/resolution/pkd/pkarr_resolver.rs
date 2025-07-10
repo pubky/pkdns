@@ -313,7 +313,6 @@ mod tests {
     // use pkarr::dns::{Name, Question, Packet};
     use super::*;
     use std::net::Ipv4Addr;
-    
 
     trait SignedPacketTimestamp {
         fn chrono_timestamp(&self) -> DateTime<Utc>;
@@ -322,7 +321,7 @@ mod tests {
     impl SignedPacketTimestamp for SignedPacket {
         fn chrono_timestamp(&self) -> DateTime<Utc> {
             let timestamp = self.timestamp().as_u64() / 1_000_000;
-            
+
             DateTime::from_timestamp((timestamp as u32).into(), 0).unwrap()
         }
     }
@@ -332,7 +331,7 @@ mod tests {
         let secret = "6kfe1u5jyqxg644eqfgk1cp4w9yjzwq51rn11ftysuo6xkpc64by";
         let seed = zbase32::decode_full_bytes_str(secret).unwrap();
         let slice: &[u8; 32] = &seed[0..32].try_into().unwrap();
-        
+
         Keypair::from_secret_key(slice)
     }
 

@@ -21,8 +21,6 @@ use std::{
 };
 use tower_http::cors::{Any, CorsLayer};
 
-
-
 /// Error prefix for web browsers so users actually
 /// know what this url is about.
 const ERROR_PREFIX: &str = "
@@ -179,7 +177,6 @@ fn create_app(dns_socket: DnsSocket) -> Router {
         .allow_methods([Method::GET, Method::POST])
         .allow_headers(Any);
 
-    
     Router::new()
         .route("/dns-query", get(dns_query_get))
         .route("/dns-query", post(dns_query_post))

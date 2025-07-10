@@ -10,14 +10,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
-#[derive(Default)]
+#[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct PkdnsConfig {
     pub general: General,
     pub dns: Dns,
     pub dht: Dht,
 }
-
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct General {

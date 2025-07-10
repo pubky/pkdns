@@ -33,7 +33,7 @@ fn parse_seed(seed: &str) -> Keypair {
     let plain_secret = decode_result.unwrap();
 
     let slice: &[u8; SECRET_KEY_LENGTH] = &plain_secret[0..SECRET_KEY_LENGTH].try_into().unwrap();
-    
+
     Keypair::from_secret_key(slice)
 }
 

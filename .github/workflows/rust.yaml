@@ -44,5 +44,5 @@ jobs:
       - name: Run Rustfmt (Code Formatting)
         run: cargo fmt --all -- --check
 
-      # - name: Run Clippy (Lint)
-      #   run: cargo clippy --all-targets --all-features -- -D warnings
+      - name: Run Clippy (Lint)
+        run: cargo clippy --all-targets --all-features -- -D warnings

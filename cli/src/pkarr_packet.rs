@@ -52,10 +52,7 @@ impl fmt::Display for PkarrPacket {
         };
         let records = self.to_records();
         writeln!(f, "Packet {}", records.first().unwrap().pubkey())?;
-        writeln!(
-            f,
-            "Name TTL Type Data"
-        )?;
+        writeln!(f, "Name TTL Type Data")?;
         for record in self.to_records() {
             writeln!(f, "{record}")?;
         }

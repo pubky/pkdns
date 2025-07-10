@@ -6,7 +6,6 @@ use std::{
 
 use reqwest::IntoUrl;
 
-
 type ExternalIpResult<T> = Result<T, ExternalIpResolverError>;
 
 type IpFuture<T> = Pin<Box<dyn Future<Output = ExternalIpResult<T>>>>;
@@ -20,11 +19,7 @@ pub struct ProviderResolver {
 }
 
 impl ProviderResolver {
-    pub fn new(
-        name: String,
-        ipv4: IpResolver<Ipv4Addr>,
-        ipv6: IpResolver<Ipv6Addr>,
-    ) -> Self {
+    pub fn new(name: String, ipv4: IpResolver<Ipv4Addr>, ipv6: IpResolver<Ipv6Addr>) -> Self {
         Self { name, ipv4, ipv6 }
     }
 
