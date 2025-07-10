@@ -186,7 +186,7 @@ where
     if let Some(label) = &value {
         let name = match Name::new(&label) {
             Ok(name) => name,
-            Err(e) => return Err(e).map_err(D::Error::custom),
+            Err(e) => return Err(D::Error::custom(e)),
         };
         if name.get_labels().len() != 1 {
             return Err(anyhow!("TLD can only be one label")).map_err(D::Error::custom);
@@ -226,14 +226,21 @@ pub fn read_or_create_config(path: &PathBuf) -> Result<PkdnsConfig, anyhow::Erro
 
     // Failed to read the config file.
     if expanded_path.exists() && expanded_path.is_file() {
-        tracing::error!("Unable to read configuration file at {}. {err}", expanded_path.display());
+        tracing::error!(
+            "Unable to read configuration file at {}. {err}",
+            expanded_path.display()
+        );
         return Err(anyhow!("Failed to read {}. {err}", expanded_path.display()));
     }
 
     tracing::info!("Create a new config file from scratch {}.", expanded_path.display());
     let mut config = PkdnsConfig::default();
     // Add default values for Options. They don't appear otherwise in the commented out config.
-    config.general.dns_over_http_socket = Some("127.0.0.1:3000".parse().expect("127.0.0.1:3000 is a valid socket address"));
+    config.general.dns_over_http_socket = Some(
+        "127.0.0.1:3000"
+            .parse()
+            .expect("127.0.0.1:3000 is a valid socket address"),
+    );
     let full_config = toml::to_string(&config).expect("Valid toml config.");
     let commented_out: Vec<String> = full_config
         .split("\n")

@@ -35,7 +35,6 @@ Add this DNS url to your browsers to enable self-sovereign Public Key Domains (P
 
 dev:";
 
-
 /// Validates the accept header.
 /// Returns an error if the accept header is missing or not application/dns-message.
 fn validate_accept_header(headers: &HeaderMap) -> Result<(), (StatusCode, String)> {
@@ -45,16 +44,16 @@ fn validate_accept_header(headers: &HeaderMap) -> Result<(), (StatusCode, String
     ));
     let accept_header = match headers.get("accept") {
         Some(value) => value,
-        None => return error
+        None => return error,
     };
 
     let value_str = match accept_header.to_str() {
         Ok(value) => value,
-        Err(_) => return error
+        Err(_) => return error,
     };
 
     if value_str != "application/dns-message" {
-        return error
+        return error;
     }
     Ok(())
 }
@@ -86,7 +85,7 @@ fn get_lowest_ttl(reply: &Vec<u8>) -> u32 {
 
     let parsed_packet = match Packet::parse(reply) {
         Ok(parsed) => parsed,
-        Err(_) => return DEFAULT_VALUE
+        Err(_) => return DEFAULT_VALUE,
     };
 
     let val = parsed_packet
@@ -104,7 +103,7 @@ fn get_lowest_ttl(reply: &Vec<u8>) -> u32 {
 fn extract_client_ip(request_addr: &SocketAddr, headers: &HeaderMap) -> IpAddr {
     let origin_ip = match headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
         Some(value) => value,
-        None => return request_addr.ip()
+        None => return request_addr.ip(),
     };
 
     match origin_ip.parse() {
@@ -142,7 +141,7 @@ async fn dns_query_get(
 
     let dns_param = match params.get("dns") {
         Some(value) => value,
-        None => return Err((StatusCode::BAD_REQUEST, format!("valid dns query param required")))
+        None => return Err((StatusCode::BAD_REQUEST, format!("valid dns query param required"))),
     };
     let packet_bytes = decode_dns_base64_packet(dns_param)?;
 
@@ -161,7 +160,7 @@ async fn dns_query_post(
 
     let packet_bytes = match axum::body::to_bytes(request.into_body(), 65535usize).await {
         Ok(bytes) => bytes.to_vec(),
-        Err(e) => return Err((StatusCode::BAD_REQUEST, e.to_string()))
+        Err(e) => return Err((StatusCode::BAD_REQUEST, e.to_string())),
     };
 
     let mut socket = state.socket.clone();

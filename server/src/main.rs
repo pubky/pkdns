@@ -101,7 +101,9 @@ async fn main() -> Result<(), Box<dyn Error>> {
     wait_on_ctrl_c().await;
     println!();
     tracing::info!("Got it! Exiting...");
-    join_handle.send(()).expect("Failed to send shutdown signal to DNS socket."); // If this fails, we panic as we are already trying to exit.
+    join_handle
+        .send(())
+        .expect("Failed to send shutdown signal to DNS socket."); // If this fails, we panic as we are already trying to exit.
 
     Ok(())
 }
