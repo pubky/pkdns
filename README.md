@@ -25,7 +25,7 @@ Use one of the [hosted DNS servers](./servers.txt) to try out pkdns quickly.
 2. Extract the tar file. Should be something like `tar -xvf tarfile.tar.gz`.
 3. Run `pkdns --verbose`.
 4. [Verify](#verify-pkdns-is-working) the server is working. Your dns server ip is `127.0.0.1`.
-5. [Configure](#change-your-system-dns) your system dns.
+5. Configure your [browser](#use-dns-over-https-in-your-browser) or [system dns](#change-your-system-dns).
 6. [Browse](#browse-the-self-sovereign-web) the self-sovereign web.
 
 
@@ -37,7 +37,7 @@ Make sure you have the [Rust toolchain](https://rustup.rs/) installed.
 2. Switch directory `cd pkdns`.
 3. Run `cargo run --package=pkdns`.
 4. [Verify](#verify-pkdns-is-working) the server is working. Your server ip is `127.0.0.1`.
-6. [Configure](#change-your-system-dns) your system dns.
+6. Configure your [browser](#use-dns-over-https-in-your-browser) or [system dns](#change-your-system-dns).
 7. [Browse](#browse-the-self-sovereign-web) the self-sovereign web.
 
 
@@ -57,6 +57,8 @@ Verify your server with this domain [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5
 
 ### Change your System DNS
 
+Upgrade your whole machine to pkdns by setting it as your primary system DNS.
+
 Follow one of the guides to change your DNS server on your system:
 - [MacOS guide](https://support.apple.com/en-gb/guide/mac-help/mh14127)
 - [Ubuntu guide](https://www.ionos.com/digitalguide/server/configuration/change-dns-server-on-ubuntu/)
@@ -67,14 +69,14 @@ Verify your server with this domain [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5
 
 ### Verify pkdns is working
 
-#### Pkarr Domains
-Verify the server resolves pkarr domains. Replace `PKDNS_SERVER_IP` with your pkdns server IP address.
+#### PKDNS Domains
+Verify the server resolves pkdns domains. Replace `PKDNS_SERVER_IP` with your pkdns server IP address.
 
 ```bash 
 nslookup 7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy PKDNS_SERVER_IP
 ```
 
-> *Troubleshooting* If this does not work then the pkdns server is likely not running.
+> *Troubleshooting* If this does not work then the pkdns server is likely not running or misconfigured.
 
 
 #### ICANN Domains
@@ -90,8 +92,7 @@ nslookup example.com PKDNS_SERVER_IP
 
 ### Browse the Self-Sovereign Web
 
-Here are some example pkarr domains:
-
+Here are some example pkdns domains:
 
 - [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./)
 - [http://pkdns.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./](http://pkdns.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./)
