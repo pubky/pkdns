@@ -196,10 +196,8 @@ impl DnsSocket {
         let packet = ParsedPacket::new(data)?;
 
         let packet_id = packet.id();
-        let pending = self.pending.remove_by_forward_id(&packet_id, &from);
-        if pending.is_some() {
+        if let Some(query) = self.pending.remove_by_forward_id(&packet_id, &from) {
             tracing::trace!("Received response from forward server. Send back to client.");
-            let query = pending.unwrap();
             query.tx.send(packet.into()).unwrap();
             return Ok(());
         };
@@ -213,12 +211,14 @@ impl DnsSocket {
         };
 
         // New query
-        let query_parser: Result<ParsedQuery, _> = packet.try_into();
-        if let Err(e) = query_parser {
-            tracing::debug!("Failed to parse query {from}. id={packet_id}. {e} Drop.");
-            return Ok(());
+        let query: ParsedQuery = match packet.try_into() {
+            Ok(query) => query,
+            Err(e) => {
+                tracing::debug!("Failed to parse query {from}. id={packet_id}. {e} Drop.");
+                return Ok(());
+            }
         };
-        let query = query_parser.unwrap();
+
         if self.disable_any_queries && query.is_any_type() {
             tracing::debug!("Received ANY type question from {from}. id={packet_id}. Drop.");
             return Ok(());
@@ -236,12 +236,14 @@ impl DnsSocket {
 
     /// Queries recursively with a byte query. If the query can't be parsed, return a server fail.
     pub async fn query_me_recursively_raw(&mut self, query: Vec<u8>, from: Option<IpAddr>) -> Vec<u8> {
-        let packet = ParsedPacket::new(query);
-        if let Err(e) = packet {
-            tracing::trace!("Failed to parse query {e}. Drop");
-            return vec![];
-        }
-        let packet = packet.unwrap();
+        let packet: ParsedPacket = match ParsedPacket::new(query) {
+            Ok(packet) => packet,
+            Err(e) => {
+                tracing::trace!("Failed to parse query {e}. Drop");
+                return vec![];
+            }
+        };
+
         match ParsedQuery::try_from(packet.clone()) {
             Ok(parsed) => self.query_me_recursively_with_log(&parsed, from).await,
             Err(e) => packet.create_server_fail_reply(),
@@ -268,18 +270,20 @@ impl DnsSocket {
 
         // Based on https://datatracker.ietf.org/doc/html/rfc1034#section-4.3.2
 
-        let client_query = query;
-        let client_query_data: Vec<u8> = client_query.packet.clone().into();
-        let mut client_reply = Packet::parse(&client_query_data).unwrap().into_reply();
+        // Original query coming from the client
+        let original_client_query = query;
+
+        // Main reply to the client
+        let mut client_reply = original_client_query.packet.parsed().clone().into_reply();
         if self.is_recursion_available() {
             client_reply.set_flags(PacketFlag::RECURSION_AVAILABLE);
         } else {
             client_reply.remove_flags(PacketFlag::RECURSION_AVAILABLE);
         }
         let mut next_name_server: Option<SocketAddr> = None; // Name server to target. If none, falls back to default and DHT
-        let mut next_raw_query: Vec<u8> = client_query_data.clone();
+        let mut next_raw_query: ParsedQuery = original_client_query.clone();
         for i in 0..self.max_recursion_depth {
-            let current_query = ParsedQuery::new(next_raw_query.clone()).unwrap();
+            let current_query = next_raw_query.clone();
             tracing::trace!(
                 "Recursive lookup {i}/{} NS:{next_name_server:?} - {current_query}",
                 self.max_recursion_depth,
@@ -293,7 +297,7 @@ impl DnsSocket {
                 tracing::trace!("Recursion not available return.");
                 return reply;
             }
-            if !client_query.is_recursion_desired() {
+            if !original_client_query.is_recursion_desired() {
                 tracing::trace!("Recursion not desired. return.");
                 return reply;
             }
@@ -363,7 +367,7 @@ impl DnsSocket {
                     let mut next_query = current_query.packet.parsed().clone();
                     next_query.questions = vec![question];
                     next_query.set_flags(PacketFlag::RECURSION_DESIRED);
-                    next_raw_query = next_query.build_bytes_vec().unwrap();
+                    next_raw_query = ParsedQuery::new(next_query.build_bytes_vec().unwrap()).unwrap();
                     continue;
                 } else {
                     panic!("CNAME match failure. Shouldnt happen.")
@@ -430,7 +434,7 @@ impl DnsSocket {
 
         // Max recursion exceeded
         tracing::debug!("Max recursion exceeded. {query}");
-        client_query.packet.create_server_fail_reply()
+        original_client_query.packet.create_server_fail_reply()
     }
 
     /// Query this DNS for data once without recursion.

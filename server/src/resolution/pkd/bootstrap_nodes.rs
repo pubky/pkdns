@@ -31,24 +31,32 @@ pub(crate) static DEFAULT_BOOTSTRAP_NODES: [DomainPortAddr; 4] = [
     DomainPortAddr::new("router.utorrent.com", 6881),
 ];
 
-/**
- * Resolve the mainline dht boostrap nodes with a custom dns server.
- * Used because if pkdns is set as the system dns on the machine, it can't rely
- * on itself to resolve while starting.
- */
+#[derive(Debug, thiserror::Error)]
+pub enum MainlineBootstrapResolverError {
+    #[error("Failed to resolve any of the boostrap node domains")]
+    DomainResolutionFailed,
+
+    #[error("Failed to create a network socket. {0}")]
+    SocketError(#[from] std::io::Error),
+}
+
+/// Resolve the mainline dht boostrap nodes with a custom dns server.
+/// Used because if pkdns is set as the system dns on the machine, it can't rely
+/// on itself to resolve while starting.
 pub(crate) struct MainlineBootstrapResolver {
     socket: UdpSocket,
 }
 
 impl MainlineBootstrapResolver {
-    pub fn new(dns_server: SocketAddr) -> Result<Self, std::io::Error> {
+    pub fn new(dns_server: SocketAddr) -> Result<Self, MainlineBootstrapResolverError> {
         let socket = UdpSocket::bind("0.0.0.0:0")?;
-        socket.set_read_timeout(Some(Duration::new(5, 0)))?;
+        socket.set_read_timeout(Some(Duration::new(3, 0)))?;
         socket.connect(dns_server)?;
         Ok(Self { socket })
     }
 
-    fn lookup_domain(&self, domain: &str) -> Result<Option<IpAddr>, anyhow::Error> {
+    /// Lookup a domain and return the first A record.
+    fn lookup_domain(&self, domain: &str) -> Result<Option<IpAddr>, MainlineBootstrapResolverError> {
         let mut m = Message::default();
         m.add_question(domain, Type::A, Class::Internet);
         m.add_extension(Extension {
@@ -64,33 +72,34 @@ impl MainlineBootstrapResolver {
         let len = self.socket.recv(&mut resp)?;
 
         // Take the response bytes and turn it into another DNS Message.
-        let answer = Message::from_slice(&resp[0..len])?;
-        if answer.answers.is_empty() {
-            return Ok(None);
+        let reply = Message::from_slice(&resp[0..len])?;
+        let first_answer = match reply.answers.first() {
+            Some(answer) => answer,
+            None => return Ok(None),
         };
-        let first = answer.answers.first().unwrap();
-        match first.resource {
+
+        match first_answer.resource {
             Resource::A(val) => Ok(Some(IpAddr::V4(val))),
-            Resource::AAAA(val) => Ok(Some(IpAddr::V6(val))),
             _ => Ok(None),
         }
     }
 
-    fn lookup(&self, boostrap_node: &DomainPortAddr) -> Result<SocketAddr, anyhow::Error> {
+    /// Lookup the domain of the boostrap node and return a SocketAddr.
+    fn lookup(&self, boostrap_node: &DomainPortAddr) -> Result<Option<SocketAddr>, MainlineBootstrapResolverError> {
         let res = self.lookup_domain(boostrap_node.domain)?;
-        if res.is_none() {
-            return Err(anyhow!("No ip found."));
-        };
-        let ip = res.unwrap();
-        Ok(SocketAddr::new(ip, boostrap_node.port))
+        Ok(res.map(|ip| SocketAddr::new(ip, boostrap_node.port)))
     }
 
-    pub fn get_bootstrap_nodes(&self) -> Result<Vec<SocketAddr>, anyhow::Error> {
+    /// Lookup all the bootstrap nodes and return a list of SocketAddrs.
+    pub fn get_bootstrap_nodes(&self) -> Result<Vec<SocketAddr>, MainlineBootstrapResolverError> {
         let mut addrs: Vec<SocketAddr> = vec![];
         for node in DEFAULT_BOOTSTRAP_NODES.iter() {
             match self.lookup(node) {
-                Ok(val) => {
+                Ok(Some(val)) => {
                     addrs.push(val);
+                }
+                Ok(None) => {
+                    tracing::debug!("Failed to resolve the DHT bootstrap node domain {node}. No ip found.");
                 }
                 Err(err) => {
                     tracing::trace!("Failed to resolve the DHT bootstrap node domain {node}. {err}");
@@ -100,16 +109,14 @@ impl MainlineBootstrapResolver {
         if !addrs.is_empty() {
             Ok(addrs)
         } else {
-            Err(anyhow!(
-                "Failed to resolve the domains of even a single DHT bootstrap node."
-            ))
+            Err(MainlineBootstrapResolverError::DomainResolutionFailed)
         }
     }
 
-    pub fn get_addrs(dns_server: &SocketAddr) -> Result<Vec<String>, anyhow::Error> {
+    /// Lookup all the bootstrap nodes and return a list of Strings.
+    pub fn get_addrs(dns_server: &SocketAddr) -> Result<Vec<SocketAddr>, MainlineBootstrapResolverError> {
         let resolver = MainlineBootstrapResolver::new(*dns_server).unwrap();
         let addrs = resolver.get_bootstrap_nodes()?;
-        let addrs: Vec<String> = addrs.into_iter().map(|addr| addr.to_string()).collect();
         Ok(addrs)
     }
 }
@@ -130,7 +137,7 @@ mod tests {
         let google_dns: SocketAddr = "8.8.8.8:53".parse().expect("valid addr");
         let node = DomainPortAddr::new("example.com", 6881);
         let resolver = MainlineBootstrapResolver::new(google_dns).unwrap();
-        let res = resolver.lookup(&node).expect("Valid ip address resolved");
+        let res = resolver.lookup(&node).expect("Valid ip address resolved").unwrap();
         assert_eq!(res.port(), 6881);
     }
 

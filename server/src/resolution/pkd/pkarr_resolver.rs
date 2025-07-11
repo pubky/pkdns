@@ -73,9 +73,7 @@ impl ResolverSettings {
             max_ttl: 60 * 60 * 24, // 1 day
             min_ttl: 60 * 5,
             cache_mb: 100,
-            forward_dns_server: "8.8.8.8:53"
-                .parse()
-                .expect("forward should be valid IP:Port combination."),
+            forward_dns_server: "8.8.8.8:53".parse().expect("Is always valid."),
             max_dht_queries_per_ip_per_second: 0,
             max_dht_queries_per_ip_burst: 0,
             top_level_domain: Some(TopLevelDomain("key".to_string())),
@@ -110,20 +108,23 @@ impl PkarrResolver {
     /**
      * Resolves the DHT boostrap nodes with the forward server.
      */
-    fn resolve_bootstrap_nodes(forward_dns_server: &SocketAddr) -> Vec<String> {
+    fn resolve_bootstrap_nodes(forward_dns_server: &SocketAddr) -> Vec<SocketAddr> {
         tracing::debug!(
-            "Connecting to the DNS forward server {}. Hold on...",
+            "Connecting to the DNS forward server {}...",
             forward_dns_server.to_string()
         );
-        let addrs = MainlineBootstrapResolver::get_addrs(forward_dns_server);
-        if addrs.is_err() {
-            let err = addrs.unwrap_err();
-            tracing::error!("{}", err);
-            tracing::error!("Connecting to the DNS forward server failed. Couldn't resolve the DHT bootstrap nodes. Is the DNS forward server active?");
-            panic!("Resolving bootstrap nodes failed. {}", err);
-        }
-        tracing::debug!("Success. DNS forward server reply received.");
-        addrs.unwrap()
+
+        let addrs = match MainlineBootstrapResolver::get_addrs(forward_dns_server) {
+            Ok(addrs) => addrs,
+            Err(err) => {
+                tracing::error!("{}", err);
+                tracing::error!("Connecting to the DNS forward server failed. Couldn't resolve the DHT bootstrap nodes. Is the DNS forward server active?");
+                panic!("Resolving bootstrap nodes failed. {}", err);
+            }
+        };
+
+        tracing::debug!("DHT bootstrap nodes resolved.");
+        addrs
     }
 
     #[allow(dead_code)]
