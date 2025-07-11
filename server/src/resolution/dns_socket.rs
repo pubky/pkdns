@@ -273,7 +273,8 @@ impl DnsSocket {
 
         // Original query coming from the client
         let original_client_query = query;
-        let client_query_data: Vec<u8> = original_client_query.packet.clone().into();
+
+        // Main reply to the client
         let mut client_reply =  original_client_query.packet.parsed().clone().into_reply();
         if self.is_recursion_available() {
             client_reply.set_flags(PacketFlag::RECURSION_AVAILABLE);
@@ -281,9 +282,9 @@ impl DnsSocket {
             client_reply.remove_flags(PacketFlag::RECURSION_AVAILABLE);
         }
         let mut next_name_server: Option<SocketAddr> = None; // Name server to target. If none, falls back to default and DHT
-        let mut next_raw_query: Vec<u8> = client_query_data.clone();
+        let mut next_raw_query: ParsedQuery = original_client_query.clone();
         for i in 0..self.max_recursion_depth {
-            let current_query = ParsedQuery::new(next_raw_query.clone()).unwrap();
+            let current_query = next_raw_query.clone();
             tracing::trace!(
                 "Recursive lookup {i}/{} NS:{next_name_server:?} - {current_query}",
                 self.max_recursion_depth,
@@ -367,7 +368,7 @@ impl DnsSocket {
                     let mut next_query = current_query.packet.parsed().clone();
                     next_query.questions = vec![question];
                     next_query.set_flags(PacketFlag::RECURSION_DESIRED);
-                    next_raw_query = next_query.build_bytes_vec().unwrap();
+                    next_raw_query = ParsedQuery::new(next_query.build_bytes_vec().unwrap()).unwrap();
                     continue;
                 } else {
                     panic!("CNAME match failure. Shouldnt happen.")
