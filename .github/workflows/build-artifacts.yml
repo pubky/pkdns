@@ -7,11 +7,8 @@ name: Build Artifacts
 on:
   # This workflow is triggered every time a push is made to the main branch.
   # Aka when a PR is merged.
-  pull_request:
-    branches:
-      - "*"
   push:
-   # branches: [main]
+    branches: [master]
 
 jobs:
   build:

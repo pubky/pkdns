@@ -37,11 +37,11 @@ VERSION=$(cargo pkgid -p pkdns | awk -F# '{print $NF}')
 echo "Preparing release executables for version $VERSION..."
 TARGETS=(
 # target, nickname
+"aarch64-apple-darwin,osx-arm64" 
+"x86_64-apple-darwin,osx-amd64"
 "aarch64-unknown-linux-musl,linux-arm64"
 "x86_64-unknown-linux-musl,linux-amd64"
 "x86_64-pc-windows-gnu,windows-amd64"
-"aarch64-apple-darwin,osx-arm64" 
-"x86_64-apple-darwin,osx-amd64"
 )
 
 # List of binaries to build.
@@ -56,7 +56,7 @@ build_target() {
     local TARGET=$1
     local NICKNAME=$2
     echo "Build $NICKNAME with $TARGET"
-    FOLDER="pubky-core-v$VERSION-$NICKNAME"
+    FOLDER="pkdns-v$VERSION-$NICKNAME"
     DICT="target/github-release/$FOLDER"
     mkdir -p $DICT
     for ARTIFACT in "${ARTIFACTS[@]}"; do
