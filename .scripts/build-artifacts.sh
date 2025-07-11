@@ -45,7 +45,7 @@ TARGETS=(
 )
 
 # List of binaries to build.
-ARTIFACTS=("pkdns", "pkdns-cli")
+ARTIFACTS=("pkdns" "pkdns-cli")
 
 echo "Create the github-release directory..."
 rm -rf target/github-release
