@@ -270,12 +270,11 @@ impl DnsSocket {
 
         // Based on https://datatracker.ietf.org/doc/html/rfc1034#section-4.3.2
 
-
         // Original query coming from the client
         let original_client_query = query;
 
         // Main reply to the client
-        let mut client_reply =  original_client_query.packet.parsed().clone().into_reply();
+        let mut client_reply = original_client_query.packet.parsed().clone().into_reply();
         if self.is_recursion_available() {
             client_reply.set_flags(PacketFlag::RECURSION_AVAILABLE);
         } else {

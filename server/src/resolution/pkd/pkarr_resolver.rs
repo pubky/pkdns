@@ -73,9 +73,7 @@ impl ResolverSettings {
             max_ttl: 60 * 60 * 24, // 1 day
             min_ttl: 60 * 5,
             cache_mb: 100,
-            forward_dns_server: "8.8.8.8:53"
-                .parse()
-                .expect("Is always valid."),
+            forward_dns_server: "8.8.8.8:53".parse().expect("Is always valid."),
             max_dht_queries_per_ip_per_second: 0,
             max_dht_queries_per_ip_burst: 0,
             top_level_domain: Some(TopLevelDomain("key".to_string())),

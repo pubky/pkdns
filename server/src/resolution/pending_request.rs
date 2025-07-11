@@ -9,7 +9,6 @@ use std::{
 
 use tokio::sync::oneshot;
 
-
 /// A pending request to a forward server.
 #[derive(Debug)]
 pub struct PendingRequest {
