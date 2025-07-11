@@ -33,7 +33,7 @@ then
 fi
 
 # Read the version from the homeserver
-VERSION=$(cargo pkgid -p pkdns | awk -F# '{print $NF}')
+VERSION=$(cargo pkgid -p pkdns | cut -d@ -f2)
 echo "Preparing release executables for version $VERSION..."
 TARGETS=(
 # target, nickname
