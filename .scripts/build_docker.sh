@@ -1,8 +1,6 @@
 #!/bin/bash
 
-export VERSION=$(cd server && cargo get package.version)
-cross build --release --package=pkdns --target=x86_64-unknown-linux-musl
-cross build --release --package=pkdns-cli --target=x86_64-unknown-linux-musl
+VERSION=$(cargo pkgid -p pkdns | cut -d@ -f2)
 docker build --platform linux/amd64 -t synonymsoft/pkdns:$VERSION -t synonymsoft/pkdns:latest .
 
 
