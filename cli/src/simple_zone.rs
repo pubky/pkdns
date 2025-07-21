@@ -123,7 +123,7 @@ $TTL 300
 
                             for bytes in val.iter() {
                                 let ascii = std::str::from_utf8(bytes).unwrap();
-                                txt.add_string(&ascii)?;
+                                txt.add_string(ascii)?;
                             }
                             let rdata: pkarr::dns::rdata::RData = pkarr::dns::rdata::RData::TXT(txt);
 
@@ -177,7 +177,7 @@ $TTL 300
 #[cfg(test)]
 mod tests {
 
-    use domain::dep::octseq::OctetsInto;
+    
 
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
