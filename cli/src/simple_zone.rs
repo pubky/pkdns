@@ -119,9 +119,12 @@ $TTL 300
                         }
 
                         domain::rdata::ZoneRecordData::Txt(val) => {
-                            let value = val.to_string();
                             let mut txt = pkarr::dns::rdata::TXT::new();
-                            txt.add_string(value.as_str())?;
+
+                            for bytes in val.iter() {
+                                let ascii = std::str::from_utf8(bytes).unwrap();
+                                txt.add_string(&ascii)?;
+                            }
                             let rdata: pkarr::dns::rdata::RData = pkarr::dns::rdata::RData::TXT(txt);
 
                             let rr = ResourceRecord::new(simple_name, pkarr::dns::CLASS::IN, ttl, rdata);
@@ -173,6 +176,8 @@ $TTL 300
 
 #[cfg(test)]
 mod tests {
+
+    use domain::dep::octseq::OctetsInto;
 
     // Note this useful idiom: importing names from outer (for mod tests) scope.
     use super::*;
@@ -233,5 +238,59 @@ _text			IN		TXT		hero=satoshi";
         let packet = zone.packet.parsed();
 
         println!("{:#?}", packet.answers);
+    }
+
+    #[test]
+    fn test_read_zone_txt1() {
+        let raw_records = "foo   IN  TXT   \"key1=1\" \"key2=2\"";
+
+        let zone = SimpleZone::read(raw_records.to_string(), "123456").unwrap();
+        let packet = zone.packet.parsed();
+
+        let entry = packet.answers.first().unwrap();
+
+        match &entry.rdata {
+            pkarr::dns::rdata::RData::TXT(txt) => {
+                let value1 = txt.clone().attributes().get("key1").unwrap().clone().unwrap();
+                assert_eq!(value1, "1");
+                let value2 = txt.clone().attributes().get("key2").unwrap().clone().unwrap();
+                assert_eq!(value2, "2");
+            }
+            _ => panic!("Expected TXT record, got {:?}", entry.rdata),
+        }
+    }
+
+    #[test]
+    fn test_read_zone_txt2() {
+        let raw_records = "foo   IN  TXT   key=value";
+
+        let zone = SimpleZone::read(raw_records.to_string(), "123456").unwrap();
+        let packet = zone.packet.parsed();
+        let entry = packet.answers.last().unwrap();
+
+        match &entry.rdata {
+            pkarr::dns::rdata::RData::TXT(txt) => {
+                let value = txt.clone().attributes().get("key").unwrap().clone().unwrap();
+                assert_eq!(value, "value");
+            }
+            _ => panic!("Expected TXT record, got {:?}", entry.rdata),
+        }
+    }
+
+    #[test]
+    fn test_read_zone_txt3() {
+        let raw_records = "foo   IN  TXT   \"key=value\"";
+
+        let zone = SimpleZone::read(raw_records.to_string(), "123456").unwrap();
+        let packet = zone.packet.parsed();
+        let entry = packet.answers.last().unwrap();
+
+        match &entry.rdata {
+            pkarr::dns::rdata::RData::TXT(txt) => {
+                let value = txt.clone().attributes().get("key").unwrap().clone().unwrap();
+                assert_eq!(value, "value");
+            }
+            _ => panic!("Expected TXT record, got {:?}", entry.rdata),
+        }
     }
 }

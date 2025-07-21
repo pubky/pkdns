@@ -40,9 +40,8 @@ async fn fill_dyndns_variables(zone: &mut String) -> Result<(), anyhow::Error> {
     Ok(())
 }
 
-async fn read_zone_file(matches: &ArgMatches, pubkey: &str) -> SimpleZone {
-    let unexpanded_path: &String = matches.get_one("zonefile").unwrap();
-    let csv_path_str: String = shellexpand::full(unexpanded_path).expect("Valid shell path.").into();
+async fn read_zone_file(zone_file_path: &str, pubkey: &str) -> SimpleZone {
+    let csv_path_str: String = shellexpand::full(zone_file_path).expect("Valid shell path.").into();
     let path = Path::new(&csv_path_str);
     let path = PathBuf::from(path);
 
@@ -64,13 +63,12 @@ async fn read_zone_file(matches: &ArgMatches, pubkey: &str) -> SimpleZone {
     zone.unwrap()
 }
 
-fn read_seed_file(matches: &ArgMatches) -> Keypair {
-    let unexpanded_path: &String = matches.get_one("seed").unwrap();
-    let expanded_path: String = shellexpand::full(unexpanded_path).expect("Valid shell path.").into();
+fn read_seed_file(seed_file_path: &str) -> Keypair {
+    let expanded_path: String = shellexpand::full(seed_file_path).expect("Valid shell path.").into();
     let path = Path::new(&expanded_path);
     let path = PathBuf::from(path);
 
-    let seed = read_to_string(path);
+    let seed = std::fs::read_to_string(path);
     if let Err(e) = seed {
         eprintln!("Failed to read seed at {expanded_path}. {e}");
         std::process::exit(1);
@@ -95,11 +93,14 @@ fn parse_seed(seed: &str) -> Keypair {
 }
 
 pub async fn cli_publish(matches: &ArgMatches) {
-    let keypair = read_seed_file(matches);
+    let seed_file_path: &String = matches.get_one("seed").expect("--seed file path is required");
+    let zone_file_path: &String = matches.get_one("zonefile").expect("--zonefile file path is required");
+
+    let keypair = read_seed_file(seed_file_path.as_str());
     let pubkey = keypair.to_z32();
     let client = construct_pkarr_client();
 
-    let zone = read_zone_file(matches, &pubkey).await;
+    let zone = read_zone_file(zone_file_path.as_str(), &pubkey).await;
     println!("{}", zone.packet);
     let packet = zone.packet.parsed();
     let packet = SignedPacket::new(&keypair, &packet.answers, Timestamp::now());
