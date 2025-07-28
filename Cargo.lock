@@ -2004,6 +2004,7 @@ dependencies = [
  "rustdns",
  "self_cell",
  "serde",
+ "tempfile",
  "thiserror 1.0.69",
  "tokio",
  "toml",

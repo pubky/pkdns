@@ -10,11 +10,73 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Error that can occur when reading a configuration file.
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigReadError {
+    /// The file did not exist or could not be read.
+    #[error("config file not found: {0}")]
+    NotFound(#[from] std::io::Error),
+    /// The TOML was syntactically invalid.
+    #[error("config file is not valid TOML: {0}")]
+    NotValid(#[from] toml::de::Error),
+}
+
+/// Example configuration file
+pub const SAMPLE_CONFIG: &str = include_str!("../../config.sample.toml");
+
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
-pub struct PkdnsConfig {
+pub struct ConfigToml {
+    #[serde(default)]
     pub general: General,
+    #[serde(default)]
     pub dns: Dns,
+    #[serde(default)]
     pub dht: Dht,
+}
+
+impl ConfigToml {
+    /// Example configuration file as a string.
+    pub fn sample() -> String {
+        SAMPLE_CONFIG.to_string()
+    }
+
+        /// Render the embedded sample config but comment out every value,
+    /// producing a handy template for end-users.
+    pub fn commented_out_sample() -> String {
+        SAMPLE_CONFIG
+            .lines()
+            .map(|line| {
+                let trimmed = line.trim_start();
+                let is_comment = trimmed.starts_with('#');
+                if !is_comment && !trimmed.is_empty() {
+                    format!("# {}", line)
+                } else {
+                    line.to_string()
+                }
+            })
+            .collect::<Vec<String>>()
+            .join("\n")
+    }
+
+    /// Read and parse a configuration file.
+    ///
+    /// # Arguments
+    /// * `path` - The path to the TOML configuration file
+    ///
+    /// # Returns
+    /// * `Result<ConfigToml>` - The parsed configuration or an error if reading/parsing fails
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ConfigReadError> {
+        let raw = fs::read_to_string(path)?;
+        let config: ConfigToml = toml::from_str(&raw)?;
+        Ok(config)
+    }
+
+    #[cfg(test)]
+    pub fn test() -> Self {
+        let mut config = Self::default();
+        config.general.dns_over_http_socket = None;
+        config
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -58,10 +120,6 @@ fn default_false() -> bool {
 fn default_none() -> Option<SocketAddr> {
     None
 }
-
-// fn default_true() -> bool {
-//     false
-// }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Dns {
@@ -189,15 +247,15 @@ impl Default for Dht {
 }
 
 /// Read the pkdns config file.
-pub fn read_config(path: &Path) -> Result<PkdnsConfig, anyhow::Error> {
+pub fn read_config(path: &Path) -> Result<ConfigToml, anyhow::Error> {
     let config_str = fs::read_to_string(path)?;
-    let config: PkdnsConfig = toml::from_str(&config_str)?;
+    let config: ConfigToml = toml::from_str(&config_str)?;
 
     Ok(config)
 }
 
 /// Read or create a config file at a given path.
-pub fn read_or_create_config(path: &PathBuf) -> Result<PkdnsConfig, anyhow::Error> {
+pub fn read_or_create_config(path: &PathBuf) -> Result<ConfigToml, anyhow::Error> {
     let expanded_path = expand_tilde(path);
 
     let err = match read_config(expanded_path.as_path()) {
@@ -215,7 +273,7 @@ pub fn read_or_create_config(path: &PathBuf) -> Result<PkdnsConfig, anyhow::Erro
     }
 
     tracing::info!("Create a new config file from scratch {}.", expanded_path.display());
-    let mut config = PkdnsConfig::default();
+    let mut config = ConfigToml::default();
     // Add default values for Options. They don't appear otherwise in the commented out config.
     config.general.dns_over_http_socket = Some(
         "127.0.0.1:3000"
@@ -247,7 +305,7 @@ pub fn read_or_create_config(path: &PathBuf) -> Result<PkdnsConfig, anyhow::Erro
 }
 
 /// Reads the config from the directory or if it doesn't exist, creates a new config in the directory.
-pub fn read_or_create_from_dir(dir_path: &PathBuf) -> Result<PkdnsConfig, anyhow::Error> {
+pub fn read_or_create_from_dir(dir_path: &PathBuf) -> Result<ConfigToml, anyhow::Error> {
     let mut path = expand_tilde(dir_path);
     if !path.exists() {
         if let Err(e) = fs::create_dir(path.clone()) {
@@ -272,4 +330,21 @@ pub fn expand_tilde(path: &PathBuf) -> PathBuf {
         }
     }
     PathBuf::from(path)
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_sample_config() {
+        let _: ConfigToml = toml::from_str(SAMPLE_CONFIG).expect("Sample config must be parseble");
+    }
+
+    #[test]
+    fn test_commented_out_sample() {
+        let commented_out = ConfigToml::commented_out_sample();
+        println!("{commented_out}");
+    }
 }

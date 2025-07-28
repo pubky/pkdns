@@ -184,16 +184,16 @@ fn create_app(dns_socket: DnsSocket) -> Router {
         .with_state(Arc::new(AppState { socket: dns_socket }))
 }
 
-pub async fn run_doh_server(addr: SocketAddr, dns_socket: DnsSocket) -> Result<(), anyhow::Error> {
+pub async fn run_doh_server(addr: SocketAddr, dns_socket: DnsSocket) -> Result<SocketAddr, anyhow::Error> {
     let app = create_app(dns_socket);
     let listener = tokio::net::TcpListener::bind(addr).await?;
+    let addr = listener.local_addr()?;
     tokio::spawn(async move {
         axum::serve(listener, app.into_make_service_with_connect_info::<SocketAddr>())
             .await
             .unwrap();
     });
-
-    Ok(())
+    Ok(addr)
 }
 
 #[cfg(test)]
