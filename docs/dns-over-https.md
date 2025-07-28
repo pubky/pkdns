@@ -10,7 +10,7 @@ Popular web browsers like Firefox, Chrome, Brave, and Edge support DoH out of th
 
 1. Pick a DNS-over-HTTPS URL from our public [servers.txt](../servers.txt) list.
 2. Configure your browser. See [this guide](https://support.privadovpn.com/kb/article/848-how-to-enable-doh-on-your-browser/).
-3. Test if everything is working with [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./).
+3. Test if everything is working with [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/).
 
 
 
@@ -29,7 +29,7 @@ location / {
 }
 ```
 4. Configure your browser with your new doh url.
-5. Test if everything is working with [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./).
+5. Test if everything is working with [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/).
 
 
 
