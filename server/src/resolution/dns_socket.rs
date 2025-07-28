@@ -1,6 +1,6 @@
 #![allow(unused)]
 use crate::{
-    app_context::AppContext, config::get_global_config, resolution::{helpers::replace_packet_id, pkd::CustomHandlerError}
+    app_context::AppContext, resolution::{helpers::replace_packet_id, pkd::CustomHandlerError}
 };
 use rand::Rng;
 use tracing_subscriber::fmt::format;
@@ -8,7 +8,7 @@ use tracing_subscriber::fmt::format;
 use super::{
     dns_packets::{ParsedPacket, ParsedQuery},
     pending_request::{PendingRequest, PendingRequestStore},
-    pkd::{PkarrResolver, ResolverSettings},
+    pkd::{PkarrResolver},
     query_id_manager::QueryIdManager,
     rate_limiter::{RateLimiter, RateLimiterBuilder},
     response_cache::IcannLruCache,
@@ -99,17 +99,6 @@ impl DnsSocket {
             .max_per_second(context.config.dns.query_rate_limit)
             .burst_size(context.config.dns.query_rate_limit_burst);
 
-        let config = get_global_config();
-
-        // let resolver_settings = ResolverSettings {
-        //     max_ttl: context.config.dns.max_ttl,
-        //     min_ttl: context.config.dns.min_ttl,
-        //     cache_mb: context.config.dht.dht_cache_mb.into(),
-        //     forward_dns_server: context.config.general.forward,
-        //     max_dht_queries_per_ip_per_second: context.config.dht.dht_query_rate_limit,
-        //     max_dht_queries_per_ip_burst: context.config.dht.dht_query_rate_limit_burst,
-        //     top_level_domain: context.config.dht.top_level_domain,
-        // };
         let pkarr_resolver = PkarrResolver::new(context).await;
         Ok(Self {
             socket: Arc::new(socket),
@@ -118,7 +107,7 @@ impl DnsSocket {
             icann_fallback: context.config.general.forward,
             id_manager: QueryIdManager::new(),
             rate_limiter: Arc::new(limiter.build()),
-            disable_any_queries: config.dns.disable_any_queries,
+            disable_any_queries: context.config.dns.disable_any_queries,
             icann_cache: IcannLruCache::new(context.config.dns.icann_cache_mb, context.config.dns.min_ttl, context.config.dns.max_ttl),
             max_recursion_depth: context.config.dns.max_recursion_depth,
         })

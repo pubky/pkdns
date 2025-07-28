@@ -1,5 +1,4 @@
 use clap::Parser;
-use config::{update_global_config};
 use dns_over_https::run_doh_server;
 use helpers::{enable_logging, set_full_stacktrace_as_default, wait_on_ctrl_c};
 
@@ -45,8 +44,6 @@ async fn main() -> Result<(), Box<dyn Error>> {
     if let Some(forward) = cli.forward {
         app_context.config.general.forward = forward;
     }
-
-    update_global_config(app_context.config.clone());
 
     enable_logging(app_context.config.general.verbose);
     const VERSION: &str = env!("CARGO_PKG_VERSION");

@@ -4,8 +4,6 @@ use anyhow::anyhow;
 use moka::{future::Cache, policy::EvictionPolicy};
 use pkarr::dns::Packet;
 
-use crate::config::get_global_config;
-
 /// Caches dns responses.
 #[derive(Clone, Debug)]
 pub struct CacheItem {

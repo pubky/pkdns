@@ -4,5 +4,5 @@ mod pkarr_resolver;
 mod pubkey_parser;
 mod query_matcher;
 
-pub use pkarr_resolver::{CustomHandlerError, PkarrResolver, PkarrResolverError, ResolverSettings};
+pub use pkarr_resolver::{CustomHandlerError, PkarrResolver, PkarrResolverError};
 use pubkey_parser::parse_pkarr_uri;
