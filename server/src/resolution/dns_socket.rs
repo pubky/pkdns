@@ -1,7 +1,6 @@
 #![allow(unused)]
 use crate::{
-    config::get_global_config,
-    resolution::{helpers::replace_packet_id, pkd::CustomHandlerError},
+    app_context::AppContext, config::get_global_config, resolution::{helpers::replace_packet_id, pkd::CustomHandlerError}
 };
 use rand::Rng;
 use tracing_subscriber::fmt::format;
@@ -9,7 +8,7 @@ use tracing_subscriber::fmt::format;
 use super::{
     dns_packets::{ParsedPacket, ParsedQuery},
     pending_request::{PendingRequest, PendingRequestStore},
-    pkd::{PkarrResolver, ResolverSettings, TopLevelDomain},
+    pkd::{PkarrResolver, ResolverSettings},
     query_id_manager::QueryIdManager,
     rate_limiter::{RateLimiter, RateLimiterBuilder},
     response_cache::IcannLruCache,
@@ -77,77 +76,51 @@ impl DnsSocket {
     /// 0.0.0.0:{49152..=65535}
     /// Used for testing
     fn random_local_socket() -> SocketAddr {
-        let mut rng = rand::thread_rng();
-        let random_port: u32 = rng.gen_range(49152..=65535);
-        let socket_str = format!("0.0.0.0:{random_port}");
-        socket_str.parse().expect("Should always be a valid socket address")
+        "0.0.0.0:0".parse().expect("Is always be a valid socket address")
     }
 
     /// Default dns socket but with a random listening port. Made for testing.
+    #[cfg(test)]
     pub async fn default_random_socket() -> tokio::io::Result<Self> {
         let listening = Self::random_local_socket();
         let icann_resolver: SocketAddr = "8.8.8.8:53".parse().expect("Should always be a valid socket address");
-        DnsSocket::new(
-            listening,
-            icann_resolver,
-            999,
-            999,
-            999,
-            999,
-            0,
-            0,
-            NonZeroU64::new(1).expect("1 is always non-zero"),
-            1,
-            Some(TopLevelDomain::new("key".to_string())),
-            5,
-        )
-        .await
+        
+        let mut context = AppContext::test();
+        
+        DnsSocket::new(&context).await
     }
 
     // Create a new DNS socket
     // TODO: Fix this too many arguments
     #[allow(clippy::too_many_arguments)]
-    pub async fn new(
-        listening: SocketAddr,
-        icann_resolver: SocketAddr,
-        max_queries_per_ip_per_second: u32,
-        max_queries_per_ip_burst: u32,
-        max_dht_queries_per_ip_per_second: u32,
-        max_dht_queries_per_ip_burst: u32,
-        min_ttl: u64,
-        max_ttl: u64,
-        pkarr_cache_mb: NonZeroU64,
-        icann_cache_mb: u64,
-        top_level_domain: Option<TopLevelDomain>,
-        max_recursion_depth: u8,
-    ) -> tokio::io::Result<Self> {
-        let socket = UdpSocket::bind(listening).await?;
+    pub async fn new(context: &AppContext) -> tokio::io::Result<Self> {
+        let socket = UdpSocket::bind(context.config.general.socket).await?;
         let limiter = RateLimiterBuilder::new()
-            .max_per_second(max_queries_per_ip_per_second)
-            .burst_size(max_queries_per_ip_burst);
+            .max_per_second(context.config.dns.query_rate_limit)
+            .burst_size(context.config.dns.query_rate_limit_burst);
 
         let config = get_global_config();
 
-        let resolver_settings = ResolverSettings {
-            max_ttl,
-            min_ttl,
-            cache_mb: pkarr_cache_mb.into(),
-            forward_dns_server: icann_resolver,
-            max_dht_queries_per_ip_per_second,
-            max_dht_queries_per_ip_burst,
-            top_level_domain,
-        };
-        let pkarr_resolver = PkarrResolver::new(resolver_settings).await;
+        // let resolver_settings = ResolverSettings {
+        //     max_ttl: context.config.dns.max_ttl,
+        //     min_ttl: context.config.dns.min_ttl,
+        //     cache_mb: context.config.dht.dht_cache_mb.into(),
+        //     forward_dns_server: context.config.general.forward,
+        //     max_dht_queries_per_ip_per_second: context.config.dht.dht_query_rate_limit,
+        //     max_dht_queries_per_ip_burst: context.config.dht.dht_query_rate_limit_burst,
+        //     top_level_domain: context.config.dht.top_level_domain,
+        // };
+        let pkarr_resolver = PkarrResolver::new(context).await;
         Ok(Self {
             socket: Arc::new(socket),
             pending: PendingRequestStore::new(),
             pkarr_resolver,
-            icann_fallback: icann_resolver,
+            icann_fallback: context.config.general.forward,
             id_manager: QueryIdManager::new(),
             rate_limiter: Arc::new(limiter.build()),
             disable_any_queries: config.dns.disable_any_queries,
-            icann_cache: IcannLruCache::new(icann_cache_mb, min_ttl, max_ttl),
-            max_recursion_depth,
+            icann_cache: IcannLruCache::new(context.config.dns.icann_cache_mb, context.config.dns.min_ttl, context.config.dns.max_ttl),
+            max_recursion_depth: context.config.dns.max_recursion_depth,
         })
     }
 
@@ -559,27 +532,27 @@ impl DnsSocket {
         reply.build_bytes_vec_compressed().unwrap()
     }
 
-    pub async fn default() -> Result<Self, anyhow::Error> {
-        let socket = UdpSocket::bind("0.0.0.0:53").await?;
-        let config = get_global_config();
-        Ok(Self {
-            socket: Arc::new(socket),
-            pending: PendingRequestStore::new(),
-            pkarr_resolver: PkarrResolver::default().await,
-            icann_fallback: "8.8.8.8:53".parse().unwrap(),
-            id_manager: QueryIdManager::new(),
-            rate_limiter: Arc::new(RateLimiterBuilder::new().build()),
-            disable_any_queries: config.dns.disable_any_queries,
-            icann_cache: IcannLruCache::new(100, config.dns.min_ttl, config.dns.max_ttl),
-            max_recursion_depth: 5,
-        })
-    }
+    // pub async fn default() -> Result<Self, anyhow::Error> {
+    //     let socket = UdpSocket::bind("0.0.0.0:53").await?;
+    //     let config = get_global_config();
+    //     Ok(Self {
+    //         socket: Arc::new(socket),
+    //         pending: PendingRequestStore::new(),
+    //         pkarr_resolver: PkarrResolver::default().await,
+    //         icann_fallback: "8.8.8.8:53".parse().unwrap(),
+    //         id_manager: QueryIdManager::new(),
+    //         rate_limiter: Arc::new(RateLimiterBuilder::new().build()),
+    //         disable_any_queries: config.dns.disable_any_queries,
+    //         icann_cache: IcannLruCache::new(100, config.dns.min_ttl, config.dns.max_ttl),
+    //         max_recursion_depth: 5,
+    //     })
+    // }
 }
 
 #[cfg(test)]
 mod tests {
     use crate::resolution::dns_packets::ParsedQuery;
-    use crate::resolution::pkd::{PkarrResolver, TopLevelDomain};
+    use crate::resolution::pkd::{PkarrResolver};
     use pkarr::dns::rdata::{RData, NS};
     use pkarr::dns::{
         rdata::{A, CNAME},

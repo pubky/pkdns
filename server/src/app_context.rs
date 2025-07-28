@@ -1,5 +1,6 @@
 use crate::config::{ConfigToml, DataDir};
 
+#[derive(Debug, Clone)]
 pub struct AppContext {
     pub config: ConfigToml,
 }
@@ -9,6 +10,17 @@ impl AppContext {
         data_dir.ensure_data_dir_exists_and_is_writable()?;
         let config = data_dir.read_or_create_config_file()?;
         Ok(Self { config })
+    }
+
+    #[cfg(test)]
+    pub fn test() -> Self {
+        Self { config: ConfigToml::default() }
+    }
+}
+
+impl Default for AppContext {
+    fn default() -> Self {
+        Self { config: ConfigToml::default() }
     }
 }
 

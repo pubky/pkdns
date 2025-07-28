@@ -1,7 +1,5 @@
 use pkarr::dns::{Name, Packet, Question, ResourceRecord};
 
-use super::pubkey_parser::parse_pkarr_uri;
-
 /// Top Level Domain like .pkd with the capability
 /// to remove and add the top level domain in queries/replies.
 #[derive(Clone, Debug)]
@@ -47,8 +45,8 @@ impl TopLevelDomain {
             );
         }
 
-        let second_label = labels.get(labels.len() - 2).expect("Question should have 2 labels");
-        let parse_res = parse_pkarr_uri(&second_label.to_string()).expect("Second label must be a pkarr public key");
+        // let second_label = labels.get(labels.len() - 2).expect("Question should have 2 labels");
+        // let parse_res: pkarr::PublicKey = parse_pkarr_uri(&second_label.to_string()).expect("Second label must be a pkarr public key");
 
         let slice = &labels[0..labels.len() - 1];
         let new_domain = slice
@@ -77,7 +75,8 @@ impl TopLevelDomain {
         };
 
         let second_label = labels.get(labels.len() - 2).unwrap().to_string();
-        parse_pkarr_uri(&second_label).is_ok()
+        let res: Result<pkarr::PublicKey, _> = second_label.try_into();
+        res.is_ok()
     }
 
     /// Checks if the name ends with a public key domain
@@ -88,8 +87,9 @@ impl TopLevelDomain {
             return false;
         }
 
-        let mut question_tld = labels.last().unwrap().to_string();
-        parse_pkarr_uri(&question_tld).is_ok()
+        let question_tld = labels.last().unwrap().to_string();
+        let res: Result<pkarr::PublicKey, _> = question_tld.try_into();
+        res.is_ok()
     }
 
     /// Append the top level domain to the reply. Zones are stored without a tld on Mainline
@@ -133,7 +133,6 @@ impl TopLevelDomain {
 mod tests {
     use super::*;
     use pkarr::dns::rdata::A;
-    use std::net::Ipv4Addr;
 
     fn create_query_with_domain(domain: &str) -> Vec<u8> {
         let tld = TopLevelDomain::new("pkd".to_string());

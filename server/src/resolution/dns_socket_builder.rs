@@ -131,11 +131,12 @@ impl DnsSocketBuilder {
     }
 
     /// Burst size of the rate limit.
-    pub fn top_level_domain(mut self, label: Option<String>) -> Self {
-        match label {
-            Some(val) => self.top_level_domain = Some(TopLevelDomain(val)),
-            None => self.top_level_domain = None,
-        };
+    pub fn top_level_domain(mut self, label: String) -> Self {
+        if label.is_empty() {
+            self.top_level_domain = None;
+        } else {
+            self.top_level_domain = Some(TopLevelDomain(label));
+        }
         self
     }
 

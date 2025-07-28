@@ -10,6 +10,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::config::TopLevelDomain;
+
 /// Error that can occur when reading a configuration file.
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigReadError {
@@ -24,7 +26,7 @@ pub enum ConfigReadError {
 /// Example configuration file
 pub const SAMPLE_CONFIG: &str = include_str!("../../config.sample.toml");
 
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
+#[derive(Debug, Deserialize, Clone, Default)]
 pub struct ConfigToml {
     #[serde(default)]
     pub general: General,
@@ -183,7 +185,7 @@ fn default_max_recursion_depth() -> u8 {
     15
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Dht {
     #[serde(default = "default_cache_mb")]
     pub dht_cache_mb: NonZeroU64,
@@ -195,7 +197,15 @@ pub struct Dht {
         default = "default_top_level_domain",
         deserialize_with = "deserialize_top_level_domain"
     )]
-    pub top_level_domain: Option<String>,
+    pub top_level_domain: Option<TopLevelDomain>,
+}
+
+fn deserialize_top_level_domain<'de, D>(deserializer: D) -> Result<Option<TopLevelDomain>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    Ok(value.map(TopLevelDomain::new))
 }
 
 fn default_cache_mb() -> NonZeroU64 {
@@ -210,29 +220,8 @@ fn default_dht_rate_limit_burst() -> u32 {
     25
 }
 
-fn default_top_level_domain() -> Option<String> {
-    Some("key".to_string())
-}
-
-/// Consider an empty value "" as None
-fn deserialize_top_level_domain<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    // Deserialize the input as an Option<String>
-    let value = Option::<String>::deserialize(deserializer)?.filter(|val| !val.is_empty());
-
-    if let Some(label) = &value {
-        let name = match Name::new(label) {
-            Ok(name) => name,
-            Err(e) => return Err(D::Error::custom(e)),
-        };
-        if name.get_labels().len() != 1 {
-            return Err(anyhow!("TLD can only be one label")).map_err(D::Error::custom);
-        };
-    }
-
-    Ok(value)
+fn default_top_level_domain() -> Option<TopLevelDomain> {
+    Some(TopLevelDomain::new("key".to_string()))
 }
 
 impl Default for Dht {
@@ -244,92 +233,6 @@ impl Default for Dht {
             top_level_domain: default_top_level_domain(),
         }
     }
-}
-
-/// Read the pkdns config file.
-pub fn read_config(path: &Path) -> Result<ConfigToml, anyhow::Error> {
-    let config_str = fs::read_to_string(path)?;
-    let config: ConfigToml = toml::from_str(&config_str)?;
-
-    Ok(config)
-}
-
-/// Read or create a config file at a given path.
-pub fn read_or_create_config(path: &PathBuf) -> Result<ConfigToml, anyhow::Error> {
-    let expanded_path = expand_tilde(path);
-
-    let err = match read_config(expanded_path.as_path()) {
-        Ok(config) => return Ok(config),
-        Err(e) => e,
-    };
-
-    // Failed to read the config file.
-    if expanded_path.exists() && expanded_path.is_file() {
-        tracing::error!(
-            "Unable to read configuration file at {}. {err}",
-            expanded_path.display()
-        );
-        return Err(anyhow!("Failed to read {}. {err}", expanded_path.display()));
-    }
-
-    tracing::info!("Create a new config file from scratch {}.", expanded_path.display());
-    let mut config = ConfigToml::default();
-    // Add default values for Options. They don't appear otherwise in the commented out config.
-    config.general.dns_over_http_socket = Some(
-        "127.0.0.1:3000"
-            .parse()
-            .expect("127.0.0.1:3000 is a valid socket address"),
-    );
-    let full_config = toml::to_string(&config).expect("Valid toml config.");
-    let commented_out: Vec<String> = full_config
-        .split("\n")
-        .map(|line| {
-            if line.contains("[") {
-                // Don't comment out sections.
-                line.to_string()
-            } else if line.is_empty() {
-                // Don't comment out empty lines.
-                line.to_string()
-            } else {
-                // Comment out regular lines
-                format!("# {line}")
-            }
-        })
-        .collect();
-    let commented_out = commented_out.join("\n");
-
-    let content =
-        format!("# PKDNS configuration file\n# More information on https://github.com/pubky/pkdns/server/sample-config.toml\n\n{commented_out}");
-    fs::write(expanded_path, content).expect("Failed to write config file");
-    Ok(config)
-}
-
-/// Reads the config from the directory or if it doesn't exist, creates a new config in the directory.
-pub fn read_or_create_from_dir(dir_path: &PathBuf) -> Result<ConfigToml, anyhow::Error> {
-    let mut path = expand_tilde(dir_path);
-    if !path.exists() {
-        if let Err(e) = fs::create_dir(path.clone()) {
-            return Err(anyhow!("Failed to create pkdns_dir path {}. {e}", path.display()));
-        };
-    };
-    if !path.is_dir() {
-        return Err(anyhow!("pkdns_dir {} is not a directory.", path.display()));
-    };
-    path.push("pkdns.toml");
-
-    read_or_create_config(&path)
-}
-
-/// Expands the ~ to the users home directory
-pub fn expand_tilde(path: &PathBuf) -> PathBuf {
-    if path.starts_with("~/") {
-        if let Some(home) = home_dir() {
-            let without_home = path.strip_prefix("~/").expect("Invalid ~ prefix");
-            let joined = home.join(without_home);
-            return joined;
-        }
-    }
-    PathBuf::from(path)
 }
 
 
