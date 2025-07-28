@@ -53,7 +53,7 @@ See [compose.yaml](./compose.yaml).
 2. Configure your browser. See [this guide](https://support.privadovpn.com/kb/article/848-how-to-enable-doh-on-your-browser/).
 
 
-Verify your server with this domain [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./).
+Verify your server with this domain [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/).
 
 ### Change your System DNS
 
@@ -65,7 +65,7 @@ Follow one of the guides to change your DNS server on your system:
 - [Windows guide](https://www.windowscentral.com/how-change-your-pcs-dns-settings-windows-10)
 
 
-Verify your server with this domain [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./).
+Verify your server with this domain [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/).
 
 ### Verify pkdns is working
 
@@ -94,8 +94,8 @@ nslookup example.com PKDNS_SERVER_IP
 
 Here are some example pkdns domains:
 
-- [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./)
-- [http://pkdns.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./](http://pkdns.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy./)
+- [http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/](http://7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/)
+- [http://pkdns.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/](http://pkdns.7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy/)
 
 
 Hint: Always add a `./` to the end of a pkarr domain. Otherwise browsers will search instead of resolve the website.
