@@ -71,7 +71,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
     );
 
     if let Some(http_socket) = &app_context.config.general.dns_over_http_socket {
-        let socket = run_doh_server(http_socket.clone(), dns_socket).await?;
+        let socket = run_doh_server(*http_socket, dns_socket).await?;
         tracing::info!("[EXPERIMENTAL] DNS-over-HTTP listening on http://{socket}/dns-query.");
     };
 
