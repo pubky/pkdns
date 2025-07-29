@@ -6,11 +6,11 @@ use std::{error::Error, net::SocketAddr, path::PathBuf};
 
 use crate::{app_context::AppContext, config::PersistentDataDir, resolution::DnsSocket};
 
+mod app_context;
 mod config;
 mod dns_over_https;
 mod helpers;
 mod resolution;
-mod app_context;
 
 #[derive(Parser, Debug)]
 #[command(
@@ -65,7 +65,10 @@ async fn main() -> Result<(), Box<dyn Error>> {
 
     let join_handle = dns_socket.start_receive_loop();
 
-    tracing::info!("Listening on {}. Waiting for Ctrl-C...", app_context.config.general.socket);
+    tracing::info!(
+        "Listening on {}. Waiting for Ctrl-C...",
+        app_context.config.general.socket
+    );
 
     if let Some(http_socket) = &app_context.config.general.dns_over_http_socket {
         let socket = run_doh_server(http_socket.clone(), dns_socket).await?;

@@ -1,7 +1,9 @@
-use super::{
-    pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply,
+use super::{pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply};
+use crate::{
+    app_context::AppContext,
+    config::TopLevelDomain,
+    resolution::{dns_packets::ParsedQuery, DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder},
 };
-use crate::{app_context::AppContext, config::TopLevelDomain, resolution::{dns_packets::ParsedQuery, DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder}};
 use pkarr::{
     dns::{Name, Question, ResourceRecord},
     Client,
@@ -114,7 +116,8 @@ impl PkarrResolver {
     }
 
     fn is_refresh_needed(&self, item: &CacheItem) -> bool {
-        let refresh_needed_in_s = item.next_refresh_needed_in_s(self.context.config.dns.min_ttl, self.context.config.dns.max_ttl);
+        let refresh_needed_in_s =
+            item.next_refresh_needed_in_s(self.context.config.dns.min_ttl, self.context.config.dns.max_ttl);
         refresh_needed_in_s == 0
     }
 
@@ -127,7 +130,8 @@ impl PkarrResolver {
         from: Option<IpAddr>,
     ) -> Result<CacheItem, CustomHandlerError> {
         if let Some(cached) = self.cache.get(pubkey).await {
-            let refresh_needed_in_s = cached.next_refresh_needed_in_s(self.context.config.dns.min_ttl, self.context.config.dns.max_ttl);
+            let refresh_needed_in_s =
+                cached.next_refresh_needed_in_s(self.context.config.dns.min_ttl, self.context.config.dns.max_ttl);
 
             if refresh_needed_in_s > 0 {
                 tracing::trace!(

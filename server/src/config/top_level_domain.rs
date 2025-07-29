@@ -33,7 +33,7 @@ impl TopLevelDomain {
             .expect("No question in query in pkarr_resolver.");
         let labels = question.qname.get_labels();
 
-        let mut question_tld = labels
+        let question_tld = labels
             .last()
             .expect("Question labels with no domain in pkarr_resolver")
             .to_string();
@@ -68,7 +68,7 @@ impl TopLevelDomain {
             return false;
         }
 
-        let mut question_tld = labels.last().unwrap().to_string();
+        let question_tld = labels.last().unwrap().to_string();
 
         if question_tld != self.0 {
             return false;
@@ -97,7 +97,7 @@ impl TopLevelDomain {
     pub fn add(&self, reply: &mut Packet<'_>) {
         // Append questions
         let mut new_questions = vec![];
-        for mut question in reply.questions.iter() {
+        for question in reply.questions.iter() {
             if !self.name_ends_with_pubkey(&question.qname) {
                 // Other question. Don't change.
                 new_questions.push(question.clone());
@@ -113,7 +113,7 @@ impl TopLevelDomain {
         reply.questions = new_questions;
         // Append answers
         let mut new_answers = vec![];
-        for mut answer in reply.answers.iter() {
+        for answer in reply.answers.iter() {
             if !self.name_ends_with_pubkey(&answer.name) {
                 // Other answer. Don't change.
                 new_answers.push(answer.clone());
@@ -135,8 +135,6 @@ mod tests {
     use pkarr::dns::rdata::A;
 
     fn create_query_with_domain(domain: &str) -> Vec<u8> {
-        let tld = TopLevelDomain::new("pkd".to_string());
-
         let name = Name::new(domain).unwrap();
         let mut query = Packet::new_query(0);
         let question = Question::new(

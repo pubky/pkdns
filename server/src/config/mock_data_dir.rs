@@ -18,9 +18,7 @@ impl MockDataDir {
     /// Create a new DataDirMock with a temporary directory.
     ///
     /// If keypair is not provided, a new one will be generated.
-    pub fn new(
-        config_toml: super::ConfigToml,
-    ) -> anyhow::Result<Self> {
+    pub fn new(config_toml: super::ConfigToml) -> anyhow::Result<Self> {
         Ok(Self {
             temp_dir: std::sync::Arc::new(tempfile::TempDir::new()?),
             config_toml,

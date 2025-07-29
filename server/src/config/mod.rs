@@ -1,8 +1,8 @@
 mod config_file;
 mod data_dir;
-mod persistent_data_dir;
 #[cfg(test)]
 mod mock_data_dir;
+mod persistent_data_dir;
 mod top_level_domain;
 
 pub use config_file::ConfigToml;

@@ -75,9 +75,7 @@ impl DataDir for PersistentDataDir {
         std::fs::create_dir_all(&self.expanded_path)?;
 
         // Check if we can write to the data directory
-        let test_file_path = self
-            .expanded_path
-            .join("test_write_f2d560932f9b437fa9ef430ba436d611"); // random file name to not conflict with anything
+        let test_file_path = self.expanded_path.join("test_write_f2d560932f9b437fa9ef430ba436d611"); // random file name to not conflict with anything
         std::fs::write(test_file_path.clone(), b"test")
             .map_err(|err| anyhow::anyhow!("Failed to write to data directory: {}", err))?;
         std::fs::remove_file(test_file_path)
@@ -139,7 +137,7 @@ mod tests {
         let mut config_file = std::fs::File::create(config_file_path.clone()).unwrap();
         config_file.write_all(b"test").unwrap();
         assert!(config_file_path.exists()); // Should exist now
-        // temp_dir will be automatically cleaned up when it goes out of scope
+                                            // temp_dir will be automatically cleaned up when it goes out of scope
     }
 
     #[test]

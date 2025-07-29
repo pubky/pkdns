@@ -14,13 +14,17 @@ impl AppContext {
 
     #[cfg(test)]
     pub fn test() -> Self {
-        Self { config: ConfigToml::test() }
+        Self {
+            config: ConfigToml::test(),
+        }
     }
 }
 
 impl Default for AppContext {
     fn default() -> Self {
-        Self { config: ConfigToml::default() }
+        Self {
+            config: ConfigToml::default(),
+        }
     }
 }
 

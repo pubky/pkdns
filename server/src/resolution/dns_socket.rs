@@ -1,6 +1,7 @@
 #![allow(unused)]
 use crate::{
-    app_context::AppContext, resolution::{helpers::replace_packet_id, pkd::CustomHandlerError}
+    app_context::AppContext,
+    resolution::{helpers::replace_packet_id, pkd::CustomHandlerError},
 };
 use rand::Rng;
 use tracing_subscriber::fmt::format;
@@ -8,7 +9,7 @@ use tracing_subscriber::fmt::format;
 use super::{
     dns_packets::{ParsedPacket, ParsedQuery},
     pending_request::{PendingRequest, PendingRequestStore},
-    pkd::{PkarrResolver},
+    pkd::PkarrResolver,
     query_id_manager::QueryIdManager,
     rate_limiter::{RateLimiter, RateLimiterBuilder},
     response_cache::IcannLruCache,
@@ -72,15 +73,14 @@ pub struct DnsSocket {
 }
 
 impl DnsSocket {
-
     /// Default dns socket but with a random listening port. Made for testing.
     #[cfg(test)]
     pub async fn default_random_socket() -> tokio::io::Result<Self> {
         let listening: SocketAddr = "0.0.0.0:0".parse().expect("Is always be a valid socket address");
         let icann_resolver: SocketAddr = "8.8.8.8:53".parse().expect("Should always be a valid socket address");
-        
+
         let mut context = AppContext::test();
-        
+
         DnsSocket::new(&context).await
     }
 
@@ -102,7 +102,11 @@ impl DnsSocket {
             id_manager: QueryIdManager::new(),
             rate_limiter: Arc::new(limiter.build()),
             disable_any_queries: context.config.dns.disable_any_queries,
-            icann_cache: IcannLruCache::new(context.config.dns.icann_cache_mb, context.config.dns.min_ttl, context.config.dns.max_ttl),
+            icann_cache: IcannLruCache::new(
+                context.config.dns.icann_cache_mb,
+                context.config.dns.min_ttl,
+                context.config.dns.max_ttl,
+            ),
             max_recursion_depth: context.config.dns.max_recursion_depth,
         })
     }
@@ -535,7 +539,7 @@ impl DnsSocket {
 #[cfg(test)]
 mod tests {
     use crate::resolution::dns_packets::ParsedQuery;
-    use crate::resolution::pkd::{PkarrResolver};
+    use crate::resolution::pkd::PkarrResolver;
     use pkarr::dns::rdata::{RData, NS};
     use pkarr::dns::{
         rdata::{A, CNAME},

@@ -277,7 +277,6 @@ mod tests {
             false,
         );
 
-
         let reply = resolve_question(&pkarr_packet, &question).await;
         let reply = Packet::parse(&reply).unwrap();
         assert_eq!(reply.answers.len(), 1);

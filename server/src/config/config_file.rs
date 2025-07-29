@@ -1,10 +1,5 @@
 use serde::{Deserialize, Deserializer, Serialize};
-use std::{
-    fs,
-    net::SocketAddr,
-    num::NonZeroU64,
-    path::{Path},
-};
+use std::{fs, net::SocketAddr, num::NonZeroU64, path::Path};
 
 use crate::config::TopLevelDomain;
 
@@ -38,7 +33,7 @@ impl ConfigToml {
         SAMPLE_CONFIG.to_string()
     }
 
-        /// Render the embedded sample config but comment out every value,
+    /// Render the embedded sample config but comment out every value,
     /// producing a handy template for end-users.
     pub fn commented_out_sample() -> String {
         SAMPLE_CONFIG
@@ -244,7 +239,6 @@ impl Default for Dht {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {

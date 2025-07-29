@@ -31,12 +31,10 @@ pub fn parse_pkarr_uri(uri: &str) -> Result<PublicKey, PubkeyParserError> {
     trying.map_err(|err| PubkeyParserError::InvalidKey(err.to_string()))
 }
 
-
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    
+
     #[test]
     fn test_parse_pkarr_uri() {
         let uri = "7fmjpcuuzf54hw18bsgi3zihzyh4awseeuq5tmojefaezjbd64cy";
@@ -44,5 +42,3 @@ mod tests {
         assert_eq!(pubkey.to_string(), uri);
     }
 }
-
-
