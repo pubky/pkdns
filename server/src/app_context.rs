@@ -1,7 +1,6 @@
 use crate::config::{ConfigToml, DataDir};
 
-#[derive(Debug, Clone)]
-#[derive(Default)]
+#[derive(Debug, Clone, Default)]
 pub struct AppContext {
     pub config: ConfigToml,
 }
@@ -20,7 +19,6 @@ impl AppContext {
         }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
