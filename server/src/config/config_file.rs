@@ -1,13 +1,9 @@
-use anyhow::anyhow;
-use dirs::home_dir;
-use pkarr::dns::Name;
-use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
 use std::{
     fs,
     net::SocketAddr,
     num::NonZeroU64,
-    path::{Path, PathBuf},
+    path::{Path},
 };
 
 use crate::config::TopLevelDomain;
@@ -77,7 +73,16 @@ impl ConfigToml {
     pub fn test() -> Self {
         let mut config = Self::default();
         config.general.dns_over_http_socket = None;
+        config.general.socket = "0.0.0.0:0".parse().expect("Is always be a valid socket address");
         config
+    }
+}
+
+impl TryFrom<&str> for ConfigToml {
+    type Error = ConfigReadError;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let config: ConfigToml = toml::from_str(value)?;
+        Ok(config)
     }
 }
 
@@ -205,6 +210,11 @@ where
     D: Deserializer<'de>,
 {
     let value = Option::<String>::deserialize(deserializer)?;
+    if let Some(tld) = &value {
+        if tld.is_empty() {
+            return Ok(None);
+        }
+    }
     Ok(value.map(TopLevelDomain::new))
 }
 
@@ -249,5 +259,16 @@ mod tests {
     fn test_commented_out_sample() {
         let commented_out = ConfigToml::commented_out_sample();
         println!("{commented_out}");
+    }
+
+    #[test]
+    fn test_default_config_top_level_domain() {
+        let config_str = "[dht]\ntop_level_domain = \"\"";
+        let config = ConfigToml::try_from(config_str).unwrap();
+        assert!(config.dht.top_level_domain.is_none());
+
+        let config_str = "[dht]\ntop_level_domain = \"test\"";
+        let config = ConfigToml::try_from(config_str).unwrap();
+        assert_eq!(config.dht.top_level_domain.unwrap().0, "test".to_string());
     }
 }

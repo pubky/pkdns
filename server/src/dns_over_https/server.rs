@@ -200,7 +200,7 @@ pub async fn run_doh_server(addr: SocketAddr, dns_socket: DnsSocket) -> Result<S
 mod tests {
     use std::net::SocketAddr;
 
-    use crate::{dns_over_https::server::create_app, resolution::DnsSocket};
+    use crate::{app_context::AppContext, dns_over_https::server::create_app, resolution::DnsSocket};
     use axum_test::TestServer;
     use pkarr::dns::{Name, Packet, PacketFlag, Question};
     use tracing_test::traced_test;
@@ -209,7 +209,8 @@ mod tests {
     #[tokio::test]
     async fn query_doh_wireformat_get() {
         // RFC8484 example https://datatracker.ietf.org/doc/html/rfc8484#section-4.1
-        let socket = DnsSocket::default_random_socket().await.unwrap();
+        let context = AppContext::test();
+        let socket = DnsSocket::new(&context).await.unwrap();
         let join_handle = socket.start_receive_loop();
         let app = create_app(socket);
         let server = TestServer::new(app.into_make_service_with_connect_info::<SocketAddr>()).unwrap();
@@ -245,7 +246,8 @@ mod tests {
     #[traced_test]
     #[tokio::test]
     async fn query_doh_wireformat_post() {
-        let socket = DnsSocket::default_random_socket().await.unwrap();
+        let context = AppContext::test();
+        let socket = DnsSocket::new(&context).await.unwrap();
         let join_handle = socket.start_receive_loop();
         let app = create_app(socket);
         let server = TestServer::new(app.into_make_service_with_connect_info::<SocketAddr>()).unwrap();
@@ -284,7 +286,8 @@ mod tests {
     #[tokio::test]
     async fn wrong_content_type() {
         // RFC8484 example https://datatracker.ietf.org/doc/html/rfc8484#section-4.1
-        let socket = DnsSocket::default_random_socket().await.unwrap();
+        let context = AppContext::test();
+        let socket = DnsSocket::new(&context).await.unwrap();
         socket.start_receive_loop();
         let app = create_app(socket);
         let server = TestServer::new(app.into_make_service_with_connect_info::<SocketAddr>()).unwrap();

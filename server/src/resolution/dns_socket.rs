@@ -72,17 +72,11 @@ pub struct DnsSocket {
 }
 
 impl DnsSocket {
-    /// Random local socket addr
-    /// 0.0.0.0:{49152..=65535}
-    /// Used for testing
-    fn random_local_socket() -> SocketAddr {
-        "0.0.0.0:0".parse().expect("Is always be a valid socket address")
-    }
 
     /// Default dns socket but with a random listening port. Made for testing.
     #[cfg(test)]
     pub async fn default_random_socket() -> tokio::io::Result<Self> {
-        let listening = Self::random_local_socket();
+        let listening: SocketAddr = "0.0.0.0:0".parse().expect("Is always be a valid socket address");
         let icann_resolver: SocketAddr = "8.8.8.8:53".parse().expect("Should always be a valid socket address");
         
         let mut context = AppContext::test();

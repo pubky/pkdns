@@ -14,7 +14,7 @@ impl AppContext {
 
     #[cfg(test)]
     pub fn test() -> Self {
-        Self { config: ConfigToml::default() }
+        Self { config: ConfigToml::test() }
     }
 }
 
