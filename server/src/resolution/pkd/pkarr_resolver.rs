@@ -1,7 +1,9 @@
-use super::{
-    pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply, top_level_domain::TopLevelDomain,
+use super::{pubkey_parser::parse_pkarr_uri, query_matcher::create_domain_not_found_reply};
+use crate::{
+    app_context::AppContext,
+    config::TopLevelDomain,
+    resolution::{dns_packets::ParsedQuery, DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder},
 };
-use crate::resolution::{dns_packets::ParsedQuery, DnsSocket, DnsSocketError, RateLimiter, RateLimiterBuilder};
 use pkarr::{
     dns::{Name, Question, ResourceRecord},
     Client,
@@ -42,45 +44,6 @@ pub enum CustomHandlerError {
     RateLimited(IpAddr),
 }
 
-#[derive(Clone, Debug)]
-pub struct ResolverSettings {
-    /// Maximum number of seconds before a cached value gets auto-refreshed.
-    pub max_ttl: u64,
-
-    /// Minimum number of seconds a value is cached for before being refreshed.
-    pub min_ttl: u64,
-
-    /// Maximum size of the pkarr packet cache in megabytes.
-    pub cache_mb: u64,
-
-    /// IP:port combination of the dns server regular ICANN queries should be forwarded to.
-    /// Used to resolve the bootstrap servers
-    pub forward_dns_server: SocketAddr,
-
-    /// Maximum number of DHT queries one IP address can make per second. 0 = disabled.
-    pub max_dht_queries_per_ip_per_second: u32,
-
-    /// Burst size of the rate limit. 0 = disabled
-    pub max_dht_queries_per_ip_burst: u32,
-
-    /// Top level domain like `.pkd`.
-    pub top_level_domain: Option<TopLevelDomain>,
-}
-
-impl ResolverSettings {
-    pub fn default() -> Self {
-        Self {
-            max_ttl: 60 * 60 * 24, // 1 day
-            min_ttl: 60 * 5,
-            cache_mb: 100,
-            forward_dns_server: "8.8.8.8:53".parse().expect("Is always valid."),
-            max_dht_queries_per_ip_per_second: 0,
-            max_dht_queries_per_ip_burst: 0,
-            top_level_domain: Some(TopLevelDomain("key".to_string())),
-        }
-    }
-}
-
 #[derive(thiserror::Error, Debug)]
 pub enum PkarrResolverError {
     // #[error("Failed to query the DHT with pkarr: {0}")]
@@ -100,7 +63,7 @@ pub struct PkarrResolver {
      * Locks to use to update pkarr packets. This avoids concurrent updates.
      */
     lock_map: Arc<Mutex<HashMap<PublicKey, Arc<Mutex<()>>>>>,
-    settings: ResolverSettings,
+    context: AppContext,
     rate_limiter: Arc<RateLimiter>,
 }
 
@@ -127,31 +90,33 @@ impl PkarrResolver {
         addrs
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub async fn default() -> Self {
-        Self::new(ResolverSettings::default()).await
+        let context = AppContext::test();
+        Self::new(&context).await
     }
 
-    pub async fn new(settings: ResolverSettings) -> Self {
-        let addrs = Self::resolve_bootstrap_nodes(&settings.forward_dns_server);
+    pub async fn new(context: &AppContext) -> Self {
+        let addrs = Self::resolve_bootstrap_nodes(&context.config.general.forward);
         let client = Client::builder()
             .minimum_ttl(0)
             .maximum_ttl(0) // Disable Pkarr caching
             .bootstrap(&addrs)
             .build()
             .unwrap();
-        let limiter = RateLimiterBuilder::new().max_per_second(settings.max_dht_queries_per_ip_per_second);
+        let limiter = RateLimiterBuilder::new().max_per_second(context.config.dht.dht_query_rate_limit);
         Self {
             client,
-            cache: PkarrPacketLruCache::new(Some(settings.cache_mb)),
+            cache: PkarrPacketLruCache::new(Some(context.config.dht.dht_cache_mb.into())),
             lock_map: Arc::new(Mutex::new(HashMap::new())),
             rate_limiter: Arc::new(limiter.build()),
-            settings,
+            context: context.clone(),
         }
     }
 
     fn is_refresh_needed(&self, item: &CacheItem) -> bool {
-        let refresh_needed_in_s = item.next_refresh_needed_in_s(self.settings.min_ttl, self.settings.max_ttl);
+        let refresh_needed_in_s =
+            item.next_refresh_needed_in_s(self.context.config.dns.min_ttl, self.context.config.dns.max_ttl);
         refresh_needed_in_s == 0
     }
 
@@ -164,7 +129,8 @@ impl PkarrResolver {
         from: Option<IpAddr>,
     ) -> Result<CacheItem, CustomHandlerError> {
         if let Some(cached) = self.cache.get(pubkey).await {
-            let refresh_needed_in_s = cached.next_refresh_needed_in_s(self.settings.min_ttl, self.settings.max_ttl);
+            let refresh_needed_in_s =
+                cached.next_refresh_needed_in_s(self.context.config.dns.min_ttl, self.context.config.dns.max_ttl);
 
             if refresh_needed_in_s > 0 {
                 tracing::trace!(
@@ -217,7 +183,7 @@ impl PkarrResolver {
     }
 
     fn remove_tld_if_necessary(&self, mut query: &mut Packet<'_>) -> bool {
-        if let Some(tld) = &self.settings.top_level_domain {
+        if let Some(tld) = &self.context.config.dht.top_level_domain {
             if tld.question_ends_with_pubkey_tld(query) {
                 tld.remove(query);
                 return true;
@@ -227,7 +193,7 @@ impl PkarrResolver {
     }
 
     fn add_tld_if_necessary(&self, mut reply: &mut Packet<'_>) -> bool {
-        if let Some(tld) = &self.settings.top_level_domain {
+        if let Some(tld) = &self.context.config.dht.top_level_domain {
             tld.add(reply);
             return true;
         }

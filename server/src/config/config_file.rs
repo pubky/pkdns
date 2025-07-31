@@ -1,20 +1,84 @@
-use anyhow::anyhow;
-use dirs::home_dir;
-use pkarr::dns::Name;
-use serde::de::Error;
 use serde::{Deserialize, Deserializer, Serialize};
-use std::{
-    fs,
-    net::SocketAddr,
-    num::NonZeroU64,
-    path::{Path, PathBuf},
-};
+use std::{fs, net::SocketAddr, num::NonZeroU64, path::Path};
 
-#[derive(Debug, Deserialize, Serialize, Clone, Default)]
-pub struct PkdnsConfig {
+use crate::config::TopLevelDomain;
+
+/// Error that can occur when reading a configuration file.
+#[derive(Debug, thiserror::Error)]
+pub enum ConfigReadError {
+    /// The file did not exist or could not be read.
+    #[error("config file not found: {0}")]
+    NotFound(#[from] std::io::Error),
+    /// The TOML was syntactically invalid.
+    #[error("config file is not valid TOML: {0}")]
+    NotValid(#[from] toml::de::Error),
+}
+
+/// Example configuration file
+pub const SAMPLE_CONFIG: &str = include_str!("../../config.sample.toml");
+
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct ConfigToml {
+    #[serde(default)]
     pub general: General,
+    #[serde(default)]
     pub dns: Dns,
+    #[serde(default)]
     pub dht: Dht,
+}
+
+impl ConfigToml {
+    /// Example configuration file as a string.
+    pub fn sample() -> String {
+        SAMPLE_CONFIG.to_string()
+    }
+
+    /// Render the embedded sample config but comment out every value,
+    /// producing a handy template for end-users.
+    pub fn commented_out_sample() -> String {
+        SAMPLE_CONFIG
+            .lines()
+            .map(|line| {
+                let trimmed = line.trim_start();
+                let is_comment = trimmed.starts_with('#');
+                if !is_comment && !trimmed.is_empty() {
+                    format!("# {}", line)
+                } else {
+                    line.to_string()
+                }
+            })
+            .collect::<Vec<String>>()
+            .join("\n")
+    }
+
+    /// Read and parse a configuration file.
+    ///
+    /// # Arguments
+    /// * `path` - The path to the TOML configuration file
+    ///
+    /// # Returns
+    /// * `Result<ConfigToml>` - The parsed configuration or an error if reading/parsing fails
+    pub fn from_file(path: impl AsRef<Path>) -> Result<Self, ConfigReadError> {
+        let raw = fs::read_to_string(path)?;
+        let config: ConfigToml = toml::from_str(&raw)?;
+        Ok(config)
+    }
+
+    #[cfg(test)]
+    pub fn test() -> Self {
+        let mut config = Self::default();
+        config.general.dns_over_http_socket = None;
+        config.general.socket = "0.0.0.0:0".parse().expect("Is always be a valid socket address");
+        config
+    }
+}
+
+impl TryFrom<&str> for ConfigToml {
+    type Error = ConfigReadError;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        let config: ConfigToml = toml::from_str(value)?;
+        Ok(config)
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
@@ -58,10 +122,6 @@ fn default_false() -> bool {
 fn default_none() -> Option<SocketAddr> {
     None
 }
-
-// fn default_true() -> bool {
-//     false
-// }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct Dns {
@@ -125,7 +185,7 @@ fn default_max_recursion_depth() -> u8 {
     15
 }
 
-#[derive(Debug, Deserialize, Serialize, Clone)]
+#[derive(Debug, Deserialize, Clone)]
 pub struct Dht {
     #[serde(default = "default_cache_mb")]
     pub dht_cache_mb: NonZeroU64,
@@ -137,7 +197,20 @@ pub struct Dht {
         default = "default_top_level_domain",
         deserialize_with = "deserialize_top_level_domain"
     )]
-    pub top_level_domain: Option<String>,
+    pub top_level_domain: Option<TopLevelDomain>,
+}
+
+fn deserialize_top_level_domain<'de, D>(deserializer: D) -> Result<Option<TopLevelDomain>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let value = Option::<String>::deserialize(deserializer)?;
+    if let Some(tld) = &value {
+        if tld.is_empty() {
+            return Ok(None);
+        }
+    }
+    Ok(value.map(TopLevelDomain::new))
 }
 
 fn default_cache_mb() -> NonZeroU64 {
@@ -152,29 +225,8 @@ fn default_dht_rate_limit_burst() -> u32 {
     25
 }
 
-fn default_top_level_domain() -> Option<String> {
-    Some("key".to_string())
-}
-
-/// Consider an empty value "" as None
-fn deserialize_top_level_domain<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    // Deserialize the input as an Option<String>
-    let value = Option::<String>::deserialize(deserializer)?.filter(|val| !val.is_empty());
-
-    if let Some(label) = &value {
-        let name = match Name::new(label) {
-            Ok(name) => name,
-            Err(e) => return Err(D::Error::custom(e)),
-        };
-        if name.get_labels().len() != 1 {
-            return Err(anyhow!("TLD can only be one label")).map_err(D::Error::custom);
-        };
-    }
-
-    Ok(value)
+fn default_top_level_domain() -> Option<TopLevelDomain> {
+    Some(TopLevelDomain::new("key".to_string()))
 }
 
 impl Default for Dht {
@@ -188,88 +240,29 @@ impl Default for Dht {
     }
 }
 
-/// Read the pkdns config file.
-pub fn read_config(path: &Path) -> Result<PkdnsConfig, anyhow::Error> {
-    let config_str = fs::read_to_string(path)?;
-    let config: PkdnsConfig = toml::from_str(&config_str)?;
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    Ok(config)
-}
-
-/// Read or create a config file at a given path.
-pub fn read_or_create_config(path: &PathBuf) -> Result<PkdnsConfig, anyhow::Error> {
-    let expanded_path = expand_tilde(path);
-
-    let err = match read_config(expanded_path.as_path()) {
-        Ok(config) => return Ok(config),
-        Err(e) => e,
-    };
-
-    // Failed to read the config file.
-    if expanded_path.exists() && expanded_path.is_file() {
-        tracing::error!(
-            "Unable to read configuration file at {}. {err}",
-            expanded_path.display()
-        );
-        return Err(anyhow!("Failed to read {}. {err}", expanded_path.display()));
+    #[test]
+    fn test_parse_sample_config() {
+        let _: ConfigToml = toml::from_str(SAMPLE_CONFIG).expect("Sample config must be parseble");
     }
 
-    tracing::info!("Create a new config file from scratch {}.", expanded_path.display());
-    let mut config = PkdnsConfig::default();
-    // Add default values for Options. They don't appear otherwise in the commented out config.
-    config.general.dns_over_http_socket = Some(
-        "127.0.0.1:3000"
-            .parse()
-            .expect("127.0.0.1:3000 is a valid socket address"),
-    );
-    let full_config = toml::to_string(&config).expect("Valid toml config.");
-    let commented_out: Vec<String> = full_config
-        .split("\n")
-        .map(|line| {
-            if line.contains("[") {
-                // Don't comment out sections.
-                line.to_string()
-            } else if line.is_empty() {
-                // Don't comment out empty lines.
-                line.to_string()
-            } else {
-                // Comment out regular lines
-                format!("# {line}")
-            }
-        })
-        .collect();
-    let commented_out = commented_out.join("\n");
-
-    let content =
-        format!("# PKDNS configuration file\n# More information on https://github.com/pubky/pkdns/server/sample-config.toml\n\n{commented_out}");
-    fs::write(expanded_path, content).expect("Failed to write config file");
-    Ok(config)
-}
-
-/// Reads the config from the directory or if it doesn't exist, creates a new config in the directory.
-pub fn read_or_create_from_dir(dir_path: &PathBuf) -> Result<PkdnsConfig, anyhow::Error> {
-    let mut path = expand_tilde(dir_path);
-    if !path.exists() {
-        if let Err(e) = fs::create_dir(path.clone()) {
-            return Err(anyhow!("Failed to create pkdns_dir path {}. {e}", path.display()));
-        };
-    };
-    if !path.is_dir() {
-        return Err(anyhow!("pkdns_dir {} is not a directory.", path.display()));
-    };
-    path.push("pkdns.toml");
-
-    read_or_create_config(&path)
-}
-
-/// Expands the ~ to the users home directory
-pub fn expand_tilde(path: &PathBuf) -> PathBuf {
-    if path.starts_with("~/") {
-        if let Some(home) = home_dir() {
-            let without_home = path.strip_prefix("~/").expect("Invalid ~ prefix");
-            let joined = home.join(without_home);
-            return joined;
-        }
+    #[test]
+    fn test_commented_out_sample() {
+        let commented_out = ConfigToml::commented_out_sample();
+        println!("{commented_out}");
     }
-    PathBuf::from(path)
+
+    #[test]
+    fn test_default_config_top_level_domain() {
+        let config_str = "[dht]\ntop_level_domain = \"\"";
+        let config = ConfigToml::try_from(config_str).unwrap();
+        assert!(config.dht.top_level_domain.is_none());
+
+        let config_str = "[dht]\ntop_level_domain = \"test\"";
+        let config = ConfigToml::try_from(config_str).unwrap();
+        assert_eq!(config.dht.top_level_domain.unwrap().0, "test".to_string());
+    }
 }

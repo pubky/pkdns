@@ -1,11 +1,12 @@
 use clap::Parser;
-use config::{read_or_create_config, read_or_create_from_dir, update_global_config};
 use dns_over_https::run_doh_server;
 use helpers::{enable_logging, set_full_stacktrace_as_default, wait_on_ctrl_c};
-use resolution::DnsSocketBuilder;
 
 use std::{error::Error, net::SocketAddr, path::PathBuf};
 
+use crate::{app_context::AppContext, config::PersistentDataDir, resolution::DnsSocket};
+
+mod app_context;
 mod config;
 mod dns_over_https;
 mod helpers;
@@ -25,10 +26,6 @@ struct Cli {
     #[arg(short, long, action = clap::ArgAction::SetTrue)]
     verbose: Option<bool>,
 
-    /// The path to pkdns configuration file. This will override the pkdns-dir config path.
-    #[arg(short, long)]
-    config: Option<PathBuf>,
-
     /// The base directory that contains pkdns's data, configuration file, etc.
     #[arg(short, long, default_value = "~/.pkdns")]
     pkdns_dir: PathBuf,
@@ -39,30 +36,21 @@ async fn main() -> Result<(), Box<dyn Error>> {
     set_full_stacktrace_as_default();
     let cli = Cli::parse();
 
-    // Read config file
-    let mut config = match cli.config {
-        Some(config_path) => read_or_create_config(&config_path).expect("Failed to read valid config file"),
-        None => read_or_create_from_dir(&cli.pkdns_dir).expect("Failed to read valid config file"),
-    };
+    let data_dir = PersistentDataDir::new(cli.pkdns_dir);
+    let mut app_context = AppContext::from_data_dir(data_dir)?;
+    if let Some(verbose) = cli.verbose {
+        app_context.config.general.verbose = verbose;
+    }
+    if let Some(forward) = cli.forward {
+        app_context.config.general.forward = forward;
+    }
 
-    // Override config args if given by CLI
-    if let Some(value) = cli.forward {
-        config.general.forward = value;
-    };
-    if let Some(value) = cli.verbose {
-        if value {
-            config.general.verbose = true
-        }
-    };
-
-    update_global_config(config.clone());
-
-    enable_logging(config.general.verbose);
+    enable_logging(app_context.config.general.verbose);
     const VERSION: &str = env!("CARGO_PKG_VERSION");
 
     tracing::info!("Starting pkdns v{VERSION}");
-    tracing::debug!("Configuration:\n{}", toml::to_string(&config)?);
-    tracing::info!("Forward ICANN queries to {}", config.general.forward);
+    tracing::debug!("Configuration:\n{:?}", app_context.config);
+    tracing::info!("Forward ICANN queries to {}", app_context.config.general.forward);
 
     // Exit the main thread if anything panics
     let orig_hook = std::panic::take_hook();
@@ -73,29 +61,18 @@ async fn main() -> Result<(), Box<dyn Error>> {
         std::process::exit(1);
     }));
 
-    let dns_socket = DnsSocketBuilder::new()
-        .listen(config.general.socket)
-        .icann_resolver(config.general.forward)
-        .icann_cache_mb(config.dns.icann_cache_mb)
-        .pkarr_cache_mb(config.dht.dht_cache_mb)
-        .min_ttl(config.dns.min_ttl)
-        .max_ttl(config.dns.max_ttl)
-        .max_dht_queries_per_ip_per_second(config.dht.dht_query_rate_limit)
-        .max_dht_queries_per_ip_burst(config.dht.dht_query_rate_limit_burst)
-        .max_queries_per_ip_per_second(config.dns.query_rate_limit)
-        .max_queries_per_ip_burst(config.dns.query_rate_limit_burst)
-        .top_level_domain(config.dht.top_level_domain)
-        .max_recursion_depth(config.dns.max_recursion_depth)
-        .build()
-        .await?;
+    let dns_socket = DnsSocket::new(&app_context).await?;
 
     let join_handle = dns_socket.start_receive_loop();
 
-    tracing::info!("Listening on {}. Waiting for Ctrl-C...", config.general.socket);
+    tracing::info!(
+        "Listening on {}. Waiting for Ctrl-C...",
+        app_context.config.general.socket
+    );
 
-    if let Some(http_socket) = config.general.dns_over_http_socket {
-        run_doh_server(http_socket, dns_socket).await?;
-        tracing::info!("[EXPERIMENTAL] DNS-over-HTTP listening on http://{http_socket}/dns-query.");
+    if let Some(http_socket) = &app_context.config.general.dns_over_http_socket {
+        let socket = run_doh_server(*http_socket, dns_socket).await?;
+        tracing::info!("[EXPERIMENTAL] DNS-over-HTTP listening on http://{socket}/dns-query.");
     };
 
     wait_on_ctrl_c().await;

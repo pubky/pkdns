@@ -203,6 +203,7 @@ pub fn create_domain_not_found_reply(query_id: u16) -> Vec<u8> {
 mod tests {
     use std::net::Ipv4Addr;
 
+    use crate::app_context::AppContext;
     use crate::resolution::{pkd::PkarrResolver, DnsSocket};
     use pkarr::dns::{rdata::RData, Question};
     use pkarr::{
@@ -211,10 +212,6 @@ mod tests {
     };
 
     use super::{resolve_query, resolve_question};
-
-    async fn get_dnssocket() -> DnsSocket {
-        DnsSocket::default_random_socket().await.unwrap()
-    }
 
     fn example_pkarr_reply() -> (Vec<u8>, PublicKey) {
         // pkarr.normalize_names makes sure all names end with the pubkey.
@@ -280,7 +277,6 @@ mod tests {
             false,
         );
 
-        let mut socket = get_dnssocket().await;
         let reply = resolve_question(&pkarr_packet, &question).await;
         let reply = Packet::parse(&reply).unwrap();
         assert_eq!(reply.answers.len(), 1);
@@ -307,7 +303,8 @@ mod tests {
             false,
         );
 
-        let mut socket = get_dnssocket().await;
+        let context = AppContext::test();
+        let mut socket = DnsSocket::new(&context).await.unwrap();
         let reply = resolve_question(&pkarr_packet, &question).await;
         let reply = Packet::parse(&reply).unwrap();
         assert_eq!(reply.answers.len(), 2);
@@ -338,7 +335,8 @@ mod tests {
             pkarr::dns::QCLASS::CLASS(pkarr::dns::CLASS::IN),
             false,
         );
-        let mut socket = get_dnssocket().await;
+        let context = AppContext::test();
+        let socket = DnsSocket::new(&context).await.unwrap();
         let reply = resolve_question(&pkarr_packet, &question).await;
         let reply = Packet::parse(&reply).unwrap();
         assert_eq!(reply.answers.len(), 0);
@@ -366,7 +364,8 @@ mod tests {
             false,
         );
 
-        let mut socket = get_dnssocket().await;
+        let context = AppContext::test();
+        let mut socket = DnsSocket::new(&context).await.unwrap();
         let reply = resolve_question(&pkarr_packet, &question).await;
         let reply = Packet::parse(&reply).unwrap();
         assert_eq!(reply.answers.len(), 0);
@@ -391,7 +390,8 @@ mod tests {
             false,
         )];
 
-        let mut socket = get_dnssocket().await;
+        let context = AppContext::test();
+        let socket = DnsSocket::new(&context).await.unwrap();
         let _reply = resolve_query(&pkarr_packet, &query);
     }
 }

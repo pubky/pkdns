@@ -5,7 +5,7 @@
  * Allows to hook into the socket and process custom queries.
  */
 mod dns_socket;
-mod dns_socket_builder;
+// mod dns_socket_builder;
 mod helpers;
 mod pending_request;
 mod pkd;
@@ -16,5 +16,5 @@ mod response_cache;
 mod dns_packets;
 
 pub use dns_socket::{DnsSocket, DnsSocketError};
-pub use dns_socket_builder::DnsSocketBuilder;
+// pub use dns_socket_builder::DnsSocketBuilder;
 pub use rate_limiter::{RateLimiter, RateLimiterBuilder};
