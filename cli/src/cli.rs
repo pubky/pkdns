@@ -6,7 +6,7 @@ use crate::commands::{cli_publickey, generate::cli_generate_seed, publish::cli_p
 pub async fn run_cli() {
     const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-    let cmd = clap::Command::new("pkarr-cli")
+    let cmd = clap::Command::new("pkdns-cli")
         .version(VERSION)
         .arg_required_else_help(true)
         .subcommand(
@@ -14,7 +14,7 @@ pub async fn run_cli() {
                 .about("Publish pkarr dns records.")
                 .arg(
                     clap::Arg::new("seed")
-                        .help("File path to the pkarr seed file.")
+                        .help("File path to the seed file.")
                         .default_value("./seed.txt"),
                 )
                 .arg(
@@ -25,11 +25,11 @@ pub async fn run_cli() {
         )
         .subcommand(
             clap::Command::new("resolve")
-                .about("Resolve pkarr dns records.")
+                .about("Resolve a public key domain on the DHT.")
                 .arg_required_else_help(true)
-                .arg(clap::Arg::new("pubkey").required(false).help("Pkarr public key uri.")),
+                .arg(clap::Arg::new("pubkey").required(false).help("Public Key Domain")),
         )
-        .subcommand(clap::Command::new("generate").about("Generate a new zbase32 pkarr seed"))
+        .subcommand(clap::Command::new("generate").about("Generate a new seed"))
         .subcommand(
             clap::Command::new("publickey")
                 .about("Derive the public key from the seed.")
