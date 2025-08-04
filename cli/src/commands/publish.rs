@@ -74,22 +74,47 @@ fn read_seed_file(seed_file_path: &str) -> Keypair {
         std::process::exit(1);
     };
     let seed = seed.unwrap();
-    parse_seed(&seed)
+    match parse_seed(&seed) {
+        Ok(keypair) => keypair,
+        Err(e) => {
+            eprintln!("Failed to parse the seed file. {e} {seed}");
+            std::process::exit(1);
+        }
+    }
 }
 
-fn parse_seed(seed: &str) -> Keypair {
+/// Parse a seed file into a keypair.
+/// Tries to parse as hex first, then as zbase32.
+/// Errors if the seed is not valid.
+fn parse_seed(seed: &str) -> anyhow::Result<Keypair> {
     let seed = seed.trim();
-    let decode_result = zbase32::decode_full_bytes_str(seed);
-    if let Err(e) = decode_result {
-        eprintln!("Failed to parse the seed file. {e} {seed}");
-        std::process::exit(1);
+
+    if seed.len() == 52 {
+        return parse_seed_zbase32(seed);
+    }
+
+    parse_seed_hex(seed)
+}
+
+/// Parse a hex seed into a keypair.
+/// The seed is expected to be 64 characters long.
+/// This is the new format of the seed.
+fn parse_seed_hex(seed: &str) -> anyhow::Result<Keypair> {
+    let decode_result = hex::decode(seed)?;
+    let slice: &[u8; SECRET_KEY_LENGTH] = &decode_result[0..SECRET_KEY_LENGTH].try_into()?;
+    Ok(Keypair::from_secret_key(slice))
+}
+
+/// Parse a zbase32 seed into a keypair.
+/// The seed is expected to be 52 characters long.
+/// This is the old format of the seed.
+fn parse_seed_zbase32(seed: &str) -> anyhow::Result<Keypair> {
+    let decode_result = match zbase32::decode_full_bytes_str(seed) {
+        Ok(bytes) => bytes,
+        Err(_) => return Err(anyhow!("Invalid zbase32 seed")),
     };
-
-    let plain_secret = decode_result.unwrap();
-
-    let slice: &[u8; SECRET_KEY_LENGTH] = &plain_secret[0..SECRET_KEY_LENGTH].try_into().unwrap();
-
-    Keypair::from_secret_key(slice)
+    let slice: &[u8; SECRET_KEY_LENGTH] = &decode_result[0..SECRET_KEY_LENGTH].try_into()?;
+    Ok(Keypair::from_secret_key(slice))
 }
 
 pub async fn cli_publish(matches: &ArgMatches) {
