@@ -1,11 +1,7 @@
-$TTL 300
-@    IN	  NS	    dns1.example.com.      
+$TTL 60
 
-@    IN	  MX	10	mail.example.com.       
-@    IN	  MX	20	mail2.example.com.   
+@      IN    A      127.0.0.1
+dynv4  IN    A      {external_ipv4}
+dynv6  IN    AAAA   {external_ipv6}
 
-@    IN    A      127.0.0.1
-subv4  IN    A      {external_ipv4}
-subv4  IN    AAAA      {external_ipv6}
-
-text  IN   TXT    hero=satoshi
+text   IN    TXT    hero=satoshi2
