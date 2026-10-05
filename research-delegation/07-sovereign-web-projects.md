@@ -16,10 +16,10 @@ their projects; browser compatibility and security have not been independently
 verified. Repository development branches can differ from released products.
 
 Assessments for Pubky are our interpretation, guided by the
-[first principles](./first-principles.md) and
-[design principles](./design-principles.md). Examples use fictional people and
-illustrative service configurations. They explain the architecture; they are not
-deployment instructions or test results.
+[first principles](./01-first-principles.md) and
+[design principles](./02-design-principles.md). Examples use fictional people
+and illustrative service configurations. They explain the architecture; they
+are not deployment instructions or test results.
 The report describes other architectures without proposing a replacement for
 the current SDK.
 
@@ -1136,7 +1136,7 @@ choices. If we want DNSSEC/DANE interoperability, publishing must create valid
 DNSKEY and RRSIG data, and verification must explicitly root authority in K.
 Changing packet syntax alone does not turn a Pkarr signature into an RRSIG.
 DNSSEC keys and signatures also consume space; their encoding needs to fit the
-[Pkarr packet limit](./pkarr-packet-size.md).
+[Pkarr packet limit](./06-pkarr-packet-size.md).
 
 For `_pubky.K`, the resolver also needs the exact service lookup and TLS
 authorization rules. None of these projects defines those Pubky-specific
@@ -1145,7 +1145,7 @@ transport, SNI, and alias behavior specified independently. SNI is the hostname
 a TLS
 client sends so a server can select a service or certificate; it is not proof
 that the selected key is authorized. See the
-[delegation discussion](./delegation-discussion.md).
+[delegation discussion](./05-discussion.md).
 
 ### Identity, authorization, and availability have separate lifetimes
 

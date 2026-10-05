@@ -1,12 +1,12 @@
 # First Principles
 
 Before planning, implementing, or reviewing any change, read
-[our first principles](research/first-principles.md) and check the proposed
-approach against them.
+[our first principles](research-delegation/01-first-principles.md) and check the
+proposed approach against them.
 
-Then read [our design principles](research/design-principles.md). Apply them
-within the limits set by the first principles. If they conflict, the first
-principles take precedence, including over web compatibility goals.
+Then read [our design principles](research-delegation/02-design-principles.md).
+Apply them within the limits set by the first principles. If they conflict,
+the first principles take precedence, including over web compatibility goals.
 
 Evaluate whether the change preserves:
 
