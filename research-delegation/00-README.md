@@ -8,7 +8,8 @@ Read in filename order:
 
 1. [First principles](./01-first-principles.md): what must be preserved.
 2. [Design principles](./02-design-principles.md): compatibility goals.
-3. [Motivation](./03-motivation.md): needs, requirements, and reported problems.
+3. [Problem statement](./03-problem-statement.md): user and operator needs,
+   illustrated through everyday key and hosting changes.
 4. [Terminology](./04-terminology.md): the terms used in this research.
 5. [Design discussion](./05-discussion.md): separate routing and explicit TLS
    delegation, with deployment tradeoffs.
