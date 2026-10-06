@@ -207,6 +207,14 @@ requiring expiring credentials would exclude raw-key TLS.
 X.509 needs a custom client verifier; raw-key TLS needs support at both ends.
 Ordinary browser Fetch supports neither Pubky verification path.
 
+> [!NOTE]
+> The current homeserver workspace uses rustls 0.23.45, whose verifier API
+> cannot advertise support for both raw public keys and X.509 certificates in
+> one TLS ClientHello. Supporting both credential forms in one handshake needs
+> a rustls change; see the [TLS certificate draft][homeserver-tls-draft] on the
+> `feat/rutls-with-tls-certs` branch. This remains an implementation concern for
+> the proposal.
+
 ### Browser endpoint declaration
 
 The `pubky-ca-endpoint` field would be read only at the final Pubky TLS service
@@ -307,4 +315,5 @@ separate TLS CNAME, would need to be defined before adoption.
 [https-query]: https://www.rfc-editor.org/rfc/rfc9460.html#section-9.1
 [https-sni]: https://www.rfc-editor.org/rfc/rfc9460.html#section-9.4
 [x509-names]: https://www.rfc-editor.org/rfc/rfc5280.html#section-4.2.1.6
+[homeserver-tls-draft]: https://github.com/pubky/pubky/blob/feat/rutls-with-tls-certs/docs/PUBKY_TLS_CERTIFICATES_DRAFT.md
 [fetch-options]: https://fetch.spec.whatwg.org/#requestinit [cloudflare-dns]: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/routing-to-tunnel/dns/ [cloudflare-pinning]: https://developers.cloudflare.com/ssl/reference/certificate-pinning/ [cloudflare-custom]: https://developers.cloudflare.com/ssl/edge-certificates/custom-certificates/
