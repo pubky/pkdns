@@ -1145,7 +1145,7 @@ transport, SNI, and alias behavior specified independently. SNI is the hostname
 a TLS
 client sends so a server can select a service or certificate; it is not proof
 that the selected key is authorized. See the
-[delegation discussion](./05-discussion.md).
+[TLSA delegation discussion](./09-discussion.md).
 
 ### Identity, authorization, and availability have separate lifetimes
 

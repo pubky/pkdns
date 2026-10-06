@@ -1,5 +1,7 @@
 # Separate routing and TLS delegation
 
+This alternative uses explicit TLSA pins for server authorization.
+
 This proposal separates routing from TLS authorization. HTTPS records select
 where to connect; TLSA records explicitly authorize the service's TLS key or
 certificate.

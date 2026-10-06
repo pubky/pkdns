@@ -79,13 +79,6 @@
 - **PKIX-EE:** TLSA usage `1`. The server certificate must match the pin and
   pass normal CA-chain, hostname, and validity checks, including expiry.
 
-Our proposed TLSA profiles use Pkarr packet signatures instead of DNSSEC.
-For `3 0 1`, the Pubky policy adds certificate validity checks to DANE-EE;
-CA and certificate-name checks remain optional through PKIX-EE.
-The optional signed `pubky-tls-name` TXT field supplies an additional
-acceptable certificate name for PKIX-EE and selects SNI independently of
-routing. This is a Pubky extension.
-
 ## Updates and freshness
 
 - **TTL:** cache lifetime; it does not prove a record is current.
