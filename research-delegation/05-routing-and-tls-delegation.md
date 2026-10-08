@@ -32,10 +32,47 @@ connects to `203.0.113.10:443`, where the provider can present either:
   corresponding private key. This lets the provider keep its signing key off the
   live server and issue certificates with limited lifetimes.
 
-SNI and certificate-name checks use `provider`. Native requests retain the
-original URL and HTTP authority `identity`, which the backend must accept. The
-provider can change servers and issue new certificates without an identity-owner
-update.
+Native Pubky requests retain the original URL, HTTP authority, and SNI
+`identity`. The client independently checks the certificate's signature against
+`provider`'s key and its name against `provider`. The provider can serve one
+certificate for all identities delegating TLS to it, and issue new certificates
+without an identity-owner update.
+
+<details>
+<summary>One provider certificate with Nginx</summary>
+
+A default TLS server can present the provider's certificate for all unmatched
+SNI names. There is no need to list every user's name in Nginx or in the
+certificate. For example, with a backend listening on port 8000:
+
+```nginx
+server {
+    listen 443 ssl default_server;
+    server_name _;
+
+    ssl_protocols TLSv1.3;
+    ssl_certificate     /etc/nginx/pubky/provider.pem;
+    ssl_certificate_key /etc/nginx/pubky/tls.key;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $http_host;
+    }
+}
+```
+
+`default_server` handles unmatched names; `_` is a placeholder, not a wildcard.
+Keep handshake rejection disabled for this server
+([Nginx TLS configuration][nginx-tls]). Preserve the original HTTP authority so
+the backend can select the user ([proxy headers][nginx-proxy]).
+
+The certificate contains `provider` as its SAN name and is signed by
+`provider`'s key. With a separate serving key, Nginx holds only `tls.key`; the
+record-signing key can stay offline. The SDK's custom verifier checks the
+delegated name even though SNI is `identity`. Ordinary browser verification
+would require a certificate matching the URL host.
+
+</details>
 
 ### Cloudflare Tunnel on Free: CA-only TLS
 
@@ -72,10 +109,63 @@ provider. IN A 203.0.113.10
 provider. IN TXT "pubky-ca-endpoint=https://edge.example/"
 ```
 
-Pubky clients connect to `203.0.113.10:443`, use SNI `provider`, and verify its
-key or signed certificate. Web apps verify the endpoint declaration and Fetch
-`https://edge.example/` with CA validation. Both paths can serve the same
-backend. On one server, SNI can select the appropriate certificate.
+Pubky clients connect to `203.0.113.10:443`, retain SNI `identity`, and verify
+`provider`'s key or signed certificate. Web apps verify the endpoint declaration
+and Fetch `https://edge.example/` with CA validation. Both paths can serve the
+same backend. On one server, a named `edge.example` virtual host can serve the
+CA certificate while the default host serves the shared Pubky certificate.
+
+<details>
+<summary>Pubky and CA certificates on the same Nginx server</summary>
+
+Use two virtual hosts on the same IP and port. Both can proxy to the same
+backend while presenting different certificates:
+
+```nginx
+# Pubky: handles unmatched SNI names
+server {
+    listen 443 ssl default_server;
+    server_name _;
+
+    ssl_certificate     /etc/nginx/pubky/provider.pem;
+    ssl_certificate_key /etc/nginx/pubky/tls.key;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $http_host;
+    }
+}
+
+# ICANN: handles this specific SNI
+server {
+    listen 443 ssl;
+    server_name edge.example;
+
+    ssl_certificate     /etc/nginx/icann/fullchain.pem;
+    ssl_certificate_key /etc/nginx/icann/privkey.pem;
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $http_host;
+    }
+}
+```
+
+Nginx selects the certificate during the TLS handshake:
+
+- SNI `edge.example` selects the CA certificate.
+- SNI `identity`, `_pubky.identity`, or any other unmatched name selects the
+  default Pubky-signed certificate.
+- A connection without SNI also receives the default certificate.
+
+The later HTTP `Host` header can select request handling, but cannot change the
+certificate already presented ([Nginx server selection][nginx-names]).
+Nginx needs neither the TLS delegation records nor a list of users. The SDK
+independently verifies the delegated signer and certificate reference name.
+Both certificates in this setup are X.509; this configuration does not serve
+raw public keys.
+
+</details>
 
 ## Design details
 
@@ -147,8 +237,9 @@ verified. Three cases determine where it ends:
 - **Another Pubky name:** the chain would continue at that exact target, with
   one target per TLS CNAME and unchanged port and TCP labels.
 - **No TLS CNAME in a verified packet:** the namespace's public key would become
-  the TLS authority. The suffix after `_<port>._tcp` would be the TLS name. A
-  timeout or unverified negative answer could not establish absence.
+  the TLS authority. The suffix after `_<port>._tcp` would be the certificate
+  reference name. A timeout or unverified negative answer could not establish
+  absence.
 - **An ICANN hostname:** a signed TLS CNAME would select normal CA,
   certificate-name, and validity checks for that hostname. Its DNS TLS CNAMEs,
   TLSA records, and address aliases would not change the chosen authority.
@@ -161,12 +252,27 @@ Allowed authentication modes would be chosen before connecting. A client
 requiring Pubky TLS would reject CA access; authentication failure would never
 change the mode.
 
-The selected TLS name would serve as SNI and the certificate reference name. It
-needs to be a concrete hostname suitable for both. An underscore-prefixed
-service such as `_pubky.identity` would delegate to a name such as `provider`,
-rather than stripping labels ([X.509 names][x509-names]). Selecting SNI and the
-certificate name through a TLS CNAME extends standard HTTPS and DANE ([HTTPS
-SNI][https-sni], [DANE][tlsa-cname]).
+For Pubky TLS, keep three values separate:
+
+- **SNI:** the original URL host, unaffected by routing or TLS delegation.
+- **Signer:** the public key authorized by the verified TLS delegation chain.
+- **Certificate reference name:** the exact name selected by that chain.
+
+The verifier checks the signer and certificate name independently of SNI. It
+must derive both from verified delegation, never from the presented certificate
+or an unauthenticated route. This lets Reqwest retain its URL-based SNI and HTTP
+authority while a custom verifier applies the delegated trust policy.
+
+The certificate reference name needs to be a concrete hostname suitable for a
+`dNSName`. An underscore-prefixed service such as `_pubky.identity` would
+delegate to a name such as `provider`, rather than stripping labels
+([X.509 names][x509-names]). Keeping the original SNI follows HTTPS service
+binding behavior; selecting a different certificate reference name through a
+TLS CNAME is a Pubky extension ([HTTPS SNI][https-sni], [DANE][tlsa-cname]).
+
+CA-only delegation instead uses the selected ICANN hostname for SNI and normal
+certificate-name checks, as in the Cloudflare example. That mode must be
+explicitly authorized and permitted by client policy.
 
 ### Separate managers
 
@@ -181,9 +287,10 @@ router.             IN HTTPS 1 edge.example. port=443
 ```
 
 If `tls-manager`'s verified packet has no further TLS CNAME, the client connects
-to `edge.example` and authenticates `tls-manager`. A compromised router can
-disrupt traffic but cannot authorize a new TLS key. The provider can replace
-either manager; sharing a key gives it both permissions.
+to `edge.example`, retains SNI `identity`, and authenticates `tls-manager`.
+Certificate-name checks use `tls-manager`. A compromised router can disrupt
+traffic but cannot authorize a new TLS key. The provider can replace either
+manager; sharing a key gives it both permissions.
 
 ### Pubky server credentials
 
@@ -193,9 +300,9 @@ The server would prove possession of its TLS private key in either form:
   is no expiry, and placing this key on the server also exposes its
   record-signing authority.
 - **Pubky-signed X.509 leaf:** the selected authority would sign it directly.
-  Proposed checks include the exact TLS name as a `dNSName` in `subjectAltName`,
-  valid `notBefore` / `notAfter`, digital-signature key usage,
-  server-authentication extended key usage, and `CA=false`. Unsupported
+  Proposed checks include the certificate reference name as an exact `dNSName`
+  in `subjectAltName`, valid `notBefore` / `notAfter`, digital-signature key
+  usage, server-authentication extended key usage, and `CA=false`. Unsupported
   algorithms, unknown critical extensions, wildcards, and intermediate issuers
   would be excluded. The issuer's textual name would not establish trust.
 
@@ -315,5 +422,8 @@ separate TLS CNAME, would need to be defined before adoption.
 [https-query]: https://www.rfc-editor.org/rfc/rfc9460.html#section-9.1
 [https-sni]: https://www.rfc-editor.org/rfc/rfc9460.html#section-9.4
 [x509-names]: https://www.rfc-editor.org/rfc/rfc5280.html#section-4.2.1.6
+[nginx-tls]: https://nginx.org/en/docs/http/ngx_http_ssl_module.html
+[nginx-proxy]: https://nginx.org/en/docs/http/ngx_http_proxy_module.html
+[nginx-names]: https://nginx.org/en/docs/http/server_names.html
 [homeserver-tls-draft]: https://github.com/pubky/pubky/blob/feat/rutls-with-tls-certs/docs/PUBKY_TLS_CERTIFICATES_DRAFT.md
 [fetch-options]: https://fetch.spec.whatwg.org/#requestinit [cloudflare-dns]: https://developers.cloudflare.com/cloudflare-one/networks/connectors/cloudflare-tunnel/routing-to-tunnel/dns/ [cloudflare-pinning]: https://developers.cloudflare.com/ssl/reference/certificate-pinning/ [cloudflare-custom]: https://developers.cloudflare.com/ssl/edge-certificates/custom-certificates/

@@ -54,6 +54,9 @@
   The server must also prove possession of its private key.
 - **Certificate name:** a claimed service name. Standard HTTPS checks it against
   the requested name; see [RFC 9525][identity].
+- **Certificate reference name:** the expected name checked against the
+  certificate. The Pubky TLS proposal derives it from verified TLS delegation,
+  independently of the original SNI.
 - **Raw public key:** a key presented in TLS without an X.509 certificate.
 - **SPKI:** SubjectPublicKeyInfo, which encodes a key and its algorithm.
 - **Hash:** a fingerprint of bytes. A hash alone does not identify their author.
