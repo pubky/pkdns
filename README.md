@@ -1,5 +1,10 @@
 # pkdns
 
+> [!WARNING]
+> pkdns is for development and experimentation only. It is not ready for
+> production use. Do not rely on it for production or mission-critical DNS
+> services.
+
 [![GitHub Release](https://img.shields.io/github/v/release/pubky/pkdns)](https://github.com/pubky/pkdns/releases/latest/)
 [![Demo](https://img.shields.io/badge/Demo-7fmjpc-green)](http://pkdns-demo.pubky.app/)
 [![Docker](https://img.shields.io/badge/Image-Docker-red)](https://hub.docker.com/r/synonymsoft/pkdns)
