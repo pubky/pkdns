@@ -1,7 +1,6 @@
 # A list of free to use pkdns servers.
 
 34.65.109.99
-66.78.40.76
 
 
 # DNS-over-HTTPS
