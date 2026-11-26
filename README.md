@@ -127,7 +127,7 @@ Options:
 
 ### Config File
 
-`~/.pkdns/pkdns.toml` is used for all extended configurations. An example can be found in [config.sample.toml](./server/config.sample.toml).
+`~/.pkdns/config.toml` is used for all extended configurations. An example can be found in [config.sample.toml](./server/config.sample.toml).
 
 
 ## FAQs

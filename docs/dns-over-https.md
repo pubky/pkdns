@@ -18,7 +18,7 @@ Popular web browsers like Firefox, Chrome, Brave, and Edge support DoH out of th
 
 pkdns supports [RFC8484](https://datatracker.ietf.org/doc/html/rfc8484).
 
-1. Start pkdns with `dns_over_http_socket = "127.0.0.1:3000"` in pkdns.toml. This makes pkdns listen for HTTP (not HTTPS) requests on http://127.0.0.1/dns-query.
+1. Start pkdns with `dns_over_http_socket = "127.0.0.1:3000"` in config.toml. This makes pkdns listen for HTTP (not HTTPS) requests on http://127.0.0.1/dns-query.
 2. Use a reverse proxy like NGINX to add HTTPS to the DoH socket. See this [tutorial](https://www.digitalocean.com/community/tutorials/how-to-secure-nginx-with-let-s-encrypt-on-ubuntu-22-04).
 3. Forward the nginx requests to pkdns. Example configuration:
 
